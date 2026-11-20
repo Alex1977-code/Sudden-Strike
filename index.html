@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0d1117">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Steppensturm – Front Ukraine</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three/build/three.module.min.js",
+      "three/addons/": "./vendor/three/addons/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- ============ HUD ============ -->
+  <div id="hud" class="hidden">
+    <div id="topbar">
+      <button id="btn-menu" class="icon-btn" title="Menü (Esc)">☰</button>
+      <div id="objectives"></div>
+      <div id="topright">
+        <div id="timer"></div>
+        <div id="fps"></div>
+      </div>
+    </div>
+    <div id="alert" class="hidden"></div>
+    <div id="subtitle" class="hidden"></div>
+    <div id="minimap-wrap"><canvas id="minimap" width="180" height="180"></canvas></div>
+    <div id="bottombar">
+      <div id="selection"></div>
+      <div id="orders">
+        <button data-order="stop" title="Halt (S)">■<span>Halt</span></button>
+        <button data-order="hold" title="Feuer halten (H)">✋<span>Feuer</span></button>
+        <button data-order="all" title="Alle wählen (Strg+A)">⬚<span>Alle</span></button>
+        <button data-order="box" id="btn-box" class="touch-only" title="Auswahlrahmen">▭<span>Rahmen</span></button>
+      </div>
+      <div id="abilities"></div>
+    </div>
+    <div id="target-hint" class="hidden"></div>
+  </div>
+  <div id="selbox" class="hidden"></div>
+
+  <!-- ============ Screens ============ -->
+  <div id="screen-title" class="screen">
+    <div class="title-bg"></div>
+    <div class="title-inner">
+      <h1>STEPPEN<span>STURM</span></h1>
+      <h2>FRONT UKRAINE</h2>
+      <p class="tag">Echtzeit-Taktik · Drohnenkrieg · Hyperschall</p>
+      <div class="menu">
+        <button id="btn-campaign" class="big">Kampagne</button>
+        <button id="btn-settings">Grafik &amp; Einstellungen</button>
+        <button id="btn-help">Steuerung</button>
+        <button id="btn-fullscreen">Vollbild</button>
+      </div>
+      <p class="disclaimer">Fiktive Handlung, inspiriert von realen Ereignissen. Alle Personen und Einheiten der Story sind erfunden.</p>
+    </div>
+  </div>
+
+  <div id="screen-campaign" class="screen hidden">
+    <div class="panel wide">
+      <h2>Kampagne: „Stahl und Sonnenblumen"</h2>
+      <div id="mission-list"></div>
+      <div class="row"><button class="back">Zurück</button><button id="btn-reset-progress" class="ghost">Fortschritt zurücksetzen</button></div>
+    </div>
+  </div>
+
+  <div id="screen-briefing" class="screen hidden">
+    <div class="panel wide briefing">
+      <div class="brief-head">
+        <div>
+          <div id="brief-place" class="place"></div>
+          <h2 id="brief-title"></h2>
+        </div>
+        <canvas id="brief-map" width="220" height="220"></canvas>
+      </div>
+      <div id="brief-text"></div>
+      <h3>Einsatzziele</h3>
+      <ul id="brief-objectives"></ul>
+      <h3>Verfügbare Kräfte</h3>
+      <div id="brief-forces"></div>
+      <div class="row"><button class="back-campaign">Zurück</button><button id="btn-start-mission" class="big">Einsatz beginnen</button></div>
+    </div>
+  </div>
+
+  <div id="screen-settings" class="screen hidden">
+    <div class="panel">
+      <h2>Grafik &amp; Einstellungen</h2>
+      <label>Qualitätsstufe
+        <select id="set-quality">
+          <option value="low">Niedrig (ältere Handys)</option>
+          <option value="medium">Mittel</option>
+          <option value="high">Hoch</option>
+          <option value="ultra">Ultra</option>
+        </select>
+      </label>
+      <label>Upscaling (SSU – DLSS-ähnlich)
+        <select id="set-upscale">
+          <option value="native">Nativ (100 %)</option>
+          <option value="quality">Qualität (67 %)</option>
+          <option value="balanced">Ausgewogen (58 %)</option>
+          <option value="performance">Leistung (50 %)</option>
+          <option value="ultraperf">Ultra-Leistung (33 %)</option>
+          <option value="auto">Dynamisch (Ziel-FPS)</option>
+        </select>
+      </label>
+      <label>Ziel-FPS (dynamisch)
+        <select id="set-targetfps">
+          <option value="30">30</option>
+          <option value="60">60</option>
+          <option value="90">90</option>
+          <option value="120">120</option>
+        </select>
+      </label>
+      <label>Schärfe <input id="set-sharpness" type="range" min="0" max="1" step="0.05"></label>
+      <label class="check"><input id="set-bloom" type="checkbox"> Bloom / Leuchteffekte</label>
+      <label class="check"><input id="set-shadows" type="checkbox"> Echtzeit-Schatten</label>
+      <label class="check"><input id="set-fps" type="checkbox"> FPS-Anzeige</label>
+      <label>Lautstärke <input id="set-volume" type="range" min="0" max="1" step="0.05"></label>
+      <p class="note">Hinweis: Echtes NVIDIA DLSS benötigt native Treiber-Schnittstellen und ist in Browsern nicht verfügbar.
+        <b>SSU</b> rendert intern mit geringerer Auflösung und skaliert mit einem kantenbewussten Bikubik-Filter plus
+        adaptivem Nachschärfen (ähnlich AMD FSR 1) auf Bildschirmauflösung hoch – das läuft auf jeder GPU, auch auf Handys.</p>
+      <div class="row"><button class="back">Fertig</button></div>
+    </div>
+  </div>
+
+  <div id="screen-help" class="screen hidden">
+    <div class="panel">
+      <h2>Steuerung</h2>
+      <div class="cols">
+        <div>
+          <h3>🖱️ PC</h3>
+          <ul>
+            <li><b>Linksklick</b> – Einheit wählen</li>
+            <li><b>Linke Maus ziehen</b> – Auswahlrahmen</li>
+            <li><b>Rechtsklick</b> – Bewegen / Angreifen</li>
+            <li><b>Doppelklick</b> – alle gleichen Typs</li>
+            <li><b>WASD / Pfeile / Bildschirmrand</b> – Kamera</li>
+            <li><b>Mausrad</b> – Zoom, <b>Q/E</b> oder <b>mittlere Maus</b> – Drehen</li>
+            <li><b>Strg+1…9</b> Gruppe speichern, <b>1…9</b> abrufen</li>
+            <li><b>S</b> Halt, <b>H</b> Feuer halten, <b>Leertaste</b> Pause</li>
+            <li><b>F1–F4</b> Spezialfähigkeiten</li>
+          </ul>
+        </div>
+        <div>
+          <h3>📱 Handy / Tablet</h3>
+          <ul>
+            <li><b>Tippen</b> – Einheit wählen</li>
+            <li><b>Tippen auf Gelände/Feind</b> – Bewegen / Angreifen</li>
+            <li><b>Ein Finger ziehen</b> – Kamera schieben</li>
+            <li><b>Zwei Finger</b> – Zoomen &amp; Drehen</li>
+            <li><b>„Rahmen"</b> – nächster Zug zieht Auswahlrahmen</li>
+            <li><b>Doppeltippen</b> – alle gleichen Typs</li>
+            <li><b>Fähigkeit tippen</b>, dann Ziel antippen</li>
+          </ul>
+        </div>
+      </div>
+      <h3>Taktik-Tipps</h3>
+      <ul>
+        <li>Aufklärungsdrohnen decken den Nebel des Krieges auf – ohne Sicht trifft die Artillerie blind.</li>
+        <li>Flugabwehr (Gepard, IRIS-T, Patriot) schießt Drohnen, Marschflugkörper und Hyperschallraketen ab.</li>
+        <li>Panzer sind vorne stark gepanzert – Flanken- und Top-Attack-Angriffe (Javelin, FPV) treffen härter.</li>
+        <li>Infanterie in Wäldern und Häusern ist schwer zu entdecken und erleidet weniger Schaden.</li>
+      </ul>
+      <div class="row"><button class="back">Zurück</button></div>
+    </div>
+  </div>
+
+  <div id="screen-pause" class="screen hidden">
+    <div class="panel">
+      <h2>Pause</h2>
+      <div class="menu">
+        <button id="btn-resume" class="big">Weiter</button>
+        <button id="btn-pause-settings">Einstellungen</button>
+        <button id="btn-restart">Mission neu starten</button>
+        <button id="btn-quit">Zur Kampagne</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-end" class="screen hidden">
+    <div class="panel">
+      <h2 id="end-title"></h2>
+      <div id="end-text"></div>
+      <div id="end-stats"></div>
+      <div class="row"><button id="btn-end-retry">Erneut versuchen</button><button id="btn-end-next" class="big">Weiter</button></div>
+    </div>
+  </div>
+
+  <div id="loading" class="hidden"><div class="spinner"></div><div id="loading-text">Lade Gelände …</div></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

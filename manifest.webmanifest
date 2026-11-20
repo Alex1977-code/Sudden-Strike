@@ -1,0 +1,14 @@
+{
+  "name": "Steppensturm – Front Ukraine",
+  "short_name": "Steppensturm",
+  "description": "Echtzeit-Taktikspiel: Drohnenkrieg, Hyperschallraketen und die Mission Krimbrücke.",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "lang": "de",
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

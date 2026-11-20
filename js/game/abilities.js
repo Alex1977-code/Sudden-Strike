@@ -1,0 +1,120 @@
+// Spezialfähigkeiten (vom Spieler auslösbar)
+import * as THREE from 'three';
+import { Missile } from './combat.js';
+import { rand } from '../engine/util.js';
+import { W } from './unitTypes.js';
+
+const HIMARS_W = { name: 'GMLRS', dmg: 320, splash: 7, vs: { soft: 1, light: 1, heavy: 0.85, air: 0, struct: 1 } };
+const ARTY_W = { name: '155-mm', dmg: 200, splash: 6, vs: { soft: 1, light: 0.8, heavy: 0.45, air: 0, struct: 0.6 } };
+const STORM_W = { name: 'Storm Shadow', dmg: 2600, splash: 9, vs: { soft: 1, light: 1, heavy: 1, air: 0, struct: 1 } };
+
+export const ABILITIES = {
+  scan: {
+    name: 'Aufklärung', icon: '🛰️', cooldown: 35, radius: 32,
+    desc: 'Satellitenbild & Drohnenaufklärung: deckt ein Gebiet 15 s lang auf.',
+    exec(game, x, z) {
+      game.addReveal(x, z, 32, 15);
+      const m = game.effects.marker(x, z, 0x6ab0ff, 15, 32);
+      game.audio.ui('radio');
+    },
+  },
+  fpv: {
+    name: 'FPV-Schwarm', icon: '🐝', cooldown: 22, charges: 6, requires: 'dronepilot', radius: 14,
+    desc: 'Drohnenpilot startet 3 FPV-Kamikazedrohnen auf das Zielgebiet.',
+    exec(game, x, z) {
+      const pilots = game.units.filter((u) => u.side === 'UA' && u.alive && u.type.key === 'dronepilot');
+      if (!pilots.length) return false;
+      pilots.sort((a, b) => Math.hypot(a.pos.x - x, a.pos.z - z) - Math.hypot(b.pos.x - x, b.pos.z - z));
+      const p = pilots[0];
+      for (let i = 0; i < 3; i++) {
+        game.later(i * 0.4, () => {
+          const d = game.spawn('fpv', 'UA', p.pos.x + rand(-2, 2), p.pos.z + rand(-2, 2), { startAlt: 1 });
+          d.moveTo(x + rand(-6, 6), z + rand(-6, 6), { attackMove: true });
+          d.ai = null;
+          game.audio.drone(p.pos.x, p.pos.z);
+        });
+      }
+      game.effects.marker(x, z, 0xffd500, 2, 14);
+    },
+  },
+  himars: {
+    name: 'HIMARS-Schlag', icon: '🎆', cooldown: 50, requires: 'himars', radius: 12,
+    desc: '6 GMLRS-Präzisionsraketen. Ohne Sicht auf das Ziel deutlich ungenauer.',
+    exec(game, x, z) {
+      const launchers = game.units.filter((u) => u.side === 'UA' && u.alive && u.type.key === 'himars');
+      if (!launchers.length) return false;
+      const l = launchers[0];
+      const visible = game.fow.isVisible(x, z);
+      const spread = visible ? 6 : 16;
+      game.say('HIMARS', visible ? 'Ziel erfasst. Sechs Raketen unterwegs!' : 'Kein Sichtkontakt – feuern nach Koordinaten. Streuung erhöht!', 3);
+      for (let i = 0; i < 6; i++) {
+        game.later(i * 0.45, () => {
+          const from = l.muzzleWorld().add(new THREE.Vector3(0, 1, 0));
+          const tx = x + rand(-spread, spread), tz = z + rand(-spread, spread);
+          game.effects.muzzle(from.x, from.y, from.z, true);
+          game.audio.shot('missile', l.pos.x, l.pos.z);
+          const dist = Math.hypot(tx - from.x, tz - from.z);
+          new Missile(game, {
+            from, to: new THREE.Vector3(tx, game.terrain.surface(tx, tz), tz), speed: 95, arc: Math.max(40, dist * 0.6), side: 'UA', model: 'rocket', scale: 1.5, threat: 'rocket',
+            onHit: (m) => { game.effects.explosion(m.pos.x, m.pos.y, m.pos.z, 1.6, { water: game.terrain.isWater(m.pos.x, m.pos.z) }); game.splashDamage(m.pos.x, m.pos.z, HIMARS_W.splash, HIMARS_W.dmg, HIMARS_W, 'UA', null); },
+          }).register();
+        });
+      }
+    },
+  },
+  artillery: {
+    name: 'Artillerie', icon: '💥', cooldown: 40, radius: 14,
+    desc: 'M777-Batterie: 8 Granaten auf das Zielgebiet (Flugzeit ~5 s).',
+    exec(game, x, z) {
+      const visible = game.fow.isVisible(x, z);
+      const spread = visible ? 9 : 18;
+      game.say('Artillerie', 'Feuer frei, Lage folgt … Granaten im Anflug!', 3);
+      for (let i = 0; i < 8; i++) game.combat.incomingShell(x + rand(-spread, spread), z + rand(-spread, spread), ARTY_W, 'UA', 4.5 + i * 0.35, null, 1.3);
+      game.effects.marker(x, z, 0xff8030, 6, 14);
+    },
+  },
+  stormshadow: {
+    name: 'Storm Shadow', icon: '✈️', cooldown: 20, charges: 4, radius: 9,
+    desc: 'Luftgestützter Marschflugkörper im Tiefflug. Kann von Panzir/S-400 abgefangen werden.',
+    exec(game, x, z) {
+      const edge = game.mission.friendlyEdge || [0, game.terrain.half + 40];
+      const from = new THREE.Vector3(edge[0] + rand(-20, 20), 30, edge[1]);
+      game.say('Luftwaffe', 'Su-24 hat abgeworfen. Storm Shadow im Anflug – Tiefflug.', 3);
+      const m = new Missile(game, {
+        from, to: new THREE.Vector3(x, game.terrain.surface(x, z) + 2, z), mode: 'cruise', cruiseAlt: 9, speed: 48, side: 'UA', model: 'cruise', threat: 'cruise', scale: 1.1,
+        onHit: (mm) => {
+          game.effects.explosion(mm.pos.x, mm.pos.y, mm.pos.z, 3.2, { water: game.terrain.isWater(mm.pos.x, mm.pos.z) });
+          game.splashDamage(mm.pos.x, mm.pos.z, STORM_W.splash, STORM_W.dmg, STORM_W, 'UA', null);
+        },
+        onIntercepted: () => game.say('Luftwaffe', 'Storm Shadow wurde abgefangen! Flugabwehr ausschalten!', 4),
+      }).register();
+      game.trackMissile(m);
+    },
+  },
+  seadrone: {
+    name: 'Seedrohnen', icon: '🚤', cooldown: 25, charges: 4, radius: 6,
+    desc: 'Startet 2 Seedrohnen am Einsatzpunkt im Meer und schickt sie zum Ziel.',
+    exec(game, x, z) {
+      const sp = game.mission.seaSpawn || [0, game.terrain.half - 10];
+      for (let i = 0; i < 2; i++) {
+        const d = game.spawn('seadrone', 'UA', sp[0] + i * 6 - 3, sp[1], { heading: Math.PI });
+        const tgt = game.unitAt(x, z, 'RU', 16);
+        if (tgt) d.attack(tgt); else d.moveTo(x + i * 5, z);
+      }
+      game.camera.focus(sp[0], sp[1]);
+    },
+  },
+  ew: {
+    name: 'EloKa-Störsender', icon: '📶', cooldown: 45, radius: 38,
+    desc: 'Elektronische Kampfführung: feindliche Drohnen im Gebiet stürzen ab.',
+    exec(game, x, z) {
+      let n = 0;
+      for (const u of game.units) {
+        if (u.side === 'RU' && u.alive && u.type.air && u.type.key !== 'ka52' && Math.hypot(u.pos.x - x, u.pos.z - z) < 38) { u.jammed = rand(0.5, 2.5); n++; }
+      }
+      game.effects.marker(x, z, 0xb070ff, 3, 38);
+      game.say('EloKa', n ? `Störsender aktiv – ${n} feindliche Drohne(n) verlieren die Verbindung.` : 'Störsender aktiv – keine feindlichen Drohnen im Gebiet.', 3);
+      game.jamZones.push({ x, z, r: 38, t: 12 });
+    },
+  },
+};
