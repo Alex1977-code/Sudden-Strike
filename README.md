@@ -16,6 +16,15 @@ python3 -m http.server 8000
 Oder über GitHub Pages / jeden Webserver ausliefern. Auf dem Handy lässt es sich über „Zum Startbildschirm hinzufügen" als App (PWA, offline-fähig) installieren.
 `?unlock=all` an die URL anhängen schaltet alle Missionen frei.
 
+## Als Einzeldatei bauen
+
+`tools/build-artifact.mjs` bündelt Three.js und den gesamten Spielcode mit esbuild in eine eigenständige HTML-Datei (z. B. für ein Claude-Artifact):
+
+```bash
+npm i esbuild
+node tools/build-artifact.mjs esbuild dist/steppensturm.html
+```
+
 ## Kampagne „Stahl und Sonnenblumen"
 
 | # | Mission | Schauplatz | Kern |

@@ -56,7 +56,7 @@ function loadWithSpinner(text, fn) {
   $('loading-text').textContent = text;
   $('loading').classList.remove('hidden');
   return new Promise((res) => setTimeout(() => {
-    try { fn(); } catch (err) { console.error(err); alert('Fehler beim Laden: ' + err.message); }
+    try { fn(); } catch (err) { console.error(err); $('loading-text').textContent = 'Fehler beim Laden: ' + err.message; return setTimeout(() => { $('loading').classList.add('hidden'); res(); }, 4000); }
     $('loading').classList.add('hidden');
     res();
   }, 30));
@@ -96,8 +96,15 @@ function renderCampaign() {
     list.appendChild(el);
   });
 }
-$('btn-reset-progress').onclick = () => {
-  if (!confirm('Kampagnenfortschritt wirklich zurücksetzen?')) return;
+// Zweistufige Bestätigung direkt im Knopf (Browser-Dialoge sind nicht überall verfügbar)
+$('btn-reset-progress').onclick = (e) => {
+  const b = e.currentTarget;
+  if (!b.dataset.armed) {
+    b.dataset.armed = '1'; b.textContent = 'Wirklich zurücksetzen? Nochmal tippen';
+    setTimeout(() => { delete b.dataset.armed; b.textContent = 'Fortschritt zurücksetzen'; }, 4000);
+    return;
+  }
+  delete b.dataset.armed; b.textContent = 'Fortschritt zurücksetzen';
   progress = { unlocked: 1, done: {} }; saveProgress(); renderCampaign();
 };
 // Entwickler-/Testmodus: ?unlock=all schaltet alle Missionen frei
@@ -235,7 +242,7 @@ function frame(now) {
 })();
 
 // Offline-Fähigkeit (PWA)
-if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+if (!window.__ARTIFACT && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 // App im Hintergrund → Pause
