@@ -110,7 +110,8 @@ export class Combat {
     const tp = threat ? threat.pos.clone() : target.aimPoint();
     game.audio.shot(w.sound, shooter.pos.x, shooter.pos.z);
     shooter.lastFired = game.time;
-    if (shooter.side === 'UA') game.stats.shots++;
+    const sp = game.ownerPlayer(shooter);
+    if (sp) sp.stats.shots++;
 
     if (w.kind === 'bullet') {
       fx.muzzle(from.x, from.y, from.z, false);
@@ -136,7 +137,7 @@ export class Combat {
         game.later(delay, () => {
           if (!target.alive) return;
           game.applyDamage(target, w.dmg * hits, w, shooter);
-          if (w.splash) game.splashDamage(target.pos.x, target.pos.z, w.splash, w.dmg * 0.3, w, shooter.side, target);
+          if (w.splash) game.splashDamage(target.pos.x, target.pos.z, w.splash, w.dmg * 0.3, w, shooter.side, target, false, shooter.owner);
           if (!target.type.infantry && Math.random() < 0.5) fx.smallHit(tp.x, tp.y, tp.z);
         });
       }
@@ -155,7 +156,7 @@ export class Combat {
           game.applyDamage(target, w.dmg, w, shooter);
           fx.explosion(end.x, end.y, end.z, 0.5, { crater: false });
         } else fx.explosion(end.x, end.y, end.z, 0.6);
-        if (w.splash) game.splashDamage(end.x, end.z, w.splash, w.dmg * 0.25, w, shooter.side, hit ? target : null);
+        if (w.splash) game.splashDamage(end.x, end.z, w.splash, w.dmg * 0.25, w, shooter.side, hit ? target : null, false, shooter.owner);
       });
       return;
     }
@@ -169,7 +170,7 @@ export class Combat {
         onHit: (m) => {
           if (hit && target.alive) game.applyDamage(target, w.dmg, w, shooter, { topAttack: w.topAttack });
           fx.explosion(m.pos.x, m.pos.y, m.pos.z, 0.9, { crater: !hit });
-          if (w.splash) game.splashDamage(m.pos.x, m.pos.z, w.splash, w.dmg * 0.2, w, shooter.side, hit ? target : null);
+          if (w.splash) game.splashDamage(m.pos.x, m.pos.z, w.splash, w.dmg * 0.2, w, shooter.side, hit ? target : null, false, shooter.owner);
         },
       }).register();
       fx.muzzle(from.x, from.y, from.z, true);
@@ -186,7 +187,9 @@ export class Combat {
             threat.engaged = Math.max(0, threat.engaged - 1);
             if (!threat.dead && Math.random() < (w.intercept[threat.threat] || 0)) {
               threat.intercepted();
-              if (shooter.side === 'UA') { game.stats.intercepts++; game.onIntercept && game.onIntercept(threat, shooter); }
+              const ip = game.ownerPlayer(shooter);
+              if (ip) ip.stats.intercepts++;
+              if (shooter.side === game.localSide && game.onIntercept) game.onIntercept(threat, shooter);
             } else fx.explosion(mm.pos.x, mm.pos.y, mm.pos.z, 0.4, { crater: false, air: true });
           } else if (target && target.alive) {
             const chance = target.type.kamikaze || target.type.key === 'orlan' ? (w.intercept?.drone ?? w.airAcc) : w.airAcc;
@@ -206,7 +209,7 @@ export class Combat {
       fx.muzzle(from.x, from.y, from.z, true);
       const spread = w.spread || 8;
       const tx = tp.x + rand(-spread, spread), tz = tp.z + rand(-spread, spread);
-      this.incomingShell(tx, tz, w, shooter.side, 3.5 + shooter.distTo(target) / 80, shooter);
+      this.incomingShell(tx, tz, w, shooter.side, 3.5 + shooter.distTo(target) / 80, shooter, 1.4, shooter.owner);
       return;
     }
 
@@ -225,12 +228,12 @@ export class Combat {
   }
 
   // Granate im Anflug (Artillerie, auch für Missionsereignisse)
-  incomingShell(x, z, w, side, delay = 3, shooter = null, size = 1.4) {
+  incomingShell(x, z, w, side, delay = 3, shooter = null, size = 1.4, owner = shooter?.owner ?? null) {
     const game = this.game;
     game.later(delay, () => {
       const y = game.terrain.surface(x, z);
       game.effects.explosion(x, y, z, size, { water: game.terrain.isWater(x, z) });
-      game.splashDamage(x, z, w.splash || 7, w.dmg, w, side, null, true);
+      game.splashDamage(x, z, w.splash || 7, w.dmg, w, side, null, true, owner);
     });
   }
 }

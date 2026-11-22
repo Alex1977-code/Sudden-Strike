@@ -1,4 +1,32 @@
 // Spielzustand, Hauptschleife, Missions-API
+/**
+ * Spieler/Teams/Kommandos – Vertrag (MP-T1)
+ *
+ * Spieler: game.players = [{ id, name, team: 'UA'|'RU', color: '#rrggbb', ai, local, remote, defeated,
+ *   abilities: [{ id, def, cd, charges, cooldown, owner }], stats: { kills, lost, shots, intercepts } }]
+ *   game.localPlayerId (Setter wechselt Perspektive: Nebel, Sichtbarkeit, Auswahl, HUD), game.localPlayer, game.localSide.
+ *   game.setupPlayers(list): legt Spieler an (Einträge wie oben, nur team Pflicht; optional abilities: [...] wie setAbilities).
+ *     Vor load() aufgerufen gilt die Liste für die nächste Mission; danach sofort (bestehende Einheiten werden auf
+ *     den ersten Spieler ihres Teams umgeschlüsselt, falls ihr owner nicht mehr existiert). load(m, { players }) und
+ *     mission.players gehen ebenfalls. Ohne Aufruf (Kampagne): Spieler 0 = lokal/'UA', Spieler 1 = KI/'RU'.
+ *   game.playerById(id), game.playersOfTeam(team), game.isOwn(u), game.isAlly(u), game.teamMode (true nach setupPlayers).
+ * Einheiten: u.id (eindeutig, opts.id möglich), u.owner (Spieler-id; 'N' → null), u.side = Team ('UA'|'RU'|'N').
+ *   game.spawn(type, side, x, z, { owner, ... }) – ohne owner: erster Spieler des Teams. game.unitById(id).
+ * Sicht: u.seenBy = { UA, RU }, u.visibleTo(team). Sicht wird im Team geteilt; game.fows[team] je Team,
+ *   game.fow = Nebel des lokalen Teams (Textur/Shader), game.fowFor(team). Feindliche Strukturen gelten als
+ *   bekannt (Zielerfassung), werden aber erst nach Erkundung dargestellt. addReveal(x, z, r, t, team = localSide).
+ * Kommandos (serialisierbar): {t:'move', ids, x, z, attackMove} · {t:'attack', ids, target} · {t:'stop', ids}
+ *   · {t:'hold', ids, value} · {t:'ability', ability, x, z}.
+ *   game.command(playerId, cmd) → bool: validiert (nur eigene lebende Einheiten, sichtbares feindl./neutrales Ziel,
+ *   eigene Fähigkeit) und führt aus; emit('command', playerId, cmd).
+ *   game.issueCommand(cmd): Einstieg für Input/HUD – Client → game.net.sendCommand(cmd), sonst command(localPlayerId, cmd).
+ * Fähigkeiten: player.abilities; game.abilities = Fähigkeiten des lokalen Spielers. useAbility(playerId, abilityId, x, z);
+ *   abilityAvailable(a) prüft requires gegen Einheiten von a.owner. setAbilities(list, playerId = lokal),
+ *   addAbilityCharges(id, n, playerId = lokal). ABILITIES[id].exec(game, x, z, player).
+ * Statistik: player.stats; game.stats.kills/lost/shots/intercepts spiegeln den lokalen Spieler (+ game.stats.start).
+ * Niederlage: Kampagne – lokaler Spieler ohne Einheiten → lose(). teamMode – Spieler ohne Einheiten → defeated
+ *   (emit 'playerDefeated'); ganzes lokales Team besiegt → lose(), ganzes Gegnerteam → win().
+ */
 import * as THREE from 'three';
 import { Terrain, CELL } from '../engine/terrain.js';
 import { FogOfWar, fowUniforms } from '../engine/fow.js';
@@ -10,6 +38,13 @@ import { ABILITIES } from './abilities.js';
 import { UNIT_TYPES } from './unitTypes.js';
 import { bridgeDecor } from './models.js';
 import { rand, clamp } from '../engine/util.js';
+
+export const TEAMS = ['UA', 'RU'];
+export const otherTeam = (t) => (t === 'UA' ? 'RU' : t === 'RU' ? 'UA' : null);
+const DEFAULT_PLAYERS = [
+  { id: 0, name: 'Spieler', team: 'UA', color: '#5dff8a', local: true },
+  { id: 1, name: 'KI', team: 'RU', color: '#ff4d4d', ai: true },
+];
 
 export class Game {
   constructor(gr, audio, settings) {
@@ -25,24 +60,83 @@ export class Game {
     this.active = false;
     this.paused = false;
     this.ringGeo = new THREE.RingGeometry(0.85, 1, 32); this.ringGeo.rotateX(-Math.PI / 2);
-    this.ringMatUA = new THREE.MeshBasicMaterial({ color: 0x5dff8a, transparent: true, opacity: 0.9, depthWrite: false });
-    this.ringMatRU = new THREE.MeshBasicMaterial({ color: 0xff4d4d, transparent: true, opacity: 0.9, depthWrite: false });
+    this.ringMatOwn = new THREE.MeshBasicMaterial({ color: 0x5dff8a, transparent: true, opacity: 0.9, depthWrite: false });
+    this.ringMatAlly = new THREE.MeshBasicMaterial({ color: 0x5db8ff, transparent: true, opacity: 0.9, depthWrite: false });
+    this.ringMatEnemy = new THREE.MeshBasicMaterial({ color: 0xff4d4d, transparent: true, opacity: 0.9, depthWrite: false });
     this.listeners = {};
+    this.net = null; // wird von der Netzwerkschicht gesetzt ({ isClient, isHost, sendCommand(cmd) })
+    this.unitMap = new Map();
+    this._applyPlayers(DEFAULT_PLAYERS);
   }
   on(ev, fn) { (this.listeners[ev] ||= []).push(fn); }
   emit(ev, ...a) { (this.listeners[ev] || []).forEach((f) => f(...a)); }
 
+  // ================== Spieler & Teams ==================
+  setupPlayers(list) {
+    this._playerSpec = list;
+    this._playersPreset = true;
+    this._applyPlayers(list);
+    // Bereits vorhandene Einheiten (setupPlayers nach load) auf gültige Besitzer abbilden
+    for (const u of this.units) if (u.side !== 'N' && !this.playerById(u.owner)) u.owner = this.playersOfTeam(u.side)[0]?.id ?? null;
+    if (this.active) { this.select([]); this._bindFow(); this.visionT = 0; this.emit('abilities'); this.emit('players'); }
+  }
+  _applyPlayers(list) {
+    this.teamMode = list !== DEFAULT_PLAYERS;
+    this.players = list.map((p, i) => {
+      const pl = {
+        id: p.id ?? i, name: p.name || `Spieler ${i + 1}`, team: p.team === 'RU' ? 'RU' : 'UA',
+        color: p.color || (p.team === 'RU' ? '#ff4d4d' : '#5dff8a'),
+        ai: !!p.ai, local: false, remote: !!p.remote, defeated: false, abilities: [],
+        stats: { kills: 0, lost: 0, shots: 0, intercepts: 0 },
+      };
+      if (p.abilities) pl.abilities = this._buildAbilities(p.abilities, pl.id);
+      return pl;
+    });
+    const loc = list.findIndex((p) => p.local);
+    this._localPlayerId = this.players[loc >= 0 ? loc : 0]?.id;
+    for (const p of this.players) p.local = p.id === this._localPlayerId;
+  }
+  get localPlayerId() { return this._localPlayerId; }
+  set localPlayerId(id) {
+    const p = this.playerById(id);
+    if (!p) return;
+    this._localPlayerId = p.id;
+    for (const q of this.players) q.local = q === p;
+    if (this.active) { this.select([]); this._bindFow(); this.updateVision(0, true); this.fow.upload(1); }
+    this.emit('abilities');
+    this.emit('localPlayer', p);
+  }
+  get localPlayer() { return this.playerById(this._localPlayerId); }
+  get localSide() { return this.localPlayer?.team ?? 'UA'; }
+  playerById(id) {
+    if (id === null || id === undefined) return null;
+    return this.players.find((p) => p.id === id) || this.players.find((p) => String(p.id) === String(id)) || null;
+  }
+  playersOfTeam(team) { return this.players.filter((p) => p.team === team); }
+  ownerPlayer(u) { return (u && (this.playerById(u.owner) || this.playersOfTeam(u.side)[0])) || null; }
+  isOwn(u) { return !!u && u.owner === this._localPlayerId && u.side !== 'N'; }
+  isAlly(u) { return !!u && u.side === this.localSide && u.owner !== this._localPlayerId; }
+  isAIOwned(u) { return !!u.ai || !!this.playerById(u.owner)?.ai; }
+  // Nebel je Team; game.fow = Nebel des lokalen Teams
+  get fow() { return this.fows?.[this.localSide]; }
+  fowFor(team) { return this.fows?.[team] || this.fow; }
+  _bindFow() { if (this.fow) fowUniforms.uFowTex.value = this.fow.tex; }
+
   // ================== Laden ==================
-  load(mission, { demo = false } = {}) {
+  load(mission, { demo = false, players = null } = {}) {
     this.dispose();
     this.mission = mission;
     this.demo = demo;
     const q = this.settings.quality;
     const map = mission.map;
     this.terrain = new Terrain(map, q);
-    this.fow = new FogOfWar(this.terrain.size);
-    this.fow.enabled = !demo && !map.noFog;
-    fowUniforms.uFowTex.value = this.fow.tex;
+    // Spieler: explizit übergeben > Mission > zuvor per setupPlayers gesetzt > Kampagnen-Standard
+    const spec = players || mission.players || (this._playersPreset ? this._playerSpec : null) || DEFAULT_PLAYERS;
+    this._applyPlayers(spec);
+    this._playersPreset = false;
+    this.fows = {};
+    for (const t of TEAMS) { this.fows[t] = new FogOfWar(this.terrain.size); this.fows[t].enabled = !demo && !map.noFog; }
+    this._bindFow();
     fowUniforms.uFowSize.value = this.terrain.size;
     fowUniforms.uFowEnabled.value = this.fow.enabled ? 1 : 0;
     this.pathfinder = new Pathfinder(this.terrain);
@@ -54,9 +148,12 @@ export class Game {
     this.combat = new Combat(this);
     this.time = 0;
     this.units = []; this.missiles = []; this.timers = []; this.animations = []; this.selected = [];
+    this.unitMap = new Map();
     this.reveals = []; this.jamZones = []; this.objectives = []; this.groups = {};
-    this.abilities = [];
-    this.stats = { kills: 0, lost: 0, shots: 0, intercepts: 0, start: 0 };
+    // Kampagnen-Statistik: spiegelt den lokalen Spieler
+    const self = this;
+    const st = (k) => ({ get() { return self.localPlayer?.stats[k] ?? 0; }, set(v) { if (self.localPlayer) self.localPlayer.stats[k] = v; }, enumerable: true });
+    this.stats = Object.defineProperties({ start: 0 }, { kills: st('kills'), lost: st('lost'), shots: st('shots'), intercepts: st('intercepts') });
     this.flags = {};
     this.ended = false;
     this.countdown = null;
@@ -94,13 +191,16 @@ export class Game {
       // Effekt-Lichter wurden entfernt; neue werden in Effects erzeugt
     }
     this.units = []; this.missiles = []; this.selected = [];
+    this.unitMap = new Map();
     this.active = false;
   }
 
   // ================== Einheiten ==================
   spawn(typeKey, side, x, z, opts = {}) {
-    const u = new Unit(this, typeKey, side, x, z, opts);
+    const owner = side === 'N' ? null : (opts.owner !== undefined && this.playerById(opts.owner) ? this.playerById(opts.owner).id : this.playersOfTeam(side)[0]?.id ?? null);
+    const u = new Unit(this, typeKey, side, x, z, { ...opts, owner });
     this.units.push(u);
+    this.unitMap.set(u.id, u);
     const t = u.type;
     if (t.structure) {
       if (typeKey === 'house') this.terrain.blockRect(x, z, opts.house.w, opts.house.d, opts.house.rot);
@@ -131,9 +231,11 @@ export class Game {
     }
     return out;
   }
+  unitById(id) { return this.unitMap.get(id) || (typeof id === 'string' ? this.unitMap.get(Number(id)) : undefined) || null; }
   removeUnit(u) {
     const i = this.units.indexOf(u);
     if (i >= 0) this.units.splice(i, 1);
+    if (this.unitMap.get(u.id) === u) this.unitMap.delete(u.id);
     const s = this.selected.indexOf(u);
     if (s >= 0) { this.selected.splice(s, 1); this.emit('selection'); }
     if (u.ring) { this.scene.remove(u.ring); u.ring = null; }
@@ -144,10 +246,15 @@ export class Game {
     if (!u.alive) return;
     u.die(killer, silent);
     this.removeUnit(u);
-    if (u.side === 'UA' && !u.type.kamikaze) this.stats.lost++;
-    if (u.side === 'RU' && killer?.side === 'UA') this.stats.kills++;
-    if (u.side === 'RU' && !killer) this.stats.kills++;
-    if (killer) killer.kills++;
+    // Statistik je Spieler (game.stats spiegelt den lokalen Spieler)
+    if (u.side !== 'N') {
+      const victim = this.ownerPlayer(u);
+      if (victim && !u.type.kamikaze) victim.stats.lost++;
+      // Ohne Verursacher (Störsender, Lebensdauer …) zählt der Abschuss für den ersten Spieler des Gegnerteams
+      const credit = killer ? (killer.side !== u.side && killer.side !== 'N' ? this.ownerPlayer(killer) : null) : this.playersOfTeam(otherTeam(u.side))[0];
+      if (credit) credit.stats.kills++;
+    }
+    if (killer) killer.kills = (killer.kills || 0) + 1;
     if (this.mission?.onKill) this.mission.onKill(this, u, killer);
     this.emit('kill', u, killer);
   }
@@ -163,20 +270,20 @@ export class Game {
     if (opts.topAttack && target.armor === 'heavy') mul *= 1.25;
     if (target.type.infantry && this.terrain.inForest(target.pos.x, target.pos.z)) mul *= 0.7;
     if (target.type.infantry && this.nearHouse(target.pos.x, target.pos.z)) mul *= 0.6;
-    if (this.mission?.damageMul && target.side === 'UA') mul *= this.mission.damageMul;
+    if (this.mission?.damageMul && target.side !== 'N' && !this.ownerPlayer(target)?.ai) mul *= this.mission.damageMul;
     const amount = dmg * mul * rand(0.85, 1.15);
     if (amount <= 0) return;
     target.hp -= amount;
     target.lastHit = this.time;
-    if (target.side === 'UA' && amount > 5 && !target.type.structure) this.emit('underAttack', target);
-    // KI reagiert auf Beschuss
-    if (target.side === 'RU' && target.ai && src && src.alive && !target.order && target.ai.mode !== 'convoy' && !target.type.structure) {
+    if (this.isOwn(target) && amount > 5 && !target.type.structure) this.emit('underAttack', target);
+    // KI reagiert auf Beschuss (teamneutral)
+    if (target.ai && src && src.alive && src.side !== target.side && !target.order && target.ai.mode !== 'convoy' && !target.type.structure) {
       if (target.ai.mode === 'hold' && target.ai.reactive !== false) { /* bleibt stehen */ }
-      else if (src.seenByEnemy || Math.random() < 0.3) target.attack(src);
+      else if (src.visibleTo?.(target.side) || Math.random() < 0.3) target.attack(src);
     }
     if (target.hp <= 0) this.killUnit(target, src && src.side ? src : null);
   }
-  splashDamage(x, z, r, dmg, w, side, exclude, hitAll = false) {
+  splashDamage(x, z, r, dmg, w, side, exclude, hitAll = false, owner = null) {
     for (const u of [...this.units]) {
       if (!u.alive || u === exclude) continue;
       if (u.side === side && !hitAll) continue;
@@ -186,7 +293,7 @@ export class Game {
       const k = 1 - Math.max(0, d) / r;
       let mul = 1;
       if (u.side === side) mul = 0.5; // Eigenbeschuss (Artillerie) abgeschwächt
-      this.applyDamage(u, dmg * k * mul, w, { pos: new THREE.Vector3(x, 0, z), alive: false, side }, { topAttack: true });
+      this.applyDamage(u, dmg * k * mul, w, { pos: new THREE.Vector3(x, 0, z), alive: false, side, owner }, { topAttack: true });
     }
   }
   // Neues Hindernis (Wrack): Einheiten, deren Weg hindurchführt, planen neu
@@ -230,19 +337,73 @@ export class Game {
   }
   byTag(tag, alive = true) { return this.units.filter((u) => u.tags.has(tag) && (!alive || u.alive)); }
   countTag(tag) { return this.units.reduce((n, u) => n + (u.alive && u.tags.has(tag) ? 1 : 0), 0); }
-  playerUnits() { return this.units.filter((u) => u.side === 'UA' && u.alive && !u.type.structure); }
-  enemyUnits() { return this.units.filter((u) => u.side === 'RU' && u.alive); }
+  // Eigene (lokaler Spieler) bzw. feindliche (aus Sicht des lokalen Teams) Einheiten
+  playerUnits() { return this.units.filter((u) => u.owner === this._localPlayerId && u.side !== 'N' && u.alive && !u.type.structure); }
+  enemyUnits() { return this.units.filter((u) => u.side !== this.localSide && u.side !== 'N' && u.alive); }
+  unitsOf(playerId) { const p = this.playerById(playerId); return p ? this.units.filter((u) => u.alive && u.owner === p.id) : []; }
   unitsInArea(x, z, r, side) { return this.units.filter((u) => u.alive && (!side || u.side === side) && Math.hypot(u.pos.x - x, u.pos.z - z) < r); }
 
-  // ================== Befehle des Spielers ==================
-  issueOrder(units, x, z, target, { attackMove = false } = {}) {
-    units = units.filter((u) => u.alive && u.side === 'UA' && !u.type.structure && u.speed > 0);
-    if (!units.length) return;
-    this.audio.ui('ack');
-    if (target && target.side !== 'UA') {
+  // ================== Kommandos ==================
+  // Einstieg für Input/HUD: Client schickt an den Host, sonst direkt ausführen
+  issueCommand(cmd) {
+    if (this.net?.isClient) return this.net.sendCommand(cmd);
+    return this.command(this._localPlayerId, cmd);
+  }
+  // Validiert und führt ein serialisierbares Kommando eines Spielers aus
+  command(playerId, cmd) {
+    const p = this.playerById(playerId);
+    if (!p || p.defeated || !cmd || typeof cmd !== 'object' || !this.active) return false;
+    const ids = Array.isArray(cmd.ids) ? cmd.ids : [];
+    const units = ids.map((id) => this.unitById(id)).filter((u) => u && u.alive && u.owner === p.id && u.side === p.team);
+    const fin = (v) => typeof v === 'number' && Number.isFinite(v);
+    let ok = false;
+    switch (cmd.t) {
+      case 'move': {
+        if (!units.length || !fin(cmd.x) || !fin(cmd.z)) return false;
+        ok = this.issueOrder(units, cmd.x, cmd.z, null, { attackMove: !!cmd.attackMove, playerId: p.id });
+        break;
+      }
+      case 'attack': {
+        const t = this.unitById(cmd.target);
+        if (!units.length || !t || !t.alive || t.side === p.team || (t.side !== 'N' && !t.type.structure && !t.visibleTo(p.team))) return false;
+        ok = this.issueOrder(units, t.pos.x, t.pos.z, t, { playerId: p.id });
+        break;
+      }
+      case 'stop':
+        if (!units.length) return false;
+        units.forEach((u) => u.stop());
+        ok = true;
+        break;
+      case 'hold': {
+        if (!units.length) return false;
+        const v = cmd.value === undefined ? !units.every((u) => u.holdFire) : !!cmd.value;
+        units.forEach((u) => (u.holdFire = v));
+        ok = true;
+        break;
+      }
+      case 'ability':
+        if (!fin(cmd.x) || !fin(cmd.z)) return false;
+        ok = this.useAbility(p.id, cmd.ability, cmd.x, cmd.z);
+        break;
+      default:
+        return false;
+    }
+    if (ok) {
+      if (p.id === this._localPlayerId && (cmd.t === 'stop' || cmd.t === 'hold')) this.audio.ui('ack');
+      this.emit('command', p.id, cmd);
+    }
+    return !!ok;
+  }
+  // Interne Befehlslogik (Formation); Validierung erfolgt in command()
+  issueOrder(units, x, z, target, { attackMove = false, playerId = this._localPlayerId } = {}) {
+    units = units.filter((u) => u.alive && !u.type.structure && u.speed > 0);
+    if (!units.length) return false;
+    const fb = playerId === this._localPlayerId; // Rückmeldung nur für den lokalen Spieler
+    if (fb) this.audio.ui('ack');
+    if (target && target.side !== units[0].side) {
       for (const u of units) u.attack(target);
-      this.effects.marker(target.pos.x, target.pos.z, 0xff4040, 0.8, Math.max(2, target.radius + 1));
-      return;
+      if (fb) this.effects.marker(target.pos.x, target.pos.z, 0xff4040, 0.8, Math.max(2, target.radius + 1));
+      return true;
     }
     // Formation um den Zielpunkt
     const n = units.length;
@@ -257,8 +418,10 @@ export class Game {
       const px = x + ox * Math.cos(dir) + oz * Math.sin(dir), pz = z - ox * Math.sin(dir) + oz * Math.cos(dir);
       u.moveTo(n === 1 ? x : px, n === 1 ? z : pz, { attackMove });
     });
-    this.effects.marker(x, z, attackMove ? 0xffa030 : 0x5dff8a, 0.8, 2);
+    if (fb) this.effects.marker(x, z, attackMove ? 0xffa030 : 0x5dff8a, 0.8, 2);
+    return true;
   }
+  ringMatFor(u) { return this.isOwn(u) ? this.ringMatOwn : u.side === this.localSide ? this.ringMatAlly : this.ringMatEnemy; }
   select(list, add = false) {
     if (!add) this.selected.forEach((u) => { if (u.ring) u.ring.visible = false; });
     const set = add ? new Set(this.selected) : new Set();
@@ -266,10 +429,11 @@ export class Game {
     this.selected = [...set];
     for (const u of this.selected) {
       if (!u.ring) {
-        u.ring = new THREE.Mesh(this.ringGeo, u.side === 'UA' ? this.ringMatUA : this.ringMatRU);
+        u.ring = new THREE.Mesh(this.ringGeo, this.ringMatFor(u));
         u.ring.renderOrder = 4;
         this.scene.add(u.ring);
       }
+      u.ring.material = this.ringMatFor(u);
       u.ring.visible = true;
       const s = u.radius * 1.3 + 0.6;
       u.ring.scale.set(s, 1, s);
@@ -278,30 +442,41 @@ export class Game {
   }
 
   // ================== Fähigkeiten ==================
-  setAbilities(list) {
-    this.abilities = list.map((a) => {
+  _buildAbilities(list, owner) {
+    return list.map((a) => {
       const id = typeof a === 'string' ? a : a.id;
       const def = ABILITIES[id];
-      return { id, def, cd: 0, charges: (typeof a === 'object' && a.charges !== undefined) ? a.charges : def.charges ?? Infinity, cooldown: (typeof a === 'object' && a.cooldown) || def.cooldown };
+      if (!def) throw new Error('Unbekannte Fähigkeit ' + id);
+      return { id, def, owner, cd: 0, charges: (typeof a === 'object' && a.charges !== undefined) ? a.charges : def.charges ?? Infinity, cooldown: (typeof a === 'object' && a.cooldown) || def.cooldown };
     });
+  }
+  // Fähigkeiten des lokalen Spielers (HUD)
+  get abilities() { return this.localPlayer?.abilities || []; }
+  setAbilities(list, playerId = this._localPlayerId) {
+    const p = this.playerById(playerId);
+    if (!p) return;
+    p.abilities = this._buildAbilities(list, p.id);
     this.emit('abilities');
   }
   abilityAvailable(a) {
-    if (a.cd > 0 || a.charges <= 0) return false;
-    if (a.def.requires && !this.units.some((u) => u.alive && u.side === 'UA' && u.type.key === a.def.requires)) return false;
+    if (!a || a.cd > 0 || a.charges <= 0) return false;
+    if (a.def.requires && !this.units.some((u) => u.alive && u.owner === a.owner && u.type.key === a.def.requires)) return false;
     return true;
   }
-  useAbility(a, x, z) {
-    if (!this.abilityAvailable(a)) return false;
-    const r = a.def.exec(this, x, z);
+  useAbility(playerId, abilityId, x, z) {
+    const p = this.playerById(playerId);
+    if (!p || p.defeated) return false;
+    const a = p.abilities.find((a) => a === abilityId || a.id === abilityId);
+    if (!a || !this.abilityAvailable(a)) return false;
+    const r = a.def.exec(this, x, z, p);
     if (r === false) return false;
     a.cd = a.cooldown;
     if (a.charges !== Infinity) a.charges--;
     this.emit('abilities');
     return true;
   }
-  addAbilityCharges(id, n) { const a = this.abilities.find((a) => a.id === id); if (a) { a.charges += n; this.emit('abilities'); } }
-  addReveal(x, z, r, t) { this.reveals.push({ x, z, r, t }); this.visionT = 0; }
+  addAbilityCharges(id, n, playerId = this._localPlayerId) { const a = this.playerById(playerId)?.abilities.find((a) => a.id === id); if (a) { a.charges += n; this.emit('abilities'); } }
+  addReveal(x, z, r, t, team = this.localSide) { this.reveals.push({ x, z, r, t, team }); this.visionT = 0; }
   trackMissile(m) { this.trackedMissile = m; }
 
   // ================== Gegnerische Angriffe ==================
@@ -384,16 +559,20 @@ export class Game {
     this.visionT -= dt;
     if (this.visionT > 0 && !force) return;
     this.visionT = 0.2;
-    const fow = this.fow, t = this.terrain;
-    fow.beginFrame();
-    const players = [], enemies = [];
-    for (const u of this.units) {
-      if (!u.alive) continue;
-      if (u.side === 'UA') players.push(u); else if (u.side === 'RU') enemies.push(u);
+    const t = this.terrain;
+    const fogOn = this.fow.enabled;
+    const byTeam = { UA: [], RU: [] };
+    for (const u of this.units) if (u.alive && byTeam[u.side]) byTeam[u.side].push(u);
+    const revealsOf = { UA: [], RU: [] };
+    for (const r of this.reveals) (revealsOf[r.team] || revealsOf.UA).push(r);
+    // Nebelraster je Team (Sicht wird im Team geteilt)
+    for (const team of TEAMS) {
+      const f = this.fows[team];
+      f.beginFrame();
+      for (const o of byTeam[team]) f.reveal(o.pos.x, o.pos.z, o.type.sight);
+      for (const r of revealsOf[team]) f.reveal(r.x, r.z, r.r);
+      if (!fogOn) f.revealAll();
     }
-    for (const p of players) fow.reveal(p.pos.x, p.pos.z, p.type.sight);
-    for (const r of this.reveals) fow.reveal(r.x, r.z, r.r);
-    if (!fow.enabled) fow.revealAll();
     const concealOf = (u) => {
       const c = u.type.conceal || 0;
       if (!c) return 1;
@@ -403,26 +582,31 @@ export class Game {
       return Math.max(0.2, k);
     };
     const check = (u, observers, reveals) => {
-      if (u.type.structure) return true;
+      if (u.type.structure) return true; // Strukturen gelten als bekannt (Darstellung erst nach Erkundung)
       const k = concealOf(u);
       for (const o of observers) {
         const range = (u.type.air ? (o.type.airSight || o.type.sight * 1.1) : o.type.sight) * k;
         const dx = u.pos.x - o.pos.x, dz = u.pos.z - o.pos.z;
         if (dx * dx + dz * dz < range * range) return true;
       }
-      if (reveals) for (const r of reveals) if (Math.hypot(u.pos.x - r.x, u.pos.z - r.z) < r.r) return true;
+      for (const r of reveals) if (Math.hypot(u.pos.x - r.x, u.pos.z - r.z) < r.r) return true;
       return false;
     };
-    for (const e of enemies) {
-      e.seenByPlayer = !fow.enabled || check(e, players, this.reveals);
-      const vis = e.type.structure ? fow.isExplored(e.pos.x, e.pos.z) : e.seenByPlayer;
-      e.root.visible = vis;
-      if (e.ring) e.ring.visible = vis && this.selected.includes(e);
+    for (const team of TEAMS) {
+      for (const u of byTeam[team]) u.seenBy[team] = true;
+      for (const u of byTeam[otherTeam(team)]) u.seenBy[team] = !fogOn || check(u, byTeam[team], revealsOf[team]);
     }
-    for (const p of players) p.seenByEnemy = check(p, enemies, this.enemyReveals);
-    // Sichtbar markierte Feinde aus Auswahl entfernen
+    // Darstellung aus Sicht des lokalen Teams
+    const ls = this.localSide, lf = this.fows[ls];
+    for (const u of this.units) {
+      if (!u.alive || u.side === 'N') continue;
+      const vis = u.side === ls || (u.type.structure ? lf.isExplored(u.pos.x, u.pos.z) : u.seenBy[ls]);
+      u.root.visible = vis;
+      if (u.ring) u.ring.visible = vis && this.selected.includes(u);
+    }
+    // Nicht mehr sichtbare Feinde aus Auswahl entfernen
     const before = this.selected.length;
-    this.selected = this.selected.filter((u) => u.side === 'UA' || u.seenByPlayer || u.type.structure);
+    this.selected = this.selected.filter((u) => u.side === ls || u.side === 'N' || u.seenBy[ls] || u.type.structure);
     if (before !== this.selected.length) this.emit('selection');
   }
 
@@ -457,7 +641,7 @@ export class Game {
     this.reveals = this.reveals.filter((r) => r.t > 0);
     for (const z of this.jamZones) {
       z.t -= dt;
-      for (const u of this.units) if (u.side === 'RU' && u.alive && u.type.air && u.type.key !== 'ka52' && !u.jammed && Math.hypot(u.pos.x - z.x, u.pos.z - z.z) < z.r) u.jammed = rand(0.5, 2);
+      for (const u of this.units) if (u.side !== (z.team || 'UA') && u.side !== 'N' && u.alive && u.type.air && u.type.key !== 'ka52' && !u.jammed && Math.hypot(u.pos.x - z.x, u.pos.z - z.z) < z.r) u.jammed = rand(0.5, 2);
     }
     this.jamZones = this.jamZones.filter((z) => z.t > 0);
     if (this.warnings) this.warnings = this.warnings.filter((w) => (w.t -= dt) > 0);
@@ -470,25 +654,40 @@ export class Game {
     this.missiles = this.missiles.filter((m) => !m.dead);
     if (this.trackedMissile?.dead) this.trackedMissile = null;
     this.updateVision(dt);
-    this.fow.upload(dt);
+    this.fow.upload(dt); // nur die Textur des lokalen Teams
     // Countdown
     if (this.countdown) {
       this.countdown.t -= dt;
       if (this.countdown.t <= 0) { const c = this.countdown; this.countdown = null; c.onEnd && c.onEnd(); }
     }
     // Fähigkeiten-Cooldowns
-    for (const a of this.abilities) if (a.cd > 0) a.cd = Math.max(0, a.cd - dt);
+    for (const p of this.players) for (const a of p.abilities) if (a.cd > 0) a.cd = Math.max(0, a.cd - dt);
     if (this.mission && !this.ended) {
       if (this.demo) { this.mission.demoUpdate && this.mission.demoUpdate(this, dt); }
       else if (this.mission.update) this.mission.update(this, dt);
       // Standard-Niederlage: alle eigenen Einheiten verloren
-      if (!this.demo && !this.ended && this.time > 3 && !this.mission.noDefaultDefeat) {
-        const own = this.units.some((u) => u.side === 'UA' && u.alive && !u.type.structure && !u.type.kamikaze);
-        if (!own) this.lose('Alle Einheiten sind gefallen.');
-      }
+      if (!this.demo && !this.ended && this.time > 3 && !this.mission.noDefaultDefeat) this.checkDefeat();
     }
     // Audio-Hörer
     this.audio.listener.x = this.camera.target.x; this.audio.listener.z = this.camera.target.z; this.audio.listener.zoom = this.camera.dist;
+  }
+  hasCombatUnits(p) { return this.units.some((u) => u.owner === p.id && u.alive && !u.type.structure && !u.type.kamikaze); }
+  checkDefeat() {
+    if (!this.teamMode) {
+      // Kampagne: nur der lokale Spieler
+      const lp = this.localPlayer;
+      if (lp && !this.hasCombatUnits(lp)) { lp.defeated = true; this.lose('Alle Einheiten sind gefallen.'); }
+      return;
+    }
+    for (const p of this.players) {
+      if (p.defeated || this.hasCombatUnits(p)) continue;
+      p.defeated = true;
+      this.emit('playerDefeated', p);
+    }
+    const ls = this.localSide;
+    const teamDown = (t) => { const ps = this.playersOfTeam(t); return ps.length > 0 && ps.every((p) => p.defeated); };
+    if (teamDown(ls)) this.lose('Euer Team wurde besiegt.');
+    else if (teamDown(otherTeam(ls))) this.win('Alle gegnerischen Spieler wurden besiegt.');
   }
   separate() {
     const us = this.units;
@@ -554,7 +753,7 @@ export class Game {
     let best = null, bd = Infinity;
     for (const u of this.units) {
       if (!u.alive || u.side === 'N') continue;
-      if (u.side === 'RU' && !u.root.visible) continue;
+      if (u.side !== this.localSide && !u.root.visible) continue;
       u.aimPoint(v); v.project(cam);
       if (v.z > 1) continue;
       const px = (v.x * 0.5 + 0.5) * w, py = (-v.y * 0.5 + 0.5) * h;

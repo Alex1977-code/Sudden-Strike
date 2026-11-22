@@ -12,9 +12,12 @@ export class Unit {
     const type = UNIT_TYPES[typeKey];
     if (!type) throw new Error('Unbekannter Einheitentyp ' + typeKey);
     this.game = game;
-    this.id = NEXT_ID++;
+    // Eindeutige id (opts.id z. B. für vom Host gespiegelte Einheiten)
+    if (opts.id !== undefined && opts.id !== null) { this.id = opts.id; if (typeof opts.id === 'number' && opts.id >= NEXT_ID) NEXT_ID = opts.id + 1; }
+    else this.id = NEXT_ID++;
     this.type = type;
-    this.side = side;
+    this.side = side; // Team: 'UA' | 'RU' | 'N'
+    this.owner = opts.owner ?? null; // Spieler-id (game.players)
     this.name = opts.name || type.name;
     this.maxHp = Math.round(type.hp * (opts.hpMul || 1));
     this.hp = this.maxHp;
@@ -32,8 +35,8 @@ export class Unit {
     this.repathT = 0;
     this.holdFire = false;
     this.lifetime = type.lifetime || 0;
-    this.seenByPlayer = side === 'UA';
-    this.seenByEnemy = false;
+    // Sicht je Team (wird in game.updateVision gepflegt); Strukturen gelten als bekannt
+    this.seenBy = { UA: side === 'UA' || side === 'N' || !!type.structure, RU: side === 'RU' || side === 'N' || !!type.structure };
     this.lastHit = -99;
     this.kills = 0;
     this.moving = false;
@@ -65,6 +68,8 @@ export class Unit {
     }
   }
 
+  // Für ein Team sichtbar/aufgeklärt? (eigenes Team und Neutrale immer)
+  visibleTo(team) { return this.side === team || this.side === 'N' || !!this.seenBy[team]; }
   get isAir() { return this.type.air; }
   get armor() { return this.type.armor; }
   get primary() { return this.weapons[0]; }
@@ -117,7 +122,6 @@ export class Unit {
     if (this.type.structure || !this.speed) return;
     this.order = { type: attackMove ? 'attackMove' : 'move', x, z };
     this.computePath(x, z);
-    if (!attackMove) this.weapons.forEach((w) => { if (this.side === 'UA') w.target = w.target; });
   }
   attack(target) {
     if (!target || !target.alive) return;
@@ -151,11 +155,8 @@ export class Unit {
     if (w.requiresRadar && !this.game.hasRadar(this.side, w.requiresRadar)) return false;
     return true;
   }
-  isSpotted(u) {
-    if (u.type.structure && u.side !== 'N') return this.side === 'UA' ? this.game.fow.isExplored(u.pos.x, u.pos.z) || u.seenByPlayer : true;
-    if (u.side === 'N') return true;
-    return this.side === 'UA' ? u.seenByPlayer : u.seenByEnemy;
-  }
+  // Aufgeklärt für das Team dieser Einheit (geteilte Teamsicht)
+  isSpotted(u) { return u.visibleTo(this.side); }
   inRange(w, u) {
     const d = u.type.air ? Math.hypot(this.distTo(u), (u.pos.y - this.pos.y) * 0.5) : this.edgeDist(u);
     if (w.minRange && d < w.minRange) return false;
@@ -167,7 +168,7 @@ export class Unit {
     // Explizites Ziel?
     const ot = this.order?.type === 'attack' ? this.order.target : null;
     if (ot && this.canWeaponTarget(w, ot) && this.isSpotted(ot) && this.inRange(w, ot)) return ot;
-    if (this.holdFire && this.side === 'UA') return null;
+    if (this.holdFire) return null;
     let best = null, bestScore = -Infinity;
     const list = game.units;
     const rangeLimit = w.range + 6;
@@ -261,7 +262,7 @@ export class Unit {
     // Kamikaze-Drohnen ohne Auftrag: automatisch angreifen
     if (type.kamikaze && (!this.order || this.order.type !== 'attack')) {
       const tgt = this.findKamikazeTarget();
-      if (tgt && (!this.order || this.order.type === 'attackMove' || this.side !== 'UA' || !this.path?.length)) this.attack(tgt);
+      if (tgt && (!this.order || this.order.type === 'attackMove' || this.game.isAIOwned(this) || !this.path?.length)) this.attack(tgt);
     }
 
     const holdForAttack = this.order?.type === 'attackMove' && this.weapons.some((w) => w.target && w.target.alive && !w.target.type.air && !w.def.airOnly);
@@ -359,7 +360,7 @@ export class Unit {
     const game = this.game;
     const p = this.pos.clone();
     if (target && target.alive) game.applyDamage(target, w.dmg, w, this, { topAttack: !!w.topAttack });
-    game.splashDamage(p.x, p.z, w.splash || 3, w.dmg * 0.35, w, this.side, target);
+    game.splashDamage(p.x, p.z, w.splash || 3, w.dmg * 0.35, w, this.side, target, false, this.owner);
     const water = this.type.naval;
     game.effects.explosion(p.x, water ? game.terrain.seaLevel : Math.max(p.y - 1, game.terrain.surface(p.x, p.z)), p.z, water ? 2.5 : this.type.key === 'shahed' ? 2.2 : 1.2, { water });
     if (water) game.effects.explosion(p.x, game.terrain.seaLevel + 1, p.z, 1.6, { crater: false, sound: false });
@@ -391,7 +392,7 @@ export class Unit {
       const tp = threat ? threat.pos : target.pos;
       if (!aimTarget) { aimTarget = threat || target; aimPoint = tp; }
       if (ws.cd > 0) continue;
-      if (this.holdFire && this.side === 'UA' && !(this.order?.type === 'attack') && !(threat && threat.threat === 'hypersonic')) continue;
+      if (this.holdFire && !(this.order?.type === 'attack') && !(threat && threat.threat === 'hypersonic')) continue;
       // Ausrichtung prüfen
       const desired = Math.atan2(tp.x - this.pos.x, tp.z - this.pos.z);
       if (this.model.turret) {
@@ -437,7 +438,7 @@ export class Unit {
     }
   }
 
-  // ---------------- KI (Gegner) ----------------
+  // ---------------- KI (teamneutral: jede Einheit mit ai-Objekt) ----------------
   updateAI(dt) {
     const ai = this.ai;
     ai.t = (ai.t || 0) - dt;
