@@ -103,7 +103,7 @@ export class Game {
     this.units.push(u);
     const t = u.type;
     if (t.structure) {
-      if (typeKey === 'house') this.terrain.blockRect(x, z, opts.house.w, opts.house.d, -opts.house.rot);
+      if (typeKey === 'house') this.terrain.blockRect(x, z, opts.house.w, opts.house.d, opts.house.rot);
       else if (!t.bridge && !opts.noBlock) this.terrain.blockCircle(x, z, Math.max(2, u.radius * 0.8));
       if (opts.y !== undefined) { u.pos.y = opts.y; u.root.position.y = opts.y; u.root.updateMatrix(); }
       if (opts.rot !== undefined) { u.heading = opts.rot; u.root.rotation.y = opts.rot; u.root.updateMatrix(); }
@@ -187,6 +187,23 @@ export class Game {
       let mul = 1;
       if (u.side === side) mul = 0.5; // Eigenbeschuss (Artillerie) abgeschwächt
       this.applyDamage(u, dmg * k * mul, w, { pos: new THREE.Vector3(x, 0, z), alive: false, side }, { topAttack: true });
+    }
+  }
+  // Neues Hindernis (Wrack): Einheiten, deren Weg hindurchführt, planen neu
+  onObstacleAdded(x, z, r) {
+    for (const u of this.units) {
+      if (!u.alive || u.type.air || u.type.naval || u.type.structure || !u.path || !u.path.length) continue;
+      let hit = false, px = u.pos.x, pz = u.pos.z;
+      for (const [wx, wz] of u.path) {
+        // Abstand Hindernis zur Wegstrecke
+        const dx = wx - px, dz = wz - pz, l2 = dx * dx + dz * dz || 1;
+        const t = Math.max(0, Math.min(1, ((x - px) * dx + (z - pz) * dz) / l2));
+        if (Math.hypot(px + dx * t - x, pz + dz * t - z) < r + u.radius) { hit = true; break; }
+        px = wx; pz = wz;
+      }
+      if (!hit) continue;
+      const end = u.path[u.path.length - 1];
+      u.path = this.pathfinder.find(u.pos.x, u.pos.z, end[0], end[1], 'ground', u.type.vehicle);
     }
   }
   nearHouse(x, z) {

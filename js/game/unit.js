@@ -319,8 +319,12 @@ export class Unit {
       const k = t.cellIndex(nx, nz);
       if (k < 0) return;
       const pf = this.game.pathfinder;
-      const ok = pf.passable(k, this.type.naval ? 'water' : 'ground');
-      if (!ok) {
+      const mode = this.type.naval ? 'water' : 'ground';
+      const ok = pf.passable(k, mode);
+      // Steht die Einheit selbst in einer gesperrten Zelle (z. B. neben einem frischen Wrack), darf sie sich herausbewegen
+      const curK = t.cellIndex(this.pos.x, this.pos.z);
+      const stuckInside = curK >= 0 && !pf.passable(curK, mode);
+      if (!ok && !stuckInside) {
         // Gleiten an Hindernis
         const kx = t.cellIndex(nx, this.pos.z), kz = t.cellIndex(this.pos.x, nz);
         if (kx >= 0 && pf.passable(kx, this.type.naval ? 'water' : 'ground')) this.pos.x = nx;
@@ -568,6 +572,11 @@ export class Unit {
       return;
     }
     // Fahrzeuge & Gebäude
+    // Wracks von Bodenfahrzeugen sind Hindernisse: Rasterzellen unter dem Rumpf sperren (Wert 3 = Wrack)
+    if (type.vehicle) {
+      game.terrain.blockRect(p.x, p.z, this.radius * 1.15, this.radius * 2.3, this.heading, 3);
+      game.onObstacleAdded && game.onObstacleAdded(p.x, p.z, this.radius * 1.3);
+    }
     const size = type.structure ? 2.2 : type.armor === 'heavy' ? 1.8 : 1.3;
     fx.explosion(p.x, p.y + 1.5, p.z, size);
     if (type.secondary) {
