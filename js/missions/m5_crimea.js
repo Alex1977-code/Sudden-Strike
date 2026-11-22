@@ -72,7 +72,7 @@ export default {
     g.later(2, () => g.say('Sova', 'Trupp ist an Land. Leise vorgehen – die SSO sind im Gelände schwer zu entdecken. Erst das S-400-Radar im Nordwesten.', 6));
     g.later(9, () => g.say('Hrytsenko', 'Seedrohnen (F2) sind bereit. Wartet, bis die Boote abgelenkt sind – oder versenkt sie zuerst.', 6));
     g.later(16, () => g.say('Sova', 'Storm Shadow (F1) fliegt tief übers Meer an. Solange S-400 und Panzir stehen, werden viele abgefangen.', 6));
-    g.later(150, () => {
+    g.later(210, () => {
       g.spawn('ka52', 'RU', 130, -20, { ai: { mode: 'patrol', points: [[60, 10], [-20, 40], [-60, 0], [10, -40]] } });
       g.alert('⚠ Ka-52 über der Meerenge!', 3);
       g.say('Hrytsenko', 'Kampfhubschrauber über dem Wasser! Er jagt unsere Drohnen – der Stinger-Schütze muss ihn erwischen.', 6);

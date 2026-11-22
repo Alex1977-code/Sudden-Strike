@@ -74,7 +74,8 @@ export default {
     this.capT = 0;
     g.later(2, () => g.say('Sova', 'Drohnen voraus! Minenfelder werden markiert, sobald unsere Aufklärung sie überfliegt.', 6));
     g.later(10, () => g.say('Shevchuk', 'Leoparden bereit. Zeigt mir die Gassen durch die Minen.', 4));
-    g.later(85, () => {
+    g.later(105, () => g.say('Sova', 'Funkaufklärung: Ein Ka-52 startet im Norden. Gepard und Stinger in Position bringen – in etwa 15 Sekunden ist er da!', 5));
+    g.later(120, () => {
       g.spawn('ka52', 'RU', -60, -128, { ai: { mode: 'attackMove', points: [[-30, -20], [0, 50], [40, 20], [0, -40]], after: 'guard', aggressive: true } });
       g.say('Sova', 'Ka-52 von Norden! Gepard und Stinger – Feuer frei!', 5);
       g.alert('⚠ Kampfhubschrauber Ka-52!', 3);
@@ -83,7 +84,7 @@ export default {
       if (g.ended) return false;
       for (let i = 0; i < 2; i++) g.spawn('lancet', 'RU', -30 + i * 60, -128, { ai: { mode: 'hunt', huntRadius: 280, points: [[0, 60], [0, 100]] } });
       g.alert('⚠ Lancet-Drohnen jagen unsere Fahrzeuge!', 3);
-    }, 60);
+    }, 85);
   },
   onKill(g, u) {
     if (u.tags.has('leo')) {

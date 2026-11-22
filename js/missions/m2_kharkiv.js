@@ -66,7 +66,7 @@ export default {
       if (this.phase > 2) return;
       for (let i = 0; i < 2; i++) g.spawn('lancet', 'RU', -20 + i * 40, -118, { ai: { mode: 'hunt', huntRadius: 260, points: [[22, 50], [0, 90]] } });
       g.alert('⚠ Lancet-Drohnen im Anflug! Gepard / EloKa einsetzen.', 3);
-    }, 50);
+    }, 75);
   },
   onKill(g, u) {
     if (u.tags.has('orlan')) {
@@ -81,9 +81,9 @@ export default {
     if (this.phase === 1 && g.objState('arty') === 'done' && g.objState('depot') === 'done') {
       this.phase = 2;
       const o = g.objectives.find((o) => o.id === 'hold'); o.hidden = false; g.emit('objectives');
-      g.say('Koval', 'Sie schicken alles, was sie noch haben, gegen Sosnivka. Haltet das Dorf drei Minuten, dann kommt Verstärkung!', 6);
+      g.say('Koval', 'Sie sammeln alles, was sie noch haben, für einen Gegenangriff auf Sosnivka – in etwa einer Minute sind sie an den Furten. Alle Trupps zurück ins Dorf und haltet es, bis die Verstärkung kommt!', 8);
       g.addAbilityCharges('fpv', 4);
-      g.setCountdown(180, 'Verstärkung in', () => {
+      g.setCountdown(225, 'Verstärkung in', () => {
         g.setObjective('hold', 'done');
         g.win('Die Gegenoffensive rollt weiter. Die Region Charkiw wird befreit.');
       });
@@ -92,8 +92,8 @@ export default {
         g.spawnGroup([['btr', 1], ['e_rifle', 4], ['e_mg', 1]], 'RU', 68, -112, { spacing: 4, ai: { mode: 'attackMove', points: [[72, -40], [70, 10], [30, 40]], aggressive: true } });
         for (let i = 0; i < 3; i++) g.spawn('lancet', 'RU', -40 + i * 30, -118, { ai: { mode: 'hunt', huntRadius: 260, points: [[22, 50], [0, 90]] } });
       };
-      wave(0);
-      g.later(80, () => { wave(1); g.say('Sova', 'Zweite Welle! Panzer an beiden Furten!', 4); });
+      g.later(60, () => { wave(0); g.alert('⚠ Gegenangriff an den Furten!', 3); });
+      g.later(140, () => { wave(1); g.say('Sova', 'Zweite Welle! Panzer an beiden Furten!', 4); });
     }
     if (this.phase === 2 && !g.ended) {
       // Niederlage, wenn das Dorf überrannt wird
