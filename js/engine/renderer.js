@@ -40,7 +40,7 @@ const ENV_PRESETS = {
     grade: { contrast: 0.2, sat: 1.06, shadowTint: [-0.01, 0.002, 0.018], highTint: [0.012, 0.006, -0.008], vignette: 0.22 },
   },
   night: {
-    sun: 0xa8bce8, sunI: 1.3, hemiSky: 0x5a72a8, hemiGround: 0x22222e, hemiI: 1.0, exposure: 1.3, envI: 0.3,
+    sun: 0xa8bce8, sunI: 1.3, hemiSky: 0x5a72a8, hemiGround: 0x22222e, hemiI: 1.0, exposure: 1.55, envI: 0.3,
     fog: 0x0a0e18, turbidity: 8, rayleigh: 0.4,
     grade: { contrast: 0.1, sat: 0.92, shadowTint: [-0.004, 0.004, 0.02], highTint: [0.012, 0.008, 0.0], vignette: 0.28 },
   },
