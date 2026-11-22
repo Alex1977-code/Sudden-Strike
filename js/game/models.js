@@ -5,17 +5,26 @@ import { applyFow } from '../engine/fow.js';
 const M = {};
 let _matsReady = false;
 
+// ---------------- Texturen ----------------
+function mkCanvas(w, h = w) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; }
+function mkRand(seed) { let s = seed; return () => { s = (s * 16807) % 2147483647; return s / 2147483647; }; }
+function finishTex(c, aniso = 4) {
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = aniso;
+  return tex;
+}
+
 function camoTexture(colors, seed = 1, size = 256) {
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  const ctx = c.getContext('2d');
+  const [c, ctx] = mkCanvas(size);
   ctx.fillStyle = colors[0]; ctx.fillRect(0, 0, size, size);
-  let s = seed;
-  const r = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+  const r = mkRand(seed);
+  const k0 = size / 256;
   for (let k = 1; k < colors.length; k++) {
     ctx.fillStyle = colors[k];
     for (let i = 0; i < 18; i++) {
-      const x = r() * size, y = r() * size, rad = 10 + r() * 34;
+      const x = r() * size, y = r() * size, rad = (10 + r() * 34) * k0;
       ctx.beginPath();
       for (let a = 0; a < 6.28; a += 0.5) {
         const rr = rad * (0.6 + r() * 0.6);
@@ -25,35 +34,124 @@ function camoTexture(colors, seed = 1, size = 256) {
       ctx.closePath(); ctx.fill();
     }
   }
-  // Schmutz/Abnutzung
-  for (let i = 0; i < 400; i++) { ctx.fillStyle = `rgba(30,25,20,${r() * 0.12})`; ctx.fillRect(r() * size, r() * size, 2 + r() * 6, 1 + r() * 3); }
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
+  if (size >= 128) {
+    // Abgeplatzter Lack (helle Kratzer an Kanten) + Regenstreifen + Staub
+    for (let i = 0; i < 90; i++) { ctx.fillStyle = `rgba(150,140,115,${0.1 + r() * 0.25})`; ctx.fillRect(r() * size, r() * size, 1 + r() * 5, 1); }
+    for (let i = 0; i < 26; i++) { const x = r() * size, y = r() * size * 0.7; const g = ctx.createLinearGradient(0, y, 0, y + 50 * k0); g.addColorStop(0, `rgba(20,16,10,${0.16 + r() * 0.12})`); g.addColorStop(1, 'rgba(20,16,10,0)'); ctx.fillStyle = g; ctx.fillRect(x, y, 1 + r() * 2, 50 * k0); }
+    const edge = ctx.createLinearGradient(0, 0, 0, size); edge.addColorStop(0, 'rgba(0,0,0,0.0)'); edge.addColorStop(0.85, 'rgba(70,55,35,0.0)'); edge.addColorStop(1, 'rgba(70,55,35,0.22)');
+    ctx.fillStyle = edge; ctx.fillRect(0, 0, size, size);
+  }
+  for (let i = 0; i < 400; i++) { ctx.fillStyle = `rgba(30,25,20,${r() * 0.12})`; ctx.fillRect(r() * size, r() * size, (2 + r() * 6) * k0, (1 + r() * 3) * k0); }
+  return finishTex(c);
+}
+
+function trackTexture() {
+  const [c, ctx] = mkCanvas(64);
+  ctx.fillStyle = '#1b1a19'; ctx.fillRect(0, 0, 64, 64);
+  for (const x of [2, 34]) {
+    ctx.fillStyle = '#3b3936'; ctx.fillRect(x, 0, 26, 64);
+    ctx.fillStyle = '#0d0d0c'; ctx.fillRect(x + 26, 0, 4, 64);
+    ctx.fillStyle = '#55524d'; ctx.fillRect(x + 2, 4, 22, 3); ctx.fillRect(x + 2, 56, 22, 3);
+    ctx.fillStyle = '#6b6761'; ctx.fillRect(x + 11, 28, 4, 8);
+  }
+  const r = mkRand(5);
+  for (let i = 0; i < 90; i++) { ctx.fillStyle = `rgba(90,70,45,${r() * 0.2})`; ctx.fillRect(r() * 64, r() * 64, 2 + r() * 4, 2 + r() * 3); }
+  return finishTex(c);
+}
+
+function plasterTexture(base, seed, dirt = 0.5) {
+  const [c, ctx] = mkCanvas(256);
+  ctx.fillStyle = base; ctx.fillRect(0, 0, 256, 256);
+  const r = mkRand(seed);
+  for (let i = 0; i < 60; i++) { ctx.fillStyle = `rgba(${r() < 0.5 ? '255,250,235' : '60,50,40'},${0.03 + r() * 0.06})`; ctx.beginPath(); ctx.ellipse(r() * 256, r() * 256, 10 + r() * 40, 8 + r() * 30, r() * 3, 0, 6.3); ctx.fill(); }
+  for (let i = 0; i < 700; i++) { ctx.fillStyle = `rgba(${r() < 0.5 ? '255,255,255' : '40,30,20'},${r() * 0.1})`; ctx.fillRect(r() * 256, r() * 256, 1 + r() * 2, 1 + r() * 2); }
+  // abgeplatzter Putz (Ziegel scheint durch) und Risse
+  for (let i = 0; i < 6; i++) { if (r() > dirt) continue; const x = r() * 240, y = r() * 240; ctx.fillStyle = 'rgba(140,85,65,0.5)'; ctx.fillRect(x, y, 6 + r() * 14, 4 + r() * 8); ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(x - 1, y + 6, 10, 1); }
+  for (let i = 0; i < 5; i++) { const x = r() * 256, y = r() * 200; const g = ctx.createLinearGradient(0, y, 0, y + 60); g.addColorStop(0, `rgba(40,35,30,${0.12 + r() * 0.1})`); g.addColorStop(1, 'rgba(40,35,30,0)'); ctx.fillStyle = g; ctx.fillRect(x, y, 3 + r() * 6, 60); }
+  return finishTex(c);
+}
+
+function panelTexture(base, seed) {
+  const [c, ctx] = mkCanvas(256);
+  ctx.fillStyle = base; ctx.fillRect(0, 0, 256, 256);
+  const r = mkRand(seed);
+  for (let i = 0; i < 900; i++) { ctx.fillStyle = `rgba(${r() < 0.5 ? '255,255,255' : '30,30,30'},${r() * 0.08})`; ctx.fillRect(r() * 256, r() * 256, 1 + r() * 3, 1 + r() * 3); }
+  for (let i = 0; i < 6; i++) { const x = r() * 256, y = r() * 150; const g = ctx.createLinearGradient(0, y, 0, y + 100); g.addColorStop(0, `rgba(30,30,30,${0.15 + r() * 0.1})`); g.addColorStop(1, 'rgba(30,30,30,0)'); ctx.fillStyle = g; ctx.fillRect(x, y, 4 + r() * 8, 100); }
+  // Plattenfugen
+  ctx.fillStyle = 'rgba(40,40,40,0.45)';
+  ctx.fillRect(0, 0, 256, 3); ctx.fillRect(0, 0, 3, 256); ctx.fillRect(126, 0, 2, 256);
+  ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(0, 3, 256, 2); ctx.fillRect(3, 0, 2, 256);
+  return finishTex(c);
+}
+
+function roofTexture(kind, base, seed) {
+  const [c, ctx] = mkCanvas(128);
+  ctx.fillStyle = base; ctx.fillRect(0, 0, 128, 128);
+  const r = mkRand(seed);
+  if (kind === 'tile') {
+    for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
+      const x = col * 16 + (row % 2) * 8, y = row * 16;
+      const l = r();
+      ctx.fillStyle = l < 0.5 ? `rgba(0,0,0,${l * 0.3})` : `rgba(255,255,255,${(l - 0.5) * 0.18})`;
+      ctx.fillRect(x, y, 16, 16);
+      ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(x, y + 13, 16, 3); ctx.fillRect(x, y, 1, 16);
+      ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fillRect(x + 1, y, 15, 1);
+    }
+    for (let i = 0; i < 22; i++) { ctx.fillStyle = `rgba(70,95,40,${0.1 + r() * 0.15})`; ctx.fillRect(r() * 128, r() * 128, 2 + r() * 6, 2 + r() * 5); }
+  } else {
+    for (let x = 0; x < 128; x += 16) {
+      ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.fillRect(x, 0, 2, 128);
+      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x + 2, 0, 3, 128);
+      ctx.fillStyle = 'rgba(0,0,0,0.08)'; ctx.fillRect(x + 5, 0, 11, 128);
+    }
+    for (let i = 0; i < 30; i++) { ctx.fillStyle = `rgba(120,60,30,${0.1 + r() * 0.2})`; ctx.fillRect(r() * 128, r() * 128, 2 + r() * 8, 3 + r() * 12); }
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(0, 62, 128, 2);
+  }
+  return finishTex(c);
+}
+
+let _blobTex = null;
+function blobTexture() {
+  if (_blobTex) return _blobTex;
+  const [c, ctx] = mkCanvas(64);
+  const g = ctx.createRadialGradient(32, 32, 2, 32, 32, 31);
+  g.addColorStop(0, 'rgba(0,0,0,0.62)'); g.addColorStop(0.5, 'rgba(0,0,0,0.36)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 64, 64);
+  _blobTex = new THREE.CanvasTexture(c);
+  _blobTex.colorSpace = THREE.SRGBColorSpace;
+  return _blobTex;
 }
 
 function initMats() {
   if (_matsReady) return;
   _matsReady = true;
   const std = (o) => new THREE.MeshStandardMaterial(o);
-  M.camoUA = std({ map: camoTexture(['#55603b', '#3c4529', '#6d6a48', '#2b2f22'], 3), roughness: 0.78, metalness: 0.25 });
-  M.camoRU = std({ map: camoTexture(['#4e5236', '#3f4430', '#5d5a3e'], 7), roughness: 0.8, metalness: 0.25 });
-  M.camoWinter = std({ map: camoTexture(['#c8ccc8', '#8d958a', '#e4e6e2'], 11), roughness: 0.8, metalness: 0.2 });
+  M.camoUA = std({ map: camoTexture(['#55603b', '#3c4529', '#6d6a48', '#2b2f22'], 3), roughness: 0.85, metalness: 0.15 });
+  M.camoRU = std({ map: camoTexture(['#4e5236', '#3f4430', '#5d5a3e'], 7), roughness: 0.85, metalness: 0.15 });
+  M.camoWinter = std({ map: camoTexture(['#c8ccc8', '#8d958a', '#e4e6e2'], 11), roughness: 0.85, metalness: 0.12 });
   M.sand = std({ color: 0x8a8060, roughness: 0.8, metalness: 0.2 });
-  M.darkMetal = std({ color: 0x2b2d2f, roughness: 0.55, metalness: 0.7 });
-  M.track = std({ color: 0x1c1b1a, roughness: 0.95, metalness: 0.3 });
+  M.darkMetal = std({ color: 0x2b2d2f, roughness: 0.5, metalness: 0.75 });
+  M.gunMetal = std({ color: 0x1c1d1f, roughness: 0.35, metalness: 0.85 });
+  M.rim = std({ color: 0x585b5c, roughness: 0.45, metalness: 0.8 });
+  M.track = std({ map: trackTexture(), roughness: 0.9, metalness: 0.4 });
   M.rubber = std({ color: 0x161616, roughness: 0.95 });
   M.glass = std({ color: 0x223344, roughness: 0.1, metalness: 0.6 });
+  M.optic = std({ color: 0x0b1a14, roughness: 0.05, metalness: 0.9, emissive: 0x03130a });
   M.white = std({ color: 0xd8d8d0, roughness: 0.6, metalness: 0.2 });
   M.grey = std({ color: 0x6d7174, roughness: 0.7, metalness: 0.4 });
   M.navy = std({ color: 0x4a5560, roughness: 0.6, metalness: 0.4 });
   M.seadrone = std({ color: 0x2f3a40, roughness: 0.5, metalness: 0.4 });
+  M.era = std({ color: 0x353a2a, roughness: 0.7, metalness: 0.45 });
+  M.tarp = std({ color: 0x59603f, roughness: 1 });
+  M.wood2 = std({ color: 0x7a5d3a, roughness: 0.9 });
+  M.headlight = std({ color: 0xfff1c0, emissive: 0x6a5a20, roughness: 0.2 });
   M.uniformUA = std({ map: camoTexture(['#6b6a4a', '#4c5236', '#87805e', '#3c3a2c'], 21, 64), roughness: 0.95 });
   M.uniformRU = std({ map: camoTexture(['#5a5c45', '#45483a', '#6a6550'], 33, 64), roughness: 0.95 });
   M.skin = std({ color: 0xc09070, roughness: 0.8 });
   M.helmet = std({ color: 0x4a4f36, roughness: 0.8 });
+  M.vest = std({ color: 0x3b3d2f, roughness: 0.9 });
+  M.vestUA = std({ color: 0x5a553c, roughness: 0.9 });
+  M.pack = std({ color: 0x4a4d38, roughness: 0.95 });
   M.iffUA = std({ color: 0xffd500, emissive: 0x332a00, roughness: 0.6 });
   M.iffUA2 = std({ color: 0x2f7de1, emissive: 0x061a33, roughness: 0.6 });
   M.iffRU = std({ color: 0xd8d8d8, roughness: 0.6 });
@@ -67,18 +165,41 @@ function initMats() {
   M.wood = applyFow(std({ color: 0x6b5236, roughness: 0.9 }));
   M.tent = applyFow(std({ color: 0x55603b, roughness: 0.95 }));
   M.crate = applyFow(std({ color: 0x5b6038, roughness: 0.85 }));
+  M.sandbag = applyFow(std({ color: 0x8a7d5c, roughness: 1 }));
   M.wreck = std({ color: 0x1a1816, roughness: 1, metalness: 0.2 });
-  M.walls = [0xd9d2c3, 0xc9b9a0, 0xa9b6b8, 0xe0d8c8, 0xb59f87].map((c) => applyFow(std({ color: c, roughness: 0.92 })));
-  M.roofs = [0x7a3d2e, 0x4b5a63, 0x5b4a3c, 0x384046].map((c) => applyFow(std({ color: c, roughness: 0.8, metalness: 0.1 })));
+  M.charred = applyFow(std({ color: 0x25221f, roughness: 1 }));
+  const wallCols = ['#d9d2c3', '#c9b9a0', '#a9b6b8', '#e0d8c8', '#b59f87'];
+  M.walls = wallCols.map((c, i) => applyFow(std({ map: plasterTexture(c, 40 + i * 7), roughness: 0.92 })));
+  M.panels = ['#b9b6ac', '#a8aaa4', '#c4bfae'].map((c, i) => applyFow(std({ map: panelTexture(c, 60 + i * 5), roughness: 0.94 })));
+  M.roofs = [
+    ['tile', '#8a4533'], ['metal', '#56646d'], ['tile', '#6a5240'], ['metal', '#3f464c'],
+  ].map(([k, c], i) => applyFow(std({ map: roofTexture(k, c, 80 + i * 3), roughness: k === 'metal' ? 0.55 : 0.85, metalness: k === 'metal' ? 0.35 : 0.05 })));
+  M.brick = applyFow(std({ color: 0x86483a, roughness: 0.95 }));
+  M.frame = applyFow(std({ color: 0xe6e2d6, roughness: 0.7 }));
+  M.shutters = [0x4d6b48, 0x7a4a36].map((c) => applyFow(std({ color: c, roughness: 0.8 })));
+  M.door = applyFow(std({ color: 0x4a3a2c, roughness: 0.85 }));
   M.window = applyFow(std({ color: 0x1b2530, roughness: 0.2, metalness: 0.5 }));
   M.windowLit = applyFow(std({ color: 0xffd28a, emissive: 0xffb050, emissiveIntensity: 1.5 }));
   M.rubble = applyFow(std({ color: 0x5a554e, roughness: 1, flatShading: true }));
+  M.blob = new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
 }
 
+// ---------------- Geometrie-Helfer ----------------
 const geoCache = {};
-function boxG(w, h, d) { const k = `b${w},${h},${d}`; return geoCache[k] || (geoCache[k] = Object.assign(new THREE.BoxGeometry(w, h, d), { userData: { shared: true } })); }
-function cylG(rt, rb, h, s = 12) { const k = `c${rt},${rb},${h},${s}`; return geoCache[k] || (geoCache[k] = Object.assign(new THREE.CylinderGeometry(rt, rb, h, s), { userData: { shared: true } })); }
-function sphG(r, w = 12, h = 8) { const k = `s${r},${w},${h}`; return geoCache[k] || (geoCache[k] = Object.assign(new THREE.SphereGeometry(r, w, h), { userData: { shared: true } })); }
+const shared = (g) => { g.userData.shared = true; return g; };
+function boxG(w, h, d) { const k = `b${w},${h},${d}`; return geoCache[k] || (geoCache[k] = shared(new THREE.BoxGeometry(w, h, d))); }
+function cylG(rt, rb, h, s = 12) { const k = `c${rt},${rb},${h},${s}`; return geoCache[k] || (geoCache[k] = shared(new THREE.CylinderGeometry(rt, rb, h, s))); }
+function sphG(r, w = 12, h = 8) { const k = `s${r},${w},${h}`; return geoCache[k] || (geoCache[k] = shared(new THREE.SphereGeometry(r, w, h))); }
+// Box mit weltmaßstäblichen UVs (Textur wiederholt sich alle s Einheiten)
+function tiledBoxG(w, h, d, s = 4) {
+  const k = `t${w},${h},${d},${s}`;
+  if (geoCache[k]) return geoCache[k];
+  const g = new THREE.BoxGeometry(w, h, d);
+  const uv = g.attributes.uv;
+  const dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+  for (let f = 0; f < 6; f++) for (let i = 0; i < 4; i++) { const j = f * 4 + i; uv.setXY(j, uv.getX(j) * dims[f][0] / s, uv.getY(j) * dims[f][1] / s); }
+  return (geoCache[k] = shared(g));
+}
 
 function add(parent, geo, mat, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, shadow = true) {
   const m = new THREE.Mesh(geo, mat);
@@ -107,84 +228,246 @@ function hullGeo(w, h, d, slopeFront = 0.35, slopeBack = 0.15) {
   return (geoCache[k] = g);
 }
 
+// Einfaches Geometrie-Merging (Position/Normale/UV), Matrix wird eingebacken
+class Merger {
+  constructor() { this.p = []; this.n = []; this.u = []; this.count = 0; }
+  add(geo, m) {
+    const g = (geo.index ? geo.toNonIndexed() : geo.clone()).applyMatrix4(m);
+    this.p.push(g.attributes.position.array); this.n.push(g.attributes.normal.array); this.u.push(g.attributes.uv.array);
+    this.count++; g.dispose();
+  }
+  build() {
+    const cat = (arrs) => { let len = 0; for (const a of arrs) len += a.length; const out = new Float32Array(len); let o = 0; for (const a of arrs) { out.set(a, o); o += a.length; } return out; };
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(cat(this.p), 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(cat(this.n), 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(cat(this.u), 2));
+    return g;
+  }
+}
+const _o = new THREE.Object3D();
+function mat4(x, y, z, ry = 0, rx = 0, rz = 0) { _o.position.set(x, y, z); _o.rotation.set(rx, ry, rz); _o.updateMatrix(); return _o.matrix; }
+function flushMerged(parent, merger, material, shadow = true) {
+  if (!merger.count) return null;
+  const m = new THREE.Mesh(merger.build(), material);
+  m.castShadow = shadow; m.receiveShadow = true;
+  parent.add(m);
+  return m;
+}
+
+// Kontaktschatten (weicher Blob unter Boden-Einheiten & Strukturen)
+let _blobGeo = null;
+function addBlob(root, w, d, cx = 0, cz = 0) {
+  if (!_blobGeo) _blobGeo = shared(new THREE.PlaneGeometry(1, 1));
+  const s = root.scale.x || 1;
+  const m = new THREE.Mesh(_blobGeo, M.blob);
+  m.rotation.x = -Math.PI / 2;
+  m.position.set(cx / s, 0.05 / s, cz / s);
+  m.scale.set(w / s, d / s, 1);
+  m.castShadow = false; m.receiveShadow = false;
+  m.userData.noWreck = true;
+  m.raycast = () => {};
+  root.add(m);
+  return m;
+}
+function footprint(root, skip) {
+  root.updateMatrixWorld(true);
+  const bb = new THREE.Box3(), tmp = new THREE.Box3();
+  root.traverse((o) => {
+    if (!o.isMesh || o.userData.noWreck) return;
+    if (skip) { let p = o.parent; while (p) { if (p === skip) return; p = p.parent; } }
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    tmp.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+    bb.union(tmp);
+  });
+  return bb;
+}
+
 function iff(group, side, y, z = 0, w = 1.2) {
   if (side === 'UA') { box(group, w, 0.05, 0.35, M.iffUA, 0, y, z - 0.2); box(group, w, 0.05, 0.35, M.iffUA2, 0, y, z + 0.2); }
 }
+function wheel(g, r, w, x, y, z, tire = M.rubber, s = 12) {
+  cyl(g, r, r, w, tire, x, y, z, 0, 0, Math.PI / 2, s);
+  const sg = Math.sign(x) || 1;
+  cyl(g, r * 0.55, r * 0.55, w + 0.06, M.rim, x + sg * 0.01, y, z, 0, 0, Math.PI / 2, 8);
+}
+function antenna(p, x, y, z, len = 2.2, tilt = 0) { cyl(p, 0.025, 0.04, len, M.darkMetal, x, y + len / 2, z, 0, 0, tilt, 4); }
+function headlights(g, y, z, xs = 1.0, size = 0.2) { for (const s of [-1, 1]) box(g, size, size, 0.12, M.headlight, s * xs, y, z); }
 
 // ---------------- Fahrzeuge ----------------
+// Laufwerk einer Seite: Kettenband (mit Gliedertextur), Laufrollen, Antriebs-/Leitrad, Stützrollen
+function trackSet(g, s, x, L, o = {}) {
+  const { w = 0.78, h = 0.95, n = 6, wr = 0.4, y = 0.52 } = o;
+  add(g, tiledBoxG(w, h, L * 0.97, 0.7), M.track, s * x, y, 0);
+  const xo = s * (x + w / 2 + 0.03);
+  const span = L * 0.64;
+  for (let i = 0; i < n; i++) cyl(g, wr, wr, 0.18, M.darkMetal, xo, wr + 0.06, -span / 2 + i * span / (n - 1) + 0.1, 0, 0, Math.PI / 2, 10);
+  cyl(g, wr * 1.1, wr * 1.1, 0.22, M.rim, xo, wr + 0.2, -L / 2 + 0.5, 0, 0, Math.PI / 2, 10);
+  cyl(g, wr * 0.95, wr * 0.95, 0.2, M.rim, xo, wr + 0.18, L / 2 - 0.5, 0, 0, Math.PI / 2, 10);
+  for (let i = 0; i < 3; i++) cyl(g, 0.11, 0.11, 0.14, M.darkMetal, xo, y + h / 2 - 0.02, -span / 2 + i * span / 2 + 0.3, 0, 0, Math.PI / 2, 6);
+}
+
 function tank(side, variant) {
   const g = new THREE.Group();
   const cam = side === 'UA' ? M.camoUA : M.camoRU;
-  const L = variant === 'leopard' ? 7.4 : 6.9, W = 3.5;
-  // Ketten
+  const leo = variant === 'leopard';
+  const L = leo ? 7.4 : 6.9, W = 3.5;
+  const tx = W / 2 - 0.35;
   for (const s of [-1, 1]) {
-    box(g, 0.8, 1.0, L * 0.96, M.track, s * (W / 2 - 0.35), 0.55, 0);
-    for (let i = 0; i < 6; i++) cyl(g, 0.38, 0.38, 0.5, M.darkMetal, s * (W / 2 - 0.35), 0.45, -L * 0.38 + i * (L * 0.76 / 5), 0, 0, Math.PI / 2, 10);
-    box(g, 0.9, 0.08, L * 0.98, cam, s * (W / 2 - 0.35), 1.12, 0); // Kettenschürze
+    trackSet(g, s, tx, L, { n: 6 });
+    if (leo) {
+      // Seitenschürzen (Segmente)
+      for (let i = 0; i < 3; i++) box(g, 0.1, 0.55, L * 0.27, cam, s * (tx + 0.52), 1.12, -L * 0.3 + i * L * 0.3);
+      box(g, 0.1, 0.55, 0.6, cam, s * (tx + 0.46), 1.12, L * 0.44, 0, s * 0.35, 0);
+    } else {
+      box(g, 0.06, 0.45, L * 0.62, cam, s * (tx + 0.5), 1.15, -0.3);
+      box(g, 0.9, 0.06, 1.2, cam, s * tx, 1.3, L / 2 - 0.5, 0.15, 0, 0); // Kotflügel
+      box(g, 0.06, 0.4, 0.8, M.era, s * (tx + 0.5), 1.15, L / 2 - 0.5);
+    }
+    box(g, 0.5, 0.3, 0.9, M.darkMetal, s * (tx + 0.1), 1.45, -L * 0.2 + s * 0.5); // Werkzeugkiste
   }
   add(g, hullGeo(W - 0.6, 0.9, L, 0.18, 0.1), cam, 0, 1.3, 0);
+  headlights(g, 1.62, L / 2 - 0.12, 1.15, 0.22);
+  box(g, 2.0, 0.1, leo ? 2.2 : 1.8, M.darkMetal, 0, 1.78, -L / 2 + (leo ? 1.3 : 1.1)); // Motorraumgitter
+  box(g, 0.45, 0.4, 0.5, M.darkMetal, 0.9, 1.9, -L / 2 + 0.6); // Auspuff / Abgasblende
+  if (!leo) {
+    for (const s of [-1, 1]) cyl(g, 0.27, 0.27, 1.1, M.era, s * 0.8, 1.98, -L / 2 + 0.15, 0, 0, Math.PI / 2, 8); // Fässer
+    cyl(g, 0.15, 0.15, 2.6, M.wood2, 0, 1.78, -L / 2 + 0.8, 0, 0, Math.PI / 2, 6); // Baumstamm
+    for (let i = 0; i < 4; i++) box(g, 0.5, 0.14, 0.4, M.era, -0.9 + i * 0.6, 1.7, L / 2 - 1.0, 0.5, 0, 0); // Reaktivpanzerung Wannenfront
+  } else {
+    box(g, 1.2, 0.2, 0.5, M.darkMetal, 0, 1.88, L / 2 - 1.0); // Fahrerluke
+    cyl(g, 0.25, 0.25, 0.1, M.darkMetal, 0, 1.78, L / 2 - 1.0, 0, 0, 0, 8);
+  }
   const turret = new THREE.Group();
-  turret.position.set(0, 1.75, variant === 'leopard' ? -0.4 : -0.2);
+  turret.position.set(0, 1.75, leo ? -0.4 : -0.2);
   g.add(turret);
-  if (variant === 'leopard') {
+  if (leo) {
     add(turret, hullGeo(2.8, 0.85, 3.6, 0.45, 0.0), cam, 0, 0.42, 0.2);
     box(turret, 2.2, 0.5, 1.2, cam, 0, 0.35, -2.0);
-    box(turret, 0.5, 0.4, 0.6, M.darkMetal, 0.7, 0.95, -0.3); // Optik
+    for (const s of [-1, 1]) {
+      box(turret, 0.5, 0.75, 0.55, cam, s * 0.95, 0.5, 2.0, 0, s * 0.55, 0); // Keilmodule vorne
+      box(turret, 0.3, 0.35, 0.8, M.darkMetal, s * 1.45, 0.62, 0.9); // Nebelwerfer
+      antenna(turret, s * 0.95, 0.65, -2.3, 2.6, s * 0.08);
+    }
+    box(turret, 1.1, 0.5, 0.45, cam, 0, 0.45, 2.2); // Blende
+    box(turret, 0.5, 0.4, 0.6, M.darkMetal, 0.7, 0.95, -0.3); // PERI
+    box(turret, 0.32, 0.18, 0.04, M.optic, 0.7, 0.98, 0.02);
     box(turret, 0.35, 0.3, 0.4, M.darkMetal, -0.6, 0.95, 0.4);
+    cyl(turret, 0.38, 0.4, 0.22, cam, 0.7, 0.92, -0.9, 0, 0, 0, 10); // Kommandantenkuppel
+    cyl(turret, 0.34, 0.34, 0.05, M.darkMetal, 0.7, 1.05, -0.9, 0.5, 0, 0, 10);
+    box(turret, 0.07, 0.07, 0.55, M.gunMetal, 0.95, 1.1, -0.6); // MG
+    cyl(turret, 0.36, 0.36, 0.12, M.darkMetal, -0.6, 0.9, -0.9, 0, 0, 0, 10); // Ladeschützenluke
+    box(turret, 2.2, 0.45, 0.45, M.darkMetal, 0, 0.35, -2.75); // Heckkorb
   } else {
     const dome = add(turret, sphG(1.55, 16, 8), cam, 0, 0.0, 0); dome.scale.set(1, 0.42, 1.15);
-    // Reaktivpanzerung
-    for (let i = 0; i < 5; i++) { const a = -0.7 + i * 0.35; box(turret, 0.55, 0.25, 0.4, cam, Math.sin(a) * 1.3, 0.45, Math.cos(a) * 1.25, 0, a, 0); }
+    cyl(turret, 1.5, 1.55, 0.25, cam, 0, -0.1, 0, 0, 0, 0, 16);
+    for (let i = 0; i < 7; i++) { const a = -0.9 + i * 0.3; box(turret, 0.5, 0.26, 0.36, M.era, Math.sin(a) * 1.35, 0.32, Math.cos(a) * 1.3, 0, a, 0); }
     box(turret, 0.4, 0.4, 0.5, M.darkMetal, 0.5, 0.75, -0.4);
+    cyl(turret, 0.3, 0.32, 0.18, cam, 0.55, 0.52, -0.5, 0, 0, 0, 10); // Luke
+    box(turret, 0.06, 0.06, 0.5, M.gunMetal, 0.55, 0.95, -0.2); // DShK
+    box(turret, 0.55, 0.42, 0.4, M.darkMetal, -0.85, 0.5, 0.95); // IR-Scheinwerfer
+    box(turret, 0.4, 0.4, 0.4, M.darkMetal, -0.4, 0.62, 0.15, 0, 0, 0);
+    for (const s of [-1, 1]) box(turret, 0.28, 0.28, 0.5, M.darkMetal, s * 1.3, 0.4, 0.8, 0, s * -0.5, 0); // Nebelwerfer
+    antenna(turret, -0.9, 0.3, -1.2, 2.2, 0.1);
     if (variant === 't90') { box(turret, 0.35, 0.3, 0.3, M.redLight, -1.1, 0.45, 0.8); box(turret, 0.35, 0.3, 0.3, M.redLight, 1.1, 0.45, 0.8); }
     // Käfig ("Cope Cage")
-    const cage = new THREE.Mesh(boxG(2.8, 0.05, 3.2), M.darkMetal); cage.position.set(0, 1.4, -0.2); turret.add(cage);
-    for (const s of [-1, 1]) for (const t of [-1, 1]) cyl(turret, 0.04, 0.04, 1.2, M.darkMetal, s * 1.3, 0.85, t * 1.4);
+    for (let i = 0; i < 6; i++) box(turret, 0.06, 0.05, 3.2, M.darkMetal, -1.25 + i * 0.5, 1.15, -0.2);
+    box(turret, 2.8, 0.05, 0.06, M.darkMetal, 0, 1.15, 1.0);
+    for (const s of [-1, 1]) { box(turret, 0.05, 0.4, 3.2, M.darkMetal, s * 1.4, 0.95, -0.2); }
+    box(turret, 2.8, 0.4, 0.05, M.darkMetal, 0, 0.95, -1.8);
   }
   const barrel = new THREE.Group();
-  barrel.position.set(0, variant === 'leopard' ? 0.45 : 0.25, variant === 'leopard' ? 1.9 : 1.3);
+  barrel.position.set(0, leo ? 0.45 : 0.25, leo ? 1.9 : 1.3);
   turret.add(barrel);
-  cyl(barrel, 0.11, 0.13, 5.2, M.darkMetal, 0, 0, 2.6, Math.PI / 2, 0, 0, 8);
-  cyl(barrel, 0.2, 0.2, 0.9, M.darkMetal, 0, 0, 2.6, Math.PI / 2, 0, 0, 8);
+  cyl(barrel, 0.11, 0.13, 5.2, M.gunMetal, 0, 0, 2.6, Math.PI / 2, 0, 0, 8);
+  if (leo) {
+    cyl(barrel, 0.18, 0.18, 2.4, M.darkMetal, 0, 0, 1.3, Math.PI / 2, 0, 0, 8); // Wärmeschutzmantel
+    cyl(barrel, 0.15, 0.15, 0.55, M.darkMetal, 0, 0, 3.5, Math.PI / 2, 0, 0, 8); // Rauchabsauger
+  } else {
+    cyl(barrel, 0.2, 0.2, 0.9, M.darkMetal, 0, 0, 2.6, Math.PI / 2, 0, 0, 8);
+    cyl(barrel, 0.16, 0.16, 0.4, M.darkMetal, 0, 0, 4.6, Math.PI / 2, 0, 0, 8);
+  }
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, 5.3); barrel.add(muzzle);
-  iff(g, side, 1.78, -2.6);
+  iff(g, side, 1.82, leo ? -2.4 : -2.2);
   return { root: g, turret, barrel, muzzle, height: 3 };
 }
 
 function ifv(side, variant) {
   const g = new THREE.Group();
   const cam = side === 'UA' ? M.camoUA : M.camoRU;
-  const L = variant === 'bradley' ? 6.5 : 6.6, W = 3.2;
+  const brad = variant === 'bradley';
+  const L = brad ? 6.5 : 6.6, W = 3.2;
   const tracked = variant !== 'btr';
   if (tracked) {
+    const tx = W / 2 - 0.3;
     for (const s of [-1, 1]) {
-      box(g, 0.7, 0.9, L * 0.95, M.track, s * (W / 2 - 0.3), 0.5, 0);
-      for (let i = 0; i < 6; i++) cyl(g, 0.34, 0.34, 0.45, M.darkMetal, s * (W / 2 - 0.3), 0.42, -L * 0.38 + i * (L * 0.76 / 5), 0, 0, Math.PI / 2, 10);
+      trackSet(g, s, tx, L, { w: 0.7, h: 0.9, n: 5, wr: 0.34 });
+      box(g, 0.08, 0.5, L * 0.6, cam, s * (tx + 0.46), 1.0, 0); // Schürze
+      if (brad) for (let i = 0; i < 3; i++) box(g, 0.1, 0.8, 0.7, M.era, s * (W / 2 - 0.02), 1.75, -1.6 + i * 1.3); // Zusatzpanzerung
     }
   } else {
-    for (const s of [-1, 1]) for (let i = 0; i < 4; i++) cyl(g, 0.55, 0.55, 0.45, M.rubber, s * (W / 2 - 0.2), 0.55, -2.2 + i * 1.45, 0, 0, Math.PI / 2, 12);
+    for (const s of [-1, 1]) for (let i = 0; i < 4; i++) wheel(g, 0.55, 0.45, s * (W / 2 - 0.2), 0.55, -2.2 + i * 1.45);
+    for (const s of [-1, 1]) box(g, 0.1, 0.12, 5.6, M.darkMetal, s * (W / 2 - 0.2), 1.1, 0.0); // Kotflügelleiste
   }
-  if (variant === 'bradley') add(g, hullGeo(W - 0.4, 1.6, L, 0.22, 0.05), cam, 0, 1.6, 0);
+  if (brad) add(g, hullGeo(W - 0.4, 1.6, L, 0.22, 0.05), cam, 0, 1.6, 0);
   else add(g, hullGeo(W - 0.4, 1.2, L, 0.4, 0.05), cam, 0, 1.4, 0);
+  headlights(g, brad ? 1.5 : 1.35, L / 2 - 0.14, 1.1, 0.2);
+  if (brad) box(g, 1.6, 0.1, 1.2, M.darkMetal, 0, 2.43, -2.4); // Motorraum
+  else { box(g, 1.2, 0.1, 1.4, M.darkMetal, 0, 2.0, -2.3); box(g, 0.5, 0.25, 0.9, cam, 0.9, 2.1, 1.7); }
+  if (variant === 'btr') box(g, 0.9, 0.7, 0.05, M.darkMetal, 0, 1.4, -L / 2 - 0.02);
   const turret = new THREE.Group();
-  turret.position.set(0, variant === 'bradley' ? 2.4 : 2.05, variant === 'bradley' ? 0.2 : 0.4);
+  turret.position.set(0, brad ? 2.4 : 2.05, brad ? 0.2 : 0.4);
   g.add(turret);
-  if (variant === 'bradley') { box(turret, 1.9, 0.75, 2.2, cam, 0, 0.35, 0); box(turret, 0.5, 0.5, 1.2, M.darkMetal, 1.15, 0.55, -0.2); }
-  else { const d = add(turret, sphG(0.95, 12, 8), cam, 0, 0, 0); d.scale.set(1, 0.5, 1); }
+  if (brad) {
+    box(turret, 1.9, 0.75, 2.2, cam, 0, 0.35, 0);
+    box(turret, 0.5, 0.5, 1.2, M.darkMetal, 1.15, 0.55, -0.2); // TOW-Werfer
+    cyl(turret, 0.12, 0.12, 0.6, M.gunMetal, 1.15, 0.55, 0.45, Math.PI / 2, 0, 0, 6);
+    box(turret, 0.4, 0.3, 0.5, M.darkMetal, -0.5, 0.85, -0.4);
+    cyl(turret, 0.3, 0.3, 0.1, M.darkMetal, 0.3, 0.76, -0.6, 0, 0, 0, 8);
+    for (const s of [-1, 1]) box(turret, 0.2, 0.25, 0.5, M.darkMetal, s * 0.95, 0.4, 1.15);
+    antenna(turret, -0.8, 0.7, -1.0, 2.2, 0.05);
+  } else {
+    const d = add(turret, sphG(0.95, 12, 8), cam, 0, 0, 0); d.scale.set(1, 0.5, 1);
+    if (variant === 'bmp') {
+      box(turret, 0.9, 0.25, 0.45, M.darkMetal, 0, 0.5, -0.1);
+      cyl(turret, 0.05, 0.05, 1.2, M.sand, 0.6, 0.45, 0.2, Math.PI / 2, 0, 0, 6); // Rakete
+      box(turret, 0.1, 0.1, 1.2, M.darkMetal, 0.6, 0.35, 0.2);
+      cyl(turret, 0.22, 0.22, 0.12, cam, -0.4, 0.4, -0.3, 0, 0, 0, 8);
+      antenna(turret, -0.6, 0.3, -0.6, 2.0, 0.1);
+    } else { // BTR: KPV-Turm
+      box(turret, 0.6, 0.2, 0.5, M.darkMetal, 0.3, 0.35, 0.3);
+      antenna(turret, -0.7, 0.3, -0.5, 2.2, 0.1);
+    }
+  }
   const barrel = new THREE.Group(); barrel.position.set(0, 0.35, 1.0); turret.add(barrel);
-  cyl(barrel, 0.06, 0.07, 2.6, M.darkMetal, 0, 0, 1.3, Math.PI / 2, 0, 0, 6);
+  cyl(barrel, 0.06, 0.07, 2.6, M.gunMetal, 0, 0, 1.3, Math.PI / 2, 0, 0, 6);
+  cyl(barrel, 0.11, 0.11, 0.9, M.darkMetal, 0, 0, 0.6, Math.PI / 2, 0, 0, 8);
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, 2.7); barrel.add(muzzle);
-  iff(g, side, variant === 'bradley' ? 2.42 : 2.02, -2.0);
+  iff(g, side, brad ? 2.45 : 2.05, -1.8);
   return { root: g, turret, barrel, muzzle, height: 2.8 };
 }
 
 function truckBase(cam, L = 7, W = 2.6, wheels = 3) {
   const g = new THREE.Group();
-  for (const s of [-1, 1]) for (let i = 0; i < wheels; i++) cyl(g, 0.55, 0.55, 0.45, M.rubber, s * (W / 2 - 0.15), 0.55, L / 2 - 1.2 - i * ((L - 2) / Math.max(1, wheels - 1)), 0, 0, Math.PI / 2, 12);
+  const pitch = (L - 2) / Math.max(1, wheels - 1);
+  for (const s of [-1, 1]) {
+    for (let i = 0; i < wheels; i++) wheel(g, 0.55, 0.45, s * (W / 2 - 0.15), 0.55, L / 2 - 1.2 - i * pitch);
+    box(g, 0.12, 0.55, 1.4, cam, s * (W / 2 - 0.1), 1.25, L / 2 - 1.2); // Radkasten vorn
+    cyl(g, 0.25, 0.25, 1.4, M.darkMetal, s * (W / 2 - 0.35), 0.85, -0.6, 0, 0, Math.PI / 2, 8); // Tank unter dem Rahmen
+  }
   box(g, W - 0.3, 0.4, L, M.darkMetal, 0, 1.0, 0);
-  // Fahrerhaus
+  // Fahrerhaus mit Haube
   box(g, W, 1.6, 1.9, cam, 0, 2.0, L / 2 - 1.0);
+  box(g, W - 0.3, 0.9, 1.0, cam, 0, 1.6, L / 2 + 0.45);
+  box(g, W - 0.5, 0.5, 0.05, M.darkMetal, 0, 1.55, L / 2 + 0.96); // Kühlergrill
   box(g, W - 0.2, 0.6, 0.05, M.glass, 0, 2.3, L / 2 - 0.04);
+  for (const s of [-1, 1]) {
+    box(g, 0.05, 0.55, 1.0, M.glass, s * (W / 2 + 0.01), 2.3, L / 2 - 1.0);
+    box(g, 0.1, 0.4, 0.3, M.darkMetal, s * (W / 2 + 0.25), 2.4, L / 2 - 0.2); // Spiegel
+  }
+  headlights(g, 1.55, L / 2 + 0.98, 0.9, 0.22);
+  box(g, W, 0.2, 0.2, M.darkMetal, 0, 1.0, L / 2 + 1.0); // Stoßstange
+  cyl(g, 0.07, 0.07, 1.4, M.darkMetal, W / 2 - 0.2, 2.9, L / 2 - 1.9, 0, 0, 0, 6); // Auspuff
   return g;
 }
 
@@ -194,20 +477,40 @@ function launcherTruck(side, kind) {
   const turret = new THREE.Group(); turret.position.set(0, 1.3, -1.2); g.add(turret);
   const barrel = new THREE.Group(); barrel.position.set(0, 0.3, -1.5); turret.add(barrel);
   let muzzle = new THREE.Object3D();
+  box(turret, 2.0, 0.25, 3.4, M.darkMetal, 0, 0.1, -0.8); // Drehkranz / Lafette
+  for (const s of [-1, 1]) box(g, 0.3, 0.9, 0.3, M.darkMetal, s * 1.3, 0.8, -3.0); // Stützen
   if (kind === 'himars') {
     box(barrel, 2.3, 1.0, 4.2, cam, 0, 0.5, 2.0);
-    for (let i = 0; i < 6; i++) cyl(barrel, 0.25, 0.25, 0.05, M.darkMetal, -0.75 + (i % 3) * 0.75, 0.25 + Math.floor(i / 3) * 0.5, 4.12, Math.PI / 2, 0, 0, 8);
+    box(barrel, 2.4, 0.12, 4.3, M.darkMetal, 0, 1.05, 2.0);
+    for (let i = 0; i < 6; i++) {
+      cyl(barrel, 0.25, 0.25, 0.05, M.darkMetal, -0.75 + (i % 3) * 0.75, 0.25 + Math.floor(i / 3) * 0.5, 4.12, Math.PI / 2, 0, 0, 8);
+      cyl(barrel, 0.15, 0.15, 0.06, M.sand, -0.75 + (i % 3) * 0.75, 0.25 + Math.floor(i / 3) * 0.5, 4.14, Math.PI / 2, 0, 0, 8);
+    }
     muzzle.position.set(0, 0.5, 4.2);
   } else if (kind === 'patriot') {
-    for (let i = 0; i < 4; i++) box(barrel, 1.0, 0.95, 5.4, cam, -0.55 + (i % 2) * 1.1, 0.5 + Math.floor(i / 2) * 1.0, 2.6);
+    for (let i = 0; i < 4; i++) {
+      const x = -0.55 + (i % 2) * 1.1, y = 0.5 + Math.floor(i / 2) * 1.0;
+      box(barrel, 1.0, 0.95, 5.4, cam, x, y, 2.6);
+      box(barrel, 0.88, 0.82, 0.06, M.white, x, y, 5.42);
+    }
+    box(barrel, 2.4, 0.15, 0.4, M.darkMetal, 0, 1.0, 0.4);
     muzzle.position.set(0, 1.0, 5.4);
     barrel.rotation.x = -0.65;
   } else if (kind === 'irist') {
-    for (let i = 0; i < 8; i++) cyl(barrel, 0.22, 0.22, 4.0, M.sand, -0.7 + (i % 4) * 0.47, 0.3 + Math.floor(i / 4) * 0.47, 2.0, Math.PI / 2, 0, 0, 8);
+    for (let i = 0; i < 8; i++) {
+      const x = -0.7 + (i % 4) * 0.47, y = 0.3 + Math.floor(i / 4) * 0.47;
+      cyl(barrel, 0.22, 0.22, 4.0, M.sand, x, y, 2.0, Math.PI / 2, 0, 0, 8);
+      cyl(barrel, 0.17, 0.17, 0.05, M.darkMetal, x, y, 4.02, Math.PI / 2, 0, 0, 8);
+    }
+    box(barrel, 2.2, 0.12, 0.5, M.darkMetal, 0, 0.8, 0.5);
     muzzle.position.set(0, 0.5, 4.0);
     barrel.rotation.x = -1.2;
   } else if (kind === 's400') {
-    for (let i = 0; i < 4; i++) cyl(barrel, 0.4, 0.4, 7.0, M.camoRU, -0.9 + i * 0.6, 0.5, 3.5, Math.PI / 2, 0, 0, 10);
+    for (let i = 0; i < 4; i++) {
+      cyl(barrel, 0.4, 0.4, 7.0, M.camoRU, -0.9 + i * 0.6, 0.5, 3.5, Math.PI / 2, 0, 0, 10);
+      cyl(barrel, 0.34, 0.34, 0.06, M.white, -0.9 + i * 0.6, 0.5, 7.02, Math.PI / 2, 0, 0, 10);
+    }
+    box(barrel, 2.8, 0.15, 0.5, M.darkMetal, 0, 0.0, 0.8);
     muzzle.position.set(0, 0.5, 7);
     barrel.rotation.x = -1.45;
   }
@@ -221,7 +524,12 @@ function radarTruck(side, big = false) {
   const g = truckBase(cam, 8, 2.7, 4);
   const turret = new THREE.Group(); turret.position.set(0, 1.5, -1.5); g.add(turret);
   box(turret, 2.4, 1.2, 2.5, cam, 0, 0.6, 0);
+  box(turret, 0.4, 0.4, 0.4, M.darkMetal, 0.8, 1.4, -0.6); // Lüfter
+  for (const s of [-1, 1]) box(turret, 0.12, 2.0, 0.12, M.darkMetal, s * 0.7, 1.9, 0.5, -0.35, 0, 0); // Stützstreben
+  box(turret, 3.2, 0.25, 0.4, M.darkMetal, 0, 1.3, 0.2);
   const panel = box(turret, big ? 4 : 3, big ? 3.6 : 2.6, 0.35, M.grey, 0, 2.6, 0.5, -0.35, 0, 0);
+  box(turret, big ? 3.8 : 2.8, big ? 3.4 : 2.4, 0.05, M.darkMetal, 0, 2.6, 0.7, -0.35, 0, 0);
+  antenna(g, -1.1, 2.8, 1.5, 2.6, 0.05);
   iff(g, side, 2.82, 2.6, 1.4);
   return { root: g, turret, barrel: null, muzzle: panel, height: 5, radar: turret };
 }
@@ -230,18 +538,28 @@ function gepard(side) {
   const g = new THREE.Group();
   const cam = side === 'UA' ? M.camoUA : M.camoRU;
   for (const s of [-1, 1]) {
-    box(g, 0.75, 1.0, 6.6, M.track, s * 1.35, 0.55, 0);
-    for (let i = 0; i < 6; i++) cyl(g, 0.36, 0.36, 0.5, M.darkMetal, s * 1.35, 0.45, -2.6 + i * 1.04, 0, 0, Math.PI / 2, 10);
+    trackSet(g, s, 1.35, 6.8, { w: 0.75, h: 0.95, n: 6, wr: 0.36 });
+    box(g, 0.08, 0.5, 4.0, cam, s * 1.85, 1.12, -0.4);
   }
   add(g, hullGeo(2.8, 0.9, 6.8, 0.2, 0.1), cam, 0, 1.3, 0);
+  headlights(g, 1.55, 3.28, 1.0, 0.2);
+  box(g, 1.8, 0.1, 1.6, M.darkMetal, 0, 1.78, -2.5);
   const turret = new THREE.Group(); turret.position.set(0, 1.8, -0.3); g.add(turret);
   box(turret, 2.2, 1.3, 2.6, cam, 0, 0.65, 0);
+  for (const s of [-1, 1]) { box(turret, 0.12, 0.9, 2.0, M.era, s * 1.15, 0.7, 0); box(turret, 0.3, 0.3, 0.6, M.darkMetal, s * 0.5, 1.45, -0.9); }
+  cyl(turret, 0.1, 0.1, 1.0, M.darkMetal, 0, 1.7, -1.0, 0, 0, 0, 6); // Radarmast
   const dish = cyl(turret, 0.9, 0.9, 0.1, M.grey, 0, 1.9, -1.0, 1.2, 0, 0, 16);
+  cyl(turret, 0.1, 0.1, 0.3, M.darkMetal, 0, 1.9, -0.7, 1.2, 0, 0, 6);
   const dish2 = cyl(turret, 0.6, 0.6, 0.1, M.grey, 0, 1.4, 1.2, 1.4, 0, 0, 16);
   const barrel = new THREE.Group(); barrel.position.set(0, 0.8, 0.2); turret.add(barrel);
-  for (const s of [-1, 1]) { box(barrel, 0.4, 0.6, 1.4, cam, s * 1.35, 0, 0.3); cyl(barrel, 0.07, 0.08, 3.2, M.darkMetal, s * 1.35, 0, 2.2, Math.PI / 2, 0, 0, 6); }
+  for (const s of [-1, 1]) {
+    box(barrel, 0.4, 0.6, 1.4, cam, s * 1.35, 0, 0.3);
+    cyl(barrel, 0.07, 0.08, 3.2, M.gunMetal, s * 1.35, 0, 2.2, Math.PI / 2, 0, 0, 6);
+    cyl(barrel, 0.12, 0.12, 1.3, M.darkMetal, s * 1.35, 0, 1.4, Math.PI / 2, 0, 0, 8);
+    cyl(barrel, 0.11, 0.11, 0.3, M.darkMetal, s * 1.35, 0, 3.7, Math.PI / 2, 0, 0, 8);
+  }
   const muzzle = new THREE.Object3D(); muzzle.position.set(1.35, 0, 3.8); barrel.add(muzzle);
-  iff(g, side, 1.78, -2.6);
+  iff(g, side, 1.82, -2.6);
   return { root: g, turret, barrel, muzzle, height: 3.5, radar: dish, radar2: dish2 };
 }
 
@@ -249,11 +567,19 @@ function pantsir() {
   const g = truckBase(M.camoRU, 8.5, 2.7, 4);
   const turret = new THREE.Group(); turret.position.set(0, 1.5, -1.6); g.add(turret);
   box(turret, 2.0, 1.4, 2.0, M.camoRU, 0, 0.7, 0);
+  box(turret, 0.3, 1.2, 0.3, M.darkMetal, 0, 1.9, 0.2); // Radarmast
   const dish = box(turret, 1.6, 1.4, 0.3, M.grey, 0, 2.2, 0.2, -0.2, 0, 0);
+  box(turret, 1.0, 0.5, 0.2, M.darkMetal, 0, 3.1, 0.2); // Zielverfolgung (EO)
+  box(turret, 0.35, 0.35, 0.05, M.optic, 0, 3.1, 0.32);
   const barrel = new THREE.Group(); barrel.position.set(0, 1.0, 0); turret.add(barrel);
   for (const s of [-1, 1]) {
-    for (let i = 0; i < 6; i++) cyl(barrel, 0.14, 0.14, 3.2, M.camoRU, s * (1.25 + (i % 2) * 0.3), Math.floor(i / 2) * 0.32 - 0.3, 0.8, Math.PI / 2, 0, 0, 6);
-    cyl(barrel, 0.06, 0.06, 2.2, M.darkMetal, s * 0.7, -0.4, 1.4, Math.PI / 2, 0, 0, 6);
+    for (let i = 0; i < 6; i++) {
+      const x = s * (1.25 + (i % 2) * 0.3), y = Math.floor(i / 2) * 0.32 - 0.3;
+      cyl(barrel, 0.14, 0.14, 3.2, M.camoRU, x, y, 0.8, Math.PI / 2, 0, 0, 6);
+      cyl(barrel, 0.1, 0.1, 0.04, M.white, x, y, 2.4, Math.PI / 2, 0, 0, 6);
+    }
+    cyl(barrel, 0.06, 0.06, 2.2, M.gunMetal, s * 0.7, -0.4, 1.4, Math.PI / 2, 0, 0, 6);
+    cyl(barrel, 0.1, 0.1, 0.9, M.darkMetal, s * 0.7, -0.4, 0.9, Math.PI / 2, 0, 0, 8);
   }
   const muzzle = new THREE.Object3D(); muzzle.position.set(1.3, 0, 2.4); barrel.add(muzzle);
   return { root: g, turret, barrel, muzzle, height: 4, radar: dish };
@@ -269,62 +595,127 @@ function spg(side) { // Msta / 2S19
 function pickup(side) {
   const cam = side === 'UA' ? M.camoUA : M.camoRU;
   const g = new THREE.Group();
-  for (const s of [-1, 1]) for (const z of [-1.5, 1.5]) cyl(g, 0.45, 0.45, 0.35, M.rubber, s * 0.95, 0.45, z, 0, 0, Math.PI / 2, 12);
+  for (const s of [-1, 1]) for (const z of [-1.5, 1.5]) wheel(g, 0.45, 0.35, s * 0.95, 0.45, z);
   box(g, 2.0, 0.8, 5.0, cam, 0, 0.95, 0);
   box(g, 1.9, 0.8, 1.9, cam, 0, 1.75, 0.6);
-  box(g, 1.8, 0.5, 0.05, M.glass, 0, 1.85, 1.56);
+  box(g, 1.8, 0.5, 0.05, M.glass, 0, 1.85, 1.56, 0.0, 0, 0);
+  for (const s of [-1, 1]) box(g, 0.05, 0.45, 1.5, M.glass, s * 0.96, 1.85, 0.6);
+  box(g, 1.9, 0.5, 1.0, cam, 0, 1.5, 2.1); // Motorhaube
+  box(g, 2.1, 0.2, 0.2, M.darkMetal, 0, 0.7, 2.6); // Stoßstange
+  headlights(g, 1.45, 2.62, 0.7, 0.22);
+  for (const s of [-1, 1]) { box(g, 0.1, 0.12, 0.25, M.darkMetal, s * 1.05, 1.95, 1.4); box(g, 0.1, 0.5, 4.0, cam, s * 1.0, 1.5, -1.5); }
+  box(g, 1.9, 0.5, 0.1, cam, 0, 1.5, -2.5);
+  box(g, 1.7, 0.05, 1.6, M.darkMetal, 0, 1.38, -1.6);
+  antenna(g, -0.9, 1.9, -0.6, 2.2, 0.05);
   const turret = new THREE.Group(); turret.position.set(0, 1.6, -1.4); g.add(turret);
   cyl(turret, 0.08, 0.08, 1.0, M.darkMetal, 0, 0.5, 0);
+  box(turret, 0.9, 0.7, 0.06, M.darkMetal, 0, 1.3, 0.35); // Schutzschild
   const barrel = new THREE.Group(); barrel.position.set(0, 1.0, 0); turret.add(barrel);
   box(barrel, 0.2, 0.25, 0.9, M.darkMetal, 0, 0, 0.2);
-  cyl(barrel, 0.04, 0.04, 1.4, M.darkMetal, 0, 0, 1.2, Math.PI / 2, 0, 0, 6);
+  cyl(barrel, 0.04, 0.04, 1.4, M.gunMetal, 0, 0, 1.2, Math.PI / 2, 0, 0, 6);
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, 1.9); barrel.add(muzzle);
   iff(g, side, 2.17, 0.6, 1.0);
   return { root: g, turret, barrel, muzzle, height: 2.5 };
+}
+
+function cargoTruck(side) {
+  const cam = side === 'UA' ? M.camoUA : M.camoRU;
+  const g = truckBase(cam, 7.5, 2.6, 3);
+  box(g, 2.6, 2.2, 4.8, M.tarp, 0, 2.3, -1.2);
+  for (let i = 0; i < 4; i++) box(g, 2.7, 2.3, 0.1, M.darkMetal, 0, 2.3, -3.4 + i * 1.6);
+  box(g, 2.2, 0.35, 4.6, M.tarp, 0, 3.55, -1.2);
+  box(g, 2.4, 0.9, 0.1, M.darkMetal, 0, 1.55, -3.7); // Heckklappe
+  for (const s of [-1, 1]) box(g, 0.2, 0.2, 0.1, M.redLight, s * 1.1, 1.3, -3.8);
+  box(g, 0.5, 0.5, 0.5, M.darkMetal, 1.3, 1.15, -1.0); // Werkzeugkasten
+  const muzzle = new THREE.Object3D(); g.add(muzzle);
+  iff(g, side, 3.75, -1.2, 1.4);
+  return { root: g, muzzle, height: 3.4 };
 }
 
 // ---------------- Infanterie ----------------
 function soldier(side, weapon = 'rifle') {
   const g = new THREE.Group();
   const uni = side === 'UA' ? M.uniformUA : M.uniformRU;
+  const vest = side === 'UA' ? M.vestUA : M.vest;
   const body = new THREE.Group(); g.add(body);
-  const legL = box(body, 0.28, 0.85, 0.3, uni, -0.17, 0.45, 0);
-  const legR = box(body, 0.28, 0.85, 0.3, uni, 0.17, 0.45, 0);
-  box(body, 0.62, 0.75, 0.38, uni, 0, 1.25, 0); // Torso
-  box(body, 0.66, 0.5, 0.44, M.helmet, 0, 1.3, 0); // Weste
-  add(body, sphG(0.17, 10, 8), M.skin, 0, 1.78, 0);
-  const helm = add(body, sphG(0.21, 10, 6), M.helmet, 0, 1.85, 0); helm.scale.set(1, 0.75, 1.05);
-  const armR = box(body, 0.18, 0.65, 0.2, uni, 0.38, 1.3, 0.18, -1.0, 0, 0);
-  box(body, 0.18, 0.65, 0.2, uni, -0.36, 1.3, 0.22, -1.2, 0.3, 0);
-  if (side === 'UA') box(body, 0.2, 0.08, 0.2, M.iffUA, 0.4, 1.55, 0); // Armbinde
-  const gun = new THREE.Group(); gun.position.set(0.12, 1.4, 0.4); body.add(gun);
-  if (weapon === 'javelin' || weapon === 'rpg') {
-    cyl(gun, 0.09, 0.09, 1.3, weapon === 'javelin' ? M.sand : M.camoRU, 0.1, 0.25, -0.1, Math.PI / 2, 0, 0, 8);
-    if (weapon === 'javelin') box(gun, 0.3, 0.3, 0.3, M.darkMetal, -0.1, 0.25, -0.2);
+  // Beine: Hüftgelenk als Drehpunkt (unit.animate rotiert legs[i] um x)
+  const mkLeg = (x) => {
+    const l = new THREE.Group(); l.position.set(x, 0.92, 0); body.add(l);
+    box(l, 0.21, 0.46, 0.25, uni, 0, -0.23, 0);
+    box(l, 0.18, 0.42, 0.21, uni, 0, -0.63, 0.01);
+    box(l, 0.2, 0.15, 0.36, M.rubber, 0, -0.86, 0.06);
+    return l;
+  };
+  const legL = mkLeg(-0.15), legR = mkLeg(0.15);
+  box(body, 0.5, 0.62, 0.3, uni, 0, 1.28, 0); // Torso
+  box(body, 0.56, 0.44, 0.36, vest, 0, 1.34, 0.01); // Plattenträger
+  box(body, 0.38, 0.5, 0.22, M.pack, 0, 1.36, -0.28); // Rucksack
+  add(body, sphG(0.14, 10, 8), M.skin, 0, 1.72, 0.01); // Kopf
+  box(body, 0.25, 0.06, 0.05, M.optic, 0, 1.74, 0.13); // Schutzbrille
+  const helm = add(body, sphG(0.2, 10, 6), side === 'UA' ? M.uniformUA : M.helmet, 0, 1.8, 0); helm.scale.set(1, 0.72, 1.1); // Helm mit Bezug
+  // Arme: Schulter -> Ellbogen -> Hand, in Anschlag
+  const mkArm = (x, shoulderRx, elbowRx, ry) => {
+    const a = new THREE.Group(); a.position.set(x, 1.5, 0.02); a.rotation.set(shoulderRx, ry, 0); body.add(a);
+    box(a, 0.14, 0.34, 0.14, uni, 0, -0.17, 0);
+    const e = new THREE.Group(); e.position.y = -0.34; e.rotation.x = elbowRx; a.add(e);
+    box(e, 0.12, 0.3, 0.12, uni, 0, -0.15, 0);
+    box(e, 0.11, 0.1, 0.12, M.rubber, 0, -0.33, 0);
+    return a;
+  };
+  const armR = mkArm(0.33, -0.9, -0.9, 0);
+  mkArm(-0.33, -1.0, -0.5, 0.55);
+  if (side === 'UA') box(body, 0.16, 0.08, 0.16, M.iffUA, 0.38, 1.6, 0.02); // Armbinde
+  const gun = new THREE.Group(); gun.position.set(0.2, 1.38, 0.3); body.add(gun);
+  if (weapon === 'javelin') {
+    gun.position.set(0.18, 1.58, 0.0);
+    cyl(gun, 0.1, 0.1, 1.2, M.sand, 0, 0, 0.15, Math.PI / 2, 0, 0, 8);
+    box(gun, 0.3, 0.28, 0.4, M.darkMetal, -0.05, 0.2, 0.0); // Kommandostartgerät
+    box(gun, 0.12, 0.1, 0.12, M.optic, -0.05, 0.38, 0.1);
+    cyl(gun, 0.12, 0.12, 0.08, M.darkMetal, 0, 0, 0.78, Math.PI / 2, 0, 0, 8);
+  } else if (weapon === 'rpg') {
+    gun.position.set(0.18, 1.58, 0.0);
+    cyl(gun, 0.07, 0.07, 1.0, M.camoRU, 0, 0, 0.1, Math.PI / 2, 0, 0, 8);
+    cyl(gun, 0.13, 0.07, 0.3, M.darkMetal, 0, 0, -0.5, Math.PI / 2, 0, 0, 8); // Auspuffkonus
+    add(gun, sphG(0.13, 8, 6), M.sand, 0, 0, 0.72).scale.set(1, 1, 1.5); // Gefechtskopf
+    box(gun, 0.05, 0.15, 0.08, M.darkMetal, 0, -0.14, 0.1); // Griff
   } else if (weapon === 'sniper') {
-    box(gun, 0.07, 0.1, 1.4, M.darkMetal, 0, 0, 0.3);
-    cyl(gun, 0.04, 0.04, 0.35, M.darkMetal, 0, 0.09, 0.2, Math.PI / 2, 0, 0, 6);
+    box(gun, 0.07, 0.1, 0.9, M.darkMetal, 0, 0, 0.1); // Schaft/Gehäuse
+    cyl(gun, 0.025, 0.03, 0.9, M.gunMetal, 0, 0.0, 0.9, Math.PI / 2, 0, 0, 6); // langer Lauf
+    cyl(gun, 0.05, 0.05, 0.4, M.darkMetal, 0, 0.1, 0.15, Math.PI / 2, 0, 0, 6); // Zielfernrohr
+    box(gun, 0.03, 0.2, 0.03, M.darkMetal, 0.04, -0.12, 0.7, 0.3, 0, 0); // Zweibein
   } else if (weapon === 'tablet') {
-    box(gun, 0.4, 0.05, 0.3, M.darkMetal, 0, -0.05, -0.1, 0.4, 0, 0);
-    cyl(gun, 0.02, 0.02, 0.5, M.darkMetal, 0.2, 0.2, -0.2, 0, 0, 0, 4);
-  } else box(gun, 0.07, 0.12, 0.95, M.darkMetal, 0, 0, 0.2);
+    box(gun, 0.4, 0.04, 0.3, M.darkMetal, 0, -0.05, 0.05, 0.4, 0, 0);
+    box(gun, 0.34, 0.01, 0.24, M.optic, 0, -0.03, 0.05, 0.4, 0, 0);
+    cyl(gun, 0.015, 0.015, 0.5, M.darkMetal, 0.2, 0.2, -0.1, 0, 0, 0, 4);
+    box(gun, 0.12, 0.08, 0.2, M.rubber, -0.3, -0.1, 0.0); // Fernsteuerung
+  } else { // Sturmgewehr
+    box(gun, 0.07, 0.12, 0.6, M.gunMetal, 0, 0, 0.2); // Gehäuse/Handschutz
+    cyl(gun, 0.018, 0.02, 0.4, M.gunMetal, 0, 0.02, 0.7, Math.PI / 2, 0, 0, 5); // Lauf
+    box(gun, 0.06, 0.1, 0.3, M.rubber, 0, -0.03, -0.25); // Schaft
+    box(gun, 0.05, 0.2, 0.08, M.rubber, 0, -0.14, 0.12, 0.2, 0, 0); // Magazin
+    box(gun, 0.05, 0.05, 0.14, M.optic, 0, 0.09, 0.2); // Visier
+  }
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, 0.8); gun.add(muzzle);
-  g.scale.setScalar(1.3);
-  return { root: g, turret: null, barrel: null, muzzle, height: 2.6, body, legs: [legL, legR], arm: armR };
+  g.scale.setScalar(1.45);
+  return { root: g, turret: null, barrel: null, muzzle, height: 2.9, body, legs: [legL, legR], arm: armR };
 }
 
 // ---------------- Luftfahrzeuge ----------------
 function quad(side, size = 1, recon = false) {
   const g = new THREE.Group();
   const body = box(g, 0.6 * size, 0.25 * size, 0.9 * size, recon ? M.grey : M.darkMetal, 0, 0, 0);
+  box(g, 0.4 * size, 0.1 * size, 0.5 * size, M.gunMetal, 0, 0.17 * size, -0.05 * size); // Akku/Abdeckung
   const rotors = [];
   for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
     box(g, 0.1 * size, 0.06 * size, 0.9 * size, M.darkMetal, x * 0.35 * size, 0.05 * size, z * 0.35 * size, 0, Math.atan2(x, z), 0);
+    cyl(g, 0.06 * size, 0.06 * size, 0.1 * size, M.gunMetal, x * 0.65 * size, 0.08 * size, z * 0.65 * size, 0, 0, 0, 8); // Motor
     const r = add(g, cylG(0.38 * size, 0.38 * size, 0.02, 16), M.rotor, x * 0.65 * size, 0.15 * size, z * 0.65 * size, 0, 0, 0, false);
+    r.userData.noWreck = true;
     rotors.push(r);
+    box(g, 0.03 * size, 0.2 * size, 0.03 * size, M.darkMetal, x * 0.2 * size, -0.15 * size, z * 0.3 * size); // Landebeine
   }
   if (!recon) cyl(g, 0.12 * size, 0.12 * size, 0.6 * size, M.sand, 0, -0.18 * size, 0.2 * size, Math.PI / 2, 0, 0, 8); // Gefechtskopf
-  else add(g, sphG(0.15 * size, 8, 6), M.glass, 0, -0.2 * size, 0.25 * size);
+  else { add(g, sphG(0.15 * size, 8, 6), M.glass, 0, -0.2 * size, 0.25 * size); box(g, 0.08 * size, 0.08 * size, 0.2 * size, M.darkMetal, 0, -0.2 * size, 0.38 * size); }
   add(g, sphG(0.05, 6, 4), side === 'UA' ? M.greenLight : M.redLight, 0, 0.15 * size, -0.45 * size, 0, 0, 0, false);
   const muzzle = new THREE.Object3D(); g.add(muzzle);
   return { root: g, muzzle, height: 0.5, rotors };
@@ -334,6 +725,7 @@ function fixedWing(side, kind) {
   const g = new THREE.Group();
   const muzzle = new THREE.Object3D(); g.add(muzzle);
   let rotors = [];
+  const rot = (m) => { m.userData.noWreck = true; rotors.push(m); };
   if (kind === 'shahed') {
     // Deltaflügel
     const shape = new THREE.Shape();
@@ -341,34 +733,51 @@ function fixedWing(side, kind) {
     const wing = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.08, bevelEnabled: false }), M.grey);
     wing.rotation.x = -Math.PI / 2; wing.castShadow = true; g.add(wing);
     cyl(g, 0.22, 0.18, 3.0, M.grey, 0, 0.05, 0.2, Math.PI / 2, 0, 0, 8);
+    add(g, sphG(0.22, 8, 6), M.grey, 0, 0.05, 1.7).scale.set(1, 1, 1.4); // Gefechtskopfspitze
     box(g, 0.05, 0.6, 0.5, M.grey, 1.2, 0.3, -0.8); box(g, 0.05, 0.6, 0.5, M.grey, -1.2, 0.3, -0.8);
-    rotors.push(add(g, cylG(0.45, 0.45, 0.02, 12), M.rotor, 0, 0.05, -1.3, Math.PI / 2, 0, 0, false));
+    box(g, 0.3, 0.12, 0.5, M.darkMetal, 0, 0.28, -1.0); // Motorgondel
+    box(g, 0.2, 0.05, 0.3, M.darkMetal, 0, 0.15, 0.9);
+    rot(add(g, cylG(0.45, 0.45, 0.02, 12), M.rotor, 0, 0.05, -1.45, Math.PI / 2, 0, 0, false));
     g.scale.setScalar(1.4);
   } else if (kind === 'lancet') {
     cyl(g, 0.14, 0.12, 1.6, M.grey, 0, 0, 0, Math.PI / 2, 0, 0, 8);
+    add(g, sphG(0.14, 8, 6), M.darkMetal, 0, 0, 0.8).scale.set(1, 1, 1.0);
     for (const z of [0.4, -0.5]) { box(g, 1.6, 0.03, 0.25, M.grey, 0, 0, z, 0, 0, Math.PI / 4); box(g, 1.6, 0.03, 0.25, M.grey, 0, 0, z, 0, 0, -Math.PI / 4); }
+    cyl(g, 0.08, 0.1, 0.2, M.darkMetal, 0, 0, -0.85, Math.PI / 2, 0, 0, 6);
     g.scale.setScalar(1.6);
   } else if (kind === 'orlan' || kind === 'recon_wing') {
-    cyl(g, 0.18, 0.12, 1.8, side === 'UA' ? M.white : M.grey, 0, 0, 0, Math.PI / 2, 0, 0, 8);
-    box(g, 3.2, 0.05, 0.35, side === 'UA' ? M.white : M.grey, 0, 0.12, 0.2);
-    box(g, 1.0, 0.04, 0.25, side === 'UA' ? M.white : M.grey, 0, 0.12, -0.8);
-    rotors.push(add(g, cylG(0.3, 0.3, 0.02, 12), M.rotor, 0, 0, -0.95, Math.PI / 2, 0, 0, false));
+    const col = side === 'UA' ? M.white : M.grey;
+    cyl(g, 0.18, 0.12, 1.8, col, 0, 0, 0, Math.PI / 2, 0, 0, 8);
+    add(g, sphG(0.18, 8, 6), col, 0, 0, 0.9).scale.set(1, 1, 0.8);
+    box(g, 3.2, 0.05, 0.35, col, 0, 0.12, 0.2);
+    box(g, 1.0, 0.04, 0.25, col, 0, 0.12, -0.8);
+    box(g, 0.04, 0.35, 0.22, col, 0, 0.25, -0.85);
+    cyl(g, 0.05, 0.05, 0.12, M.glass, 0, -0.14, 0.4, 0, 0, 0, 6); // Kamerakugel
+    rot(add(g, cylG(0.3, 0.3, 0.02, 12), M.rotor, 0, 0, -0.95, Math.PI / 2, 0, 0, false));
     g.scale.setScalar(1.5);
   } else if (kind === 'cruise') { // Storm Shadow / Kalibr
     cyl(g, 0.3, 0.3, 4.6, M.grey, 0, 0, 0, Math.PI / 2, 0, 0, 10);
     add(g, sphG(0.3, 10, 6), M.grey, 0, 0, 2.3).scale.set(1, 1, 2);
     box(g, 2.8, 0.05, 0.5, M.grey, 0, 0, 0.2);
     box(g, 1.0, 0.05, 0.4, M.grey, 0, 0, -2.0);
+    box(g, 0.05, 0.5, 0.4, M.grey, 0, 0.3, -2.0);
+    box(g, 0.4, 0.2, 0.9, M.darkMetal, 0, -0.32, -0.4); // Lufteinlauf
     add(g, sphG(0.22, 8, 6), M.engineGlow, 0, 0, -2.4, 0, 0, 0, false);
   } else if (kind === 'hypersonic') {
     cyl(g, 0.12, 0.5, 6.0, M.white, 0, 0, 0, Math.PI / 2, 0, 0, 12);
+    add(g, sphG(0.12, 8, 6), M.darkMetal, 0, 0, 3.0);
     for (let i = 0; i < 4; i++) box(g, 0.04, 0.9, 0.9, M.white, 0, 0, -2.6, 0, 0, i * Math.PI / 2);
+    cyl(g, 0.52, 0.52, 0.15, M.darkMetal, 0, 0, -2.95, Math.PI / 2, 0, 0, 12);
     add(g, sphG(0.5, 10, 6), M.engineGlow, 0, 0, -3.1, 0, 0, 0, false);
   } else if (kind === 'interceptor') {
     cyl(g, 0.12, 0.15, 2.8, M.white, 0, 0, 0, Math.PI / 2, 0, 0, 8);
+    add(g, sphG(0.12, 8, 6), M.darkMetal, 0, 0, 1.4).scale.set(1, 1, 1.6);
+    for (let i = 0; i < 4; i++) box(g, 0.03, 0.5, 0.4, M.white, 0, 0, -1.1, 0, 0, i * Math.PI / 2);
     add(g, sphG(0.2, 8, 6), M.engineGlow, 0, 0, -1.4, 0, 0, 0, false);
   } else if (kind === 'atgm' || kind === 'rocket') {
     cyl(g, 0.12, 0.12, 1.4, kind === 'rocket' ? M.grey : M.sand, 0, 0, 0, Math.PI / 2, 0, 0, 6);
+    add(g, sphG(0.12, 6, 5), M.darkMetal, 0, 0, 0.7).scale.set(1, 1, 1.3);
+    for (let i = 0; i < 4; i++) box(g, 0.03, 0.4, 0.25, M.darkMetal, 0, 0, -0.55, 0, 0, i * Math.PI / 2);
     add(g, sphG(0.15, 8, 6), M.engineGlow, 0, 0, -0.75, 0, 0, 0, false);
   }
   return { root: g, muzzle, height: 0.5, rotors };
@@ -382,14 +791,25 @@ function helicopter(side) { // Ka-52-artig mit Koaxialrotor
   box(g, 0.1, 1.6, 1.0, cam, 0, 0.8, -7.0);
   box(g, 2.6, 0.08, 0.6, cam, 0, 0.2, -6.6);
   box(g, 1.4, 0.1, 0.8, M.glass, 0, 0.7, 2.6, -0.4, 0, 0);
+  add(g, sphG(0.8, 10, 8), M.glass, 0, 0.55, 2.3).scale.set(0.9, 0.65, 1.2); // Kanzel
   box(g, 4.6, 0.12, 0.7, cam, 0, -0.3, 0.3); // Stummelflügel
-  for (const s of [-1, 1]) cyl(g, 0.2, 0.2, 1.8, M.grey, s * 1.9, -0.6, 0.3, Math.PI / 2, 0, 0, 8);
+  for (const s of [-1, 1]) {
+    cyl(g, 0.2, 0.2, 1.8, M.grey, s * 1.9, -0.6, 0.3, Math.PI / 2, 0, 0, 8);
+    cyl(g, 0.2, 0.05, 0.3, M.darkMetal, s * 1.9, -0.6, 1.3, Math.PI / 2, 0, 0, 8);
+    cyl(g, 0.08, 0.08, 0.6, M.darkMetal, s * 0.6, -1.2, 1.6, 0, 0, 0, 6); // Fahrwerk vorn/hinten
+    cyl(g, 0.08, 0.08, 0.6, M.darkMetal, s * 0.9, -1.2, -0.8, 0, 0, 0, 6);
+    cyl(g, 0.2, 0.2, 0.15, M.rubber, s * 0.9, -1.55, -0.8, 0, 0, Math.PI / 2, 8);
+  }
+  add(g, sphG(0.22, 8, 6), M.darkMetal, 0, -0.55, 3.2); // Sensorkugel
   cyl(g, 0.12, 0.12, 2.6, M.darkMetal, 0, 1.4, 0.4, 0, 0, 0, 6);
+  cyl(g, 0.5, 0.5, 0.5, M.darkMetal, 0, 1.0, 0.4, 0, 0, 0, 8); // Rotorkopf
   const r1 = add(g, cylG(7, 7, 0.04, 24), M.rotor, 0, 1.4, 0.4, 0, 0, 0, false);
   const r2 = add(g, cylG(7, 7, 0.04, 24), M.rotor, 0, 2.5, 0.4, 0, 0, 0, false);
+  r1.userData.noWreck = r2.userData.noWreck = true;
   const turret = new THREE.Group(); turret.position.set(0, -0.6, 2.0); g.add(turret);
   const barrel = new THREE.Group(); turret.add(barrel);
-  cyl(barrel, 0.06, 0.06, 1.4, M.darkMetal, 0, 0, 0.7, Math.PI / 2, 0, 0, 6);
+  box(barrel, 0.3, 0.3, 0.6, M.darkMetal, 0, 0, 0.1);
+  cyl(barrel, 0.06, 0.06, 1.4, M.gunMetal, 0, 0, 0.7, Math.PI / 2, 0, 0, 6);
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, 1.5); barrel.add(muzzle);
   return { root: g, turret, barrel, muzzle, height: 2, rotors: [r1, r2] };
 }
@@ -399,8 +819,11 @@ function seaDrone() {
   const g = new THREE.Group();
   const hull = add(g, hullGeo(1.3, 0.6, 5.5, 0.5, 0.0), M.seadrone, 0, 0.1, 0);
   box(g, 0.6, 0.3, 0.8, M.darkMetal, 0, 0.5, -1.4);
+  box(g, 1.1, 0.05, 3.0, M.darkMetal, 0, 0.42, 0.3); // Deck
   cyl(g, 0.03, 0.03, 0.8, M.darkMetal, 0, 0.9, -1.6, 0, 0, 0, 4);
   add(g, sphG(0.06, 6, 4), M.greenLight, 0, 1.3, -1.6, 0, 0, 0, false);
+  add(g, sphG(0.15, 8, 6), M.optic, 0, 0.65, -0.9); // Kamerakopf
+  box(g, 0.5, 0.35, 0.4, M.darkMetal, 0, 0.2, -2.8); // Außenborder
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, 2.7); g.add(muzzle);
   g.scale.setScalar(1.5);
   return { root: g, muzzle, height: 1.2, hull };
@@ -408,109 +831,245 @@ function seaDrone() {
 function patrolBoat() {
   const g = new THREE.Group();
   add(g, hullGeo(4.2, 2.0, 16, 0.35, 0.0), M.navy, 0, 0.6, 0);
+  box(g, 4.25, 0.15, 15.0, M.darkMetal, 0, 1.0, -0.2); // Scheuerleiste
   box(g, 3.0, 2.2, 5, M.navy, 0, 2.6, -1.5);
   box(g, 3.05, 0.5, 0.1, M.glass, 0, 3.2, 1.0);
+  for (const s of [-1, 1]) box(g, 0.05, 0.5, 3.5, M.glass, s * 1.53, 3.2, -1.0);
+  box(g, 3.2, 0.15, 5.2, M.darkMetal, 0, 3.75, -1.5); // Brückendach
   cyl(g, 0.1, 0.1, 3, M.darkMetal, 0, 5, -2.0, 0, 0, 0, 6);
+  box(g, 1.6, 0.12, 0.3, M.grey, 0, 6.3, -2.0); // Radarantenne
+  box(g, 1.4, 0.4, 1.0, M.navy, 0, 4.1, -3.4); // Aufbau hinten
+  for (const s of [-1, 1]) { box(g, 0.05, 0.7, 5.5, M.darkMetal, s * 1.95, 1.65, -1.5); box(g, 0.05, 0.7, 4.5, M.darkMetal, s * 1.95, 1.65, 4.5); } // Reling
+  box(g, 1.2, 0.3, 2.0, M.sand, 1.0, 1.25, -6.0); // Rettungsinsel
   const turret = new THREE.Group(); turret.position.set(0, 1.9, 4.5); g.add(turret);
   box(turret, 1.2, 0.8, 1.2, M.navy, 0, 0.4, 0);
   const barrel = new THREE.Group(); barrel.position.set(0, 0.5, 0.5); turret.add(barrel);
-  cyl(barrel, 0.06, 0.06, 1.8, M.darkMetal, 0, 0, 0.9, Math.PI / 2, 0, 0, 6);
+  cyl(barrel, 0.06, 0.06, 1.8, M.gunMetal, 0, 0, 0.9, Math.PI / 2, 0, 0, 6);
+  cyl(barrel, 0.12, 0.12, 0.6, M.darkMetal, 0, 0, 0.4, Math.PI / 2, 0, 0, 8);
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, 1.9); barrel.add(muzzle);
   return { root: g, turret, barrel, muzzle, height: 4 };
 }
 
 // ---------------- Gebäude & Ziele ----------------
+function gableG(w, rh) {
+  const k = `g${w},${rh}`;
+  if (geoCache[k]) return geoCache[k];
+  const sh = new THREE.Shape();
+  sh.moveTo(-w / 2, 0); sh.lineTo(w / 2, 0); sh.lineTo(0, rh); sh.closePath();
+  const g = new THREE.ShapeGeometry(sh);
+  const uv = g.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 0.25 * 1, uv.getY(i) * 0.25);
+  return (geoCache[k] = shared(g));
+}
+
 export function house(h) {
   initMats();
   const g = new THREE.Group();
-  const wall = M.walls[h.style % M.walls.length], roof = M.roofs[h.style % M.roofs.length];
-  const fh = 3.0, H = h.floors * fh;
-  const body = box(g, h.w, H, h.d, wall, 0, H / 2, 0);
-  // Fenster
-  const winMat = h.lit ? M.windowLit : M.window;
-  for (let f = 0; f < h.floors; f++) {
-    const y = f * fh + 1.7;
-    const nx = Math.max(1, Math.floor(h.w / 2.4));
-    for (let i = 0; i < nx; i++) {
-      const x = -h.w / 2 + (i + 0.5) * (h.w / nx);
-      box(g, 0.9, 1.1, 0.06, (h.lit && Math.random() < 0.3) ? M.windowLit : M.window, x, y, h.d / 2 + 0.02);
-      box(g, 0.9, 1.1, 0.06, M.window, x, y, -h.d / 2 - 0.02);
+  const big = h.floors > 2;
+  const wall = big ? M.panels[h.style % M.panels.length] : M.walls[h.style % M.walls.length];
+  const roofMat = M.roofs[h.style % M.roofs.length];
+  const fh = 3.0, H = h.floors * fh, w = h.w, d = h.d;
+  const body = add(g, tiledBoxG(w, H, d, big ? 6 : 4), wall, 0, H / 2, 0);
+  add(g, boxG(w + 0.2, 0.5, d + 0.2), M.concreteDark, 0, 0.25, 0); // Sockel
+
+  const frame = new Merger(), glass = new Merger(), lit = new Merger(), shut = new Merger(), trim = new Merger(), doorM = new Merger();
+  const faces = [
+    { ry: 0, cx: 0, cz: d / 2, len: w }, { ry: Math.PI, cx: 0, cz: -d / 2, len: w },
+    { ry: Math.PI / 2, cx: w / 2, cz: 0, len: d }, { ry: -Math.PI / 2, cx: -w / 2, cz: 0, len: d },
+  ];
+  const put = (m, geo, f, u, y, out) => {
+    const c = Math.cos(f.ry), s = Math.sin(f.ry);
+    m.add(geo, mat4(f.cx + c * u + s * out, y, f.cz - s * u + c * out, f.ry));
+  };
+  const ww = big ? 1.3 : 0.9, wh = big ? 1.3 : 1.2;
+  const doorsAt = big ? (w > 14 ? [-w / 4, w / 4] : [0]) : [0];
+  const shutterOn = !big && h.style % 2 === 1;
+  faces.forEach((f, fi) => {
+    const nx = Math.max(1, Math.floor(f.len / (big ? 2.6 : 2.4)));
+    for (let fl = 0; fl < h.floors; fl++) {
+      const y = fl * fh + 1.7;
+      for (let i = 0; i < nx; i++) {
+        const u = -f.len / 2 + (i + 0.5) * (f.len / nx);
+        if (fi === 0 && fl === 0 && doorsAt.some((dx) => Math.abs(u - dx) < 1.3)) continue;
+        put(frame, boxG(ww + 0.2, wh + 0.2, 0.08), f, u, y, 0.02);
+        put(frame, boxG(ww + 0.35, 0.08, 0.22), f, u, y - wh / 2 - 0.12, 0.1); // Fensterbank
+        put(h.lit && Math.random() < 0.35 ? lit : glass, boxG(ww, wh, 0.1), f, u, y, 0.05);
+        put(frame, boxG(0.05, wh, 0.12), f, u, y, 0.08); // Fensterkreuz
+        if (shutterOn) { put(shut, boxG(ww * 0.5, wh + 0.2, 0.06), f, u - ww * 0.78, y, 0.06); put(shut, boxG(ww * 0.5, wh + 0.2, 0.06), f, u + ww * 0.78, y, 0.06); }
+        if (big && fi === 0 && fl >= 1 && i % 2 === 0) { // Balkone
+          const by = fl * fh;
+          put(trim, boxG(1.8, 0.14, 1.0), f, u, by + 0.75, 0.5);
+          put(trim, boxG(1.8, 0.5, 0.06), f, u, by + 1.07, 1.0);
+          put(trim, boxG(0.06, 0.5, 1.0), f, u - 0.87, by + 1.07, 0.5);
+          put(trim, boxG(0.06, 0.5, 1.0), f, u + 0.87, by + 1.07, 0.5);
+        }
+      }
     }
+  });
+  // Türen
+  const f0 = faces[0];
+  for (const dx of doorsAt) {
+    const dw = big ? 1.5 : 1.0;
+    put(frame, boxG(dw + 0.3, 2.35, 0.08), f0, dx, 1.2, 0.02);
+    put(doorM, boxG(dw, 2.2, 0.1), f0, dx, 1.15, 0.05);
+    put(trim, boxG(dw + 0.8, 0.2, 0.8), f0, dx, 0.1, 0.4); // Stufe
+    put(trim, boxG(dw + 0.8, 0.12, 0.9), f0, dx, 2.6, 0.45); // Vordach
   }
-  if (h.floors <= 2) {
-    // Satteldach
-    const shape = new THREE.Shape();
-    shape.moveTo(-h.w / 2 - 0.4, 0); shape.lineTo(0, Math.min(3, h.w * 0.35)); shape.lineTo(h.w / 2 + 0.4, 0); shape.closePath();
-    const rg = new THREE.ExtrudeGeometry(shape, { depth: h.d + 0.8, bevelEnabled: false });
-    rg.translate(0, 0, -(h.d + 0.8) / 2);
-    const r = new THREE.Mesh(rg, roof); r.position.y = H; r.castShadow = true; r.receiveShadow = true; g.add(r);
+  flushMerged(g, frame, M.frame);
+  flushMerged(g, glass, M.window, false);
+  flushMerged(g, lit, M.windowLit, false);
+  flushMerged(g, shut, M.shutters[h.style % 2]);
+  flushMerged(g, doorM, M.door);
+
+  if (!big) {
+    // Satteldach mit Ziegel-/Blechtextur, Giebel, First, Kamin
+    const rh = Math.min(3, w * 0.35);
+    const half = w / 2 + 0.4, ls = Math.hypot(half, rh), ang = Math.atan2(rh, half);
+    for (const s of [-1, 1]) add(g, tiledBoxG(ls, 0.16, d + 0.8, 2), roofMat, s * half / 2, H + rh / 2 + 0.04, 0, 0, 0, -s * ang);
+    box(g, 0.3, 0.2, d + 0.9, M.concreteDark, 0, H + rh + 0.06, 0);
+    add(g, gableG(w, rh), wall, 0, H, d / 2 + 0.01);
+    add(g, gableG(w, rh), wall, 0, H, -d / 2 - 0.01, 0, Math.PI, 0);
+    const hc = rh * 0.7 + 1.0;
+    box(g, 0.6, hc, 0.6, M.brick, w * 0.18, H + rh * 0.3 + hc / 2, -d * 0.2);
+    box(g, 0.8, 0.12, 0.8, M.concreteDark, w * 0.18, H + rh + 1.0, -d * 0.2);
+    if (h.floors === 2 && w > 9) { // Gaube
+      add(g, tiledBoxG(1.6, 1.0, 1.4, 4), wall, -w * 0.22, H + rh * 0.35, d * 0.3);
+      box(g, 0.7, 0.6, 0.06, M.window, -w * 0.22, H + rh * 0.35, d * 0.3 + 0.72);
+    }
   } else {
-    box(g, h.w + 0.3, 0.4, h.d + 0.3, M.concreteDark, 0, H + 0.2, 0);
-    box(g, 1.5, 1.2, 1.5, M.concreteDark, h.w * 0.25, H + 0.8, 0);
+    // Flachdach mit Attika, Treppenhaus, Aufbauten
+    const tr = new Merger();
+    box(g, w + 0.3, 0.4, d + 0.3, M.concreteDark, 0, H + 0.2, 0);
+    tr.add(boxG(w + 0.3, 0.5, 0.15), mat4(0, H + 0.65, d / 2 + 0.07)); tr.add(boxG(w + 0.3, 0.5, 0.15), mat4(0, H + 0.65, -d / 2 - 0.07));
+    tr.add(boxG(0.15, 0.5, d + 0.3), mat4(w / 2 + 0.07, H + 0.65, 0)); tr.add(boxG(0.15, 0.5, d + 0.3), mat4(-w / 2 - 0.07, H + 0.65, 0));
+    for (const dx of doorsAt) tr.add(boxG(1.8, 1.6, 1.8), mat4(dx, H + 1.2, 0)); // Treppenhaus-Aufbauten
+    for (let i = 0; i < 3; i++) tr.add(boxG(0.8, 0.6, 0.8), mat4(-w * 0.3 + i * 1.3, H + 0.7, d * 0.25));
+    tr.add(boxG(0.06, 2.4, 0.06), mat4(-w * 0.35, H + 1.6, -d * 0.2));
+    flushMerged(g, tr, M.concreteDark);
   }
+  flushMerged(g, trim, M.concrete);
+  addBlob(g, w + 5, d + 5);
   return { root: g, height: H + 2, body };
 }
+
 export function rubble(w, d) {
   initMats();
   const g = new THREE.Group();
-  for (let i = 0; i < 7; i++) {
-    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.8 + Math.random() * 1.2, 0), M.rubble);
-    m.position.set((Math.random() - 0.5) * w * 0.8, 0.3, (Math.random() - 0.5) * d * 0.8);
-    m.scale.y = 0.5; m.rotation.set(Math.random(), Math.random(), Math.random());
+  const rnd = Math.random;
+  const base = box(g, w * 0.9, 0.5, d * 0.9, M.rubble, 0, 0.25, 0);
+  base.scale.y = 1;
+  for (let i = 0; i < 12; i++) {
+    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6 + rnd() * 1.2, 0), i % 3 === 0 ? M.concreteDark : M.rubble);
+    m.position.set((rnd() - 0.5) * w * 0.8, 0.4 + rnd() * 0.5, (rnd() - 0.5) * d * 0.8);
+    m.scale.y = 0.5; m.rotation.set(rnd(), rnd(), rnd());
     m.castShadow = true; m.receiveShadow = true;
     g.add(m);
   }
-  const base = box(g, w * 0.9, 0.6, d * 0.9, M.rubble, 0, 0.3, 0);
+  // stehengebliebene Wandreste
+  for (let i = 0; i < 3; i++) {
+    const wl = 2 + rnd() * 3, hh = 0.8 + rnd() * 2.0;
+    const side = i % 2 ? 1 : -1;
+    add(g, boxG(wl, hh, 0.4), M.walls[i % M.walls.length], side * w * 0.3 + (rnd() - 0.5), hh / 2 + 0.3, (rnd() - 0.5) * d * 0.7, (rnd() - 0.5) * 0.25, rnd() * 3, (rnd() - 0.5) * 0.25);
+  }
+  // verkohlte Balken und Deckenplatten
+  for (let i = 0; i < 5; i++) add(g, boxG(0.25, 0.25, 2.5 + rnd() * 2.5), i % 2 ? M.charred : M.wood, (rnd() - 0.5) * w * 0.7, 0.9 + rnd() * 0.6, (rnd() - 0.5) * d * 0.7, (rnd() - 0.5) * 0.6, rnd() * 3, (rnd() - 0.5) * 0.6);
+  add(g, boxG(w * 0.45, 0.25, d * 0.4), M.concrete, (rnd() - 0.5) * 2, 0.9, (rnd() - 0.5) * 2, 0.2, rnd(), 0.15);
   return g;
+}
+
+function sandbags(g, x, z, len, ry = 0, rows = 2) {
+  const m = new Merger();
+  const n = Math.max(1, Math.floor(len / 0.9));
+  for (let r = 0; r < rows; r++) for (let i = 0; i < n; i++) {
+    const u = -len / 2 + (i + 0.5 + (r % 2) * 0.5) * (len / n);
+    m.add(boxG(0.85, 0.35, 0.5), mat4(Math.cos(ry) * u, 0.2 + r * 0.34, -Math.sin(ry) * u, ry));
+  }
+  const mesh = flushMerged(g, m, M.sandbag);
+  if (mesh) mesh.position.set(x, 0, z);
 }
 
 function structure(kind, side) {
   const g = new THREE.Group();
   let height = 4, radar = null;
+  const cam = side === 'UA' ? M.camoUA : M.camoRU;
   if (kind === 'hq') {
     box(g, 8, 2.6, 5, M.tent, 0, 1.3, 0);
     box(g, 8.6, 0.2, 5.6, M.tent, 0, 2.7, 0, 0, 0, 0.04);
+    for (const s of [-1, 1]) box(g, 8.6, 0.2, 3.0, M.tarp, 0, 3.15, s * 1.4, -s * 0.35, 0, 0); // Zeltdach
+    box(g, 1.4, 2.0, 0.1, M.darkMetal, 1.0, 1.0, 2.55); // Eingang
     for (let i = 0; i < 6; i++) box(g, 1.4, 0.7, 0.7, M.crate, -4 + i * 1.6, 0.35, 3.2);
+    sandbags(g, 0, 4.2, 9, 0, 2);
     cyl(g, 0.05, 0.05, 9, M.darkMetal, 3.5, 4.5, -2, 0, 0, 0, 4);
     radar = cyl(g, 0.8, 0.8, 0.08, M.grey, -2.6, 3.4, -1.8, 1.0, 0, 0, 16);
+    cyl(g, 0.08, 0.08, 1.0, M.darkMetal, -2.6, 3.0, -1.8, 0, 0, 0, 6);
+    box(g, 1.0, 1.0, 1.4, M.camoRU, 5.0, 0.5, -1.0); // Generator
     if (side === 'UA') { box(g, 1.2, 0.4, 0.05, M.iffUA2, 3.5, 8.3, -1.75); box(g, 1.2, 0.4, 0.05, M.iffUA, 3.5, 7.9, -1.75); }
     height = 5;
   } else if (kind === 'radar' || kind === 's400radar') {
-    box(g, 4, 2.4, 9, side === 'UA' ? M.camoUA : M.camoRU, 0, 1.6, 0);
-    for (const s of [-1, 1]) for (let i = 0; i < 4; i++) cyl(g, 0.55, 0.55, 0.45, M.rubber, s * 1.8, 0.55, -3 + i * 2, 0, 0, Math.PI / 2, 12);
+    box(g, 4, 2.4, 9, cam, 0, 1.6, 0);
+    for (const s of [-1, 1]) for (let i = 0; i < 4; i++) wheel(g, 0.55, 0.45, s * 1.8, 0.55, -3 + i * 2);
+    box(g, 3.6, 1.2, 1.6, cam, 0, 2.1, 4.3); // Kabine
+    box(g, 3.4, 0.5, 0.05, M.glass, 0, 2.5, 5.15);
     radar = new THREE.Group(); radar.position.set(0, 3, -1); g.add(radar);
     box(radar, 1, 2.5, 1, M.darkMetal, 0, 1.2, 0);
     box(radar, 6, 4.5, 0.4, M.grey, 0, 4.2, 0.4, -0.3, 0, 0);
+    box(radar, 5.7, 4.2, 0.05, M.darkMetal, 0, 4.2, 0.62, -0.3, 0, 0);
+    box(radar, 0.4, 2.4, 0.3, M.darkMetal, 0, 2.6, 0.1, -0.3, 0, 0);
+    for (const s of [-1, 1]) box(g, 0.4, 0.5, 0.4, M.darkMetal, s * 1.6, 0.5, -4.6); // Stützen
     height = 9;
   } else if (kind === 'depot') {
     for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) {
       box(g, 2.2, 1.2, 1.3, M.crate, -3 + i * 3, 0.6, -1.2 + j * 2.4);
       box(g, 2.2, 1.2, 1.3, M.crate, -3 + i * 3, 1.8, -1.2 + j * 2.4);
+      box(g, 2.3, 0.1, 1.4, M.wood2, -3 + i * 3, 1.2, -1.2 + j * 2.4);
     }
     const tarp = box(g, 9.5, 0.15, 6, M.tent, 0, 3.2, 0, 0.05, 0, 0);
     for (const x of [-4.5, 4.5]) for (const z of [-2.8, 2.8]) cyl(g, 0.08, 0.08, 3.2, M.wood, x, 1.6, z, 0, 0, 0, 4);
+    for (let i = 0; i < 4; i++) cyl(g, 0.35, 0.35, 0.9, i % 2 ? M.era : M.sand, 5.5, 0.45, -2 + i * 1.0, 0, 0, 0, 10); // Fässer
+    sandbags(g, 0, 3.8, 9, 0, 2);
     height = 4;
   } else if (kind === 'powerplant') {
     const tower = add(g, cylG(5, 7.5, 18, 24), M.concrete, -8, 9, 0);
     add(g, cylG(5, 6.5, 14, 24), M.concrete, 8, 7, -4);
+    cyl(g, 5.1, 5.1, 0.4, M.concreteDark, -8, 18.2, 0, 0, 0, 0, 24);
     box(g, 12, 9, 10, M.concreteDark, 2, 4.5, 8);
+    for (let i = 0; i < 4; i++) box(g, 1.6, 2.0, 0.1, M.window, -2 + i * 3.4, 6, 13.05); // Fensterband
+    box(g, 12.4, 0.5, 10.4, M.concrete, 2, 9.2, 8);
     cyl(g, 0.8, 1.0, 22, M.concrete, 8, 11, 10, 0, 0, 0, 10);
+    cyl(g, 0.9, 0.9, 0.3, M.redLight, 8, 22.1, 10, 0, 0, 0, 10);
     for (let i = 0; i < 4; i++) { box(g, 2.0, 2.4, 2.0, M.grey, -6 + i * 3.5, 1.2, -12); cyl(g, 0.06, 0.06, 5, M.darkMetal, -6 + i * 3.5, 4.5, -12, 0, 0, 0, 4); }
+    cyl(g, 0.4, 0.4, 14, M.darkMetal, -2, 6.5, 2, 0, 0, Math.PI / 2, 8); // Rohrleitung
     height = 20;
   } else if (kind === 'substation') {
-    for (let i = 0; i < 3; i++) { box(g, 2.6, 2.8, 2.2, M.grey, -4 + i * 4, 1.4, 0); cyl(g, 0.15, 0.15, 2, M.white, -4 + i * 4, 3.6, 0, 0, 0, 0, 6); }
-    for (const x of [-6, 6]) { const t = box(g, 0.3, 9, 0.3, M.darkMetal, x, 4.5, -3); box(g, 5, 0.25, 0.25, M.darkMetal, x, 8.5, -3); }
+    for (let i = 0; i < 3; i++) {
+      box(g, 2.6, 2.8, 2.2, M.grey, -4 + i * 4, 1.4, 0);
+      cyl(g, 0.15, 0.15, 2, M.white, -4 + i * 4, 3.6, 0, 0, 0, 0, 6);
+      for (let k = 0; k < 3; k++) cyl(g, 0.3, 0.3, 0.08, M.white, -4 + i * 4, 3.0 + k * 0.5, 0, 0, 0, 0, 8);
+      box(g, 1.0, 1.2, 0.8, M.darkMetal, -4 + i * 4, 0.6, 1.6);
+    }
+    for (const x of [-6, 6]) { const t = box(g, 0.3, 9, 0.3, M.darkMetal, x, 4.5, -3); box(g, 5, 0.25, 0.25, M.darkMetal, x, 8.5, -3); box(g, 4, 0.2, 0.2, M.darkMetal, x, 7.2, -3); }
     height = 9;
   } else if (kind === 'bunker') {
     box(g, 6, 2, 6, M.concreteDark, 0, 1, 0);
+    add(g, sphG(3.6, 14, 6), M.tent, 0, 1.6, 0).scale.set(1, 0.28, 1); // Erdabdeckung
     box(g, 3, 0.4, 0.2, M.darkMetal, 0, 1.3, 3.05);
+    box(g, 1.2, 1.6, 0.3, M.darkMetal, 2.0, 0.9, 3.05); // Tür
+    sandbags(g, 0, 3.9, 6, 0, 2);
     height = 2.5;
   } else if (kind === 'fuel') {
-    for (let i = 0; i < 3; i++) add(g, cylG(2.2, 2.2, 4, 18), M.white, -5 + i * 5, 2, 0);
+    for (let i = 0; i < 3; i++) {
+      add(g, cylG(2.2, 2.2, 4, 18), M.white, -5 + i * 5, 2, 0);
+      add(g, cylG(2.0, 2.2, 0.3, 18), M.grey, -5 + i * 5, 4.1, 0);
+      cyl(g, 0.15, 0.15, 4.2, M.darkMetal, -5 + i * 5 + 1.9, 2.1, 1.1, 0, 0, 0, 6); // Leiter
+    }
+    for (let i = 0; i < 2; i++) cyl(g, 0.2, 0.2, 5.4, M.darkMetal, -2.5 + i * 5, 3.0, -2.5, 0, 0, Math.PI / 2, 8); // Rohre
     height = 4;
   } else if (kind === 'rail') { // Munitionszug-Waggon
     box(g, 2.8, 2.6, 12, M.camoRU, 0, 2.1, 0);
-    for (const z of [-4.5, 4.5]) for (const s of [-1, 1]) cyl(g, 0.45, 0.45, 0.2, M.darkMetal, s * 1.1, 0.5, z, 0, 0, Math.PI / 2, 10);
+    box(g, 2.9, 0.2, 12.2, M.darkMetal, 0, 0.9, 0);
+    for (const z of [-4.5, 4.5]) for (const s of [-1, 1]) { cyl(g, 0.45, 0.45, 0.2, M.darkMetal, s * 1.1, 0.5, z, 0, 0, Math.PI / 2, 10); cyl(g, 0.45, 0.45, 0.2, M.darkMetal, s * 1.1, 0.5, z + 1.3, 0, 0, Math.PI / 2, 10); }
+    box(g, 0.1, 2.0, 2.4, M.darkMetal, 1.42, 2.1, 0); box(g, 0.1, 2.0, 2.4, M.darkMetal, -1.42, 2.1, 0); // Schiebetüren
+    box(g, 2.6, 0.12, 12, M.era, 0, 3.45, 0);
     height = 4;
   }
   return { root: g, height, radar };
@@ -569,6 +1128,9 @@ export function bridgeDecor(x0, x1, z, deckY, seaLevel, gapCenters = [], gapLen 
 }
 
 // ---------------- Fabrik ----------------
+const NO_BLOB = new Set(['quad', 'reconquad', 'shahed', 'lancet', 'orlan', 'recon_wing', 'heli', 'seadrone', 'boat', 'bridge_road', 'bridge_rail']);
+const TURRET_SKIP = new Set(['leopard', 't72', 't90', 'bradley', 'bmp', 'gepard', 'spg']);
+
 export function buildModel(type, side, season) {
   initMats();
   let r;
@@ -588,14 +1150,7 @@ export function buildModel(type, side, season) {
     case 'pantsir': r = pantsir(); break;
     case 'spg': r = spg(side); break;
     case 'pickup': r = pickup(side); break;
-    case 'truck': {
-      const cam = side === 'UA' ? M.camoUA : M.camoRU;
-      const g = truckBase(cam, 7.5, 2.6, 3);
-      box(g, 2.6, 2.2, 4.8, M.tent, 0, 2.3, -1.2);
-      const muzzle = new THREE.Object3D(); g.add(muzzle);
-      r = { root: g, muzzle, height: 3.4 };
-      break;
-    }
+    case 'truck': r = cargoTruck(side); break;
     case 'soldier': r = soldier(side, type.weaponModel || 'rifle'); break;
     case 'quad': r = quad(side, type.modelSize || 1, false); break;
     case 'reconquad': r = quad(side, type.modelSize || 1.6, true); break;
@@ -607,6 +1162,16 @@ export function buildModel(type, side, season) {
     case 'bridge_rail': r = bridgeSpan(type.spanLen || 28, 'rail'); break;
     default: r = structure(type.model, side);
   }
+  // Kontaktschatten für Boden-Einheiten und Strukturen
+  if (!NO_BLOB.has(type.model)) {
+    const bb = footprint(r.root, TURRET_SKIP.has(type.model) ? r.turret : null);
+    const s = r.root.scale.x || 1;
+    const sx = Math.min(80, bb.max.x - bb.min.x) / 1, sz = Math.min(80, bb.max.z - bb.min.z);
+    if (isFinite(sx) && sx > 0) {
+      const inf = type.model === 'soldier';
+      addBlob(r.root, sx * (inf ? 1.2 : 1.12) + 0.5 * s, sz * (inf ? 1.2 : 1.1) + 0.5 * s, (bb.max.x + bb.min.x) / 2, (bb.max.z + bb.min.z) / 2);
+    }
+  }
   // Winter-Tarnung
   if (season === 'winter' && side === 'UA') r.root.traverse((o) => { if (o.material === M.camoUA) o.material = M.camoWinter; });
   return r;
@@ -614,7 +1179,7 @@ export function buildModel(type, side, season) {
 export function projectileModel(kind) { initMats(); return fixedWing('UA', kind); }
 export function wreckify(root) {
   initMats();
-  root.traverse((o) => { if (o.isMesh && o.material !== M.rotor) { o.material = M.wreck; } });
+  root.traverse((o) => { if (o.isMesh && o.material !== M.rotor && !o.userData.noWreck) { o.material = M.wreck; } });
 }
 export const Materials = M;
 export { initMats };
