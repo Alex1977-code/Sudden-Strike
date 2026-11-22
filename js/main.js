@@ -15,8 +15,8 @@ const PROGRESS_KEY = 'steppensturm.progress.v1';
 // ---------- Einstellungen ----------
 const mobile = isMobile();
 const defaults = mobile
-  ? { quality: 'medium', upscale: 'auto', targetFps: 30, sharpness: 0.6, bloom: true, shadows: true, showFps: false, volume: 0.7 }
-  : { quality: 'high', upscale: 'quality', targetFps: 60, sharpness: 0.5, bloom: true, shadows: true, showFps: false, volume: 0.7 };
+  ? { quality: 'medium', upscale: 'auto', targetFps: 30, sharpness: 0.5, bloom: true, shadows: true, showFps: false, volume: 0.7 }
+  : { quality: 'high', upscale: 'auto', targetFps: 60, sharpness: 0.4, bloom: true, shadows: true, showFps: false, volume: 0.7 };
 let settings = { ...defaults };
 try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (e) { /* ignorieren */ }
 const saveSettings = () => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* ignorieren */ } };
