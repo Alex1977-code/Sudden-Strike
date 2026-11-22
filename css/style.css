@@ -205,3 +205,20 @@ body.touch .key { display: none; }
   #objectives { max-width: 44vw; }
   #alert { top: calc(54px + var(--safe-t)); font-size: 13px; padding: 6px 12px; }
 }
+
+/* Handy hochkant: kompakteres HUD, damit mehr vom Schlachtfeld sichtbar bleibt */
+@media (orientation: portrait) and (max-width: 700px) {
+  #objectives { font-size: 11px; padding: 6px 8px; max-width: 68vw; line-height: 1.35; }
+  #objectives .obj { line-height: 1.35; }
+  #minimap { width: 112px; height: 112px; }
+  #bottombar { right: calc(132px + var(--safe-r)); gap: 6px; }
+  #selection { min-height: 44px; min-width: 0; max-width: 100%; padding: 4px; }
+  #selection:empty { display: none; }
+  #orders button, #abilities button { width: 46px; height: 46px; font-size: 16px; }
+  #abilities button { width: 52px; }
+  #orders button span, #abilities button span { font-size: 9px; }
+  .sel-unit { width: 36px; height: 36px; font-size: 17px; }
+  .sel-detail { display: none; }
+  #subtitle { bottom: calc(170px + var(--safe-b)); font-size: 12.5px; max-width: 92vw; }
+  #timer { font-size: 13px; padding: 4px 8px; }
+}
