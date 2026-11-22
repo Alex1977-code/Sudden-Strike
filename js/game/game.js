@@ -365,7 +365,9 @@ export class Game {
       }
       case 'attack': {
         const t = this.unitById(cmd.target);
-        if (!units.length || !t || !t.alive || t.side === p.team || (t.side !== 'N' && !t.type.structure && !t.visibleTo(p.team))) return false;
+        if (!units.length || !t || !t.alive || t.side === p.team) return false;
+        // Ziel muss für das Team aufgeklärt sein (Strukturen: erkundet)
+        if (t.side !== 'N' && !(t.type.structure ? this.fowFor(p.team).isExplored(t.pos.x, t.pos.z) : t.visibleTo(p.team))) return false;
         ok = this.issueOrder(units, t.pos.x, t.pos.z, t, { playerId: p.id });
         break;
       }
