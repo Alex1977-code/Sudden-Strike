@@ -9,7 +9,7 @@ import { CAMPAIGN, DEMO } from './missions/index.js';
 import { isMobile, isTouchDevice, fmtTime } from './engine/util.js';
 
 const $ = (id) => document.getElementById(id);
-const SETTINGS_KEY = 'steppensturm.settings.v1';
+const SETTINGS_KEY = 'steppensturm.settings.v2'; // v2: neue Grafik-Voreinstellungen
 const PROGRESS_KEY = 'steppensturm.progress.v1';
 
 // ---------- Einstellungen ----------
