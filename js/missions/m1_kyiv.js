@@ -47,6 +47,7 @@ export default {
     this.convoy = [];
     this.escaped = 0;
     this.waves = 0;
+    this.flagsScouts = false; // MP-T6: bei „Erneut versuchen“ zurücksetzen (sonst bleibt das Nebenziel gesperrt)
     g.addObjective('spot', 'Feindkolonne mit der Aufklärungsdrohne aufspüren');
     g.addObjective('convoy', 'Kolonne aufreiben – Durchbrüche: 0/3');
     g.addObjective('scouts', 'Feindlichen Spähtrupp im Nordosten ausschalten', { optional: true });

@@ -330,7 +330,7 @@ export class Input {
     this.pendingBuild = { mode, kind };
     const touch = this.touch;
     const txt = mode === 'binoculars' ? 'Blickrichtung des Fernglases wählen' : mode === 'garrison' ? 'Gebäude zum Besetzen wählen' : mode === 'build' ? `${UNIT_TYPES[kind].name} platzieren` : mode === 'clearmines' ? 'Minenfeld zum Räumen wählen' : 'Brücke/Gebäude zum Sprengen wählen';
-    this.hud.showTargetHint(txt + (touch ? ' – Karte antippen' : ' – Klick platziert (R dreht)'), () => this.cancelBuild());
+    this.hud.showTargetHint(txt + (touch ? ' – Karte antippen' : mode === 'build' ? ' – Klick platziert (R dreht)' : ' – Klick wählt'), () => this.cancelBuild());
     if (mode === 'build') {
       const d = UNIT_TYPES[kind].build;
       if (!this.buildPreview) {

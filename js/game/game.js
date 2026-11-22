@@ -174,6 +174,7 @@ export class Game {
     const st = (k) => ({ get() { return self.localPlayer?.stats[k] ?? 0; }, set(v) { if (self.localPlayer) self.localPlayer.stats[k] = v; }, enumerable: true });
     this.stats = Object.defineProperties({ start: 0 }, { kills: st('kills'), lost: st('lost'), shots: st('shots'), intercepts: st('intercepts') });
     this.flags = {};
+    this.onIntercept = null; // MP-T6: Missions-Hook (M3) nicht in spätere Missionen/Gefechte mitnehmen
     this.ended = false;
     this.countdown = null;
     this.radarCache = {};

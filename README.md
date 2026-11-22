@@ -44,6 +44,26 @@ node tools/build-artifact.mjs esbuild dist/steppensturm.html
 - **Taktik:** Frontpanzerung, Deckung in Wald und Ortschaften, Tarnung, Minenfelder, Artillerie mit Beobachtern, Wegfindung (A*), Formationen, Kontrollgruppen.
 - **Steuerung:** Maus/Tastatur und Touch (Tippen, Ziehen, Pinch-Zoom, Drehen, Auswahlrahmen-Modus).
 
+## Gefecht gegen KI (1v1 bis 6v6)
+
+Im Titelmenü öffnet **„Gefecht"** den Setup-Bildschirm. Dort wählst du:
+- Modus 1v1–6v6, Team und Rolle: 🛡️ Panzerkeil, 🪖 Infanterie & Aufklärung, 💥 Artillerie & Flugabwehr oder 🚚 Logistik & Pioniere. Die KI besetzt die übrigen Rollen und spiegelt sie beim Gegner.
+- Kartenthema: Flussübergang, Stadtkampf, Höhenzug, Eisenbahnknoten, Wald & Sumpf, Küste oder Offene Steppe.
+- Größe (klein, mittel, groß; zu kleine Karten werden automatisch vergrößert), Jahreszeit, Nacht und KI-Stärke.
+- Verstärkungsintervall, Siegbedingung (Vernichtung, Punkte-Limit oder Zeitlimit) und Seed. Eine Kartenvorschau zeigt Punkte und Aufmarschräume.
+
+**Kern des Gefechts:**
+- **Eroberungspunkte:** Zeppeline, Fesselballone, Flugfeld, Depot, Funkturm, Bahnhof und Dorf. Steht 6 s nur ein Team im Ring, wechselt der Besitzer. Stehen beide Teams im Ring, ist der Punkt umkämpft. Die Besitzerfarbe zeigen Fahne, Leitwerk, Bodenring, Punkteleiste und Minikarte.
+- **Verstärkungs-Countdown:** Oben steht „Verstärkung in m:ss", in den letzten 30 s rot und mit Ton. Wer einen Punkt beim Ablauf hält, bekommt ein Paket; am Zeppelin kommen Fallschirmjäger und Fähigkeitsladungen dazu. Ein unbewachter Punkt lässt sich so in letzter Sekunde klauen. Das schwächere Team erhält zusätzlich eine kleine Reserve.
+- **Frontlinie und Logistik:**
+  - Munition und Treibstoff sind begrenzt. Versorgungs-Lkw füllen im Umkreis auf, Bergepanzer reparieren Fahrzeuge und zerstörte Ketten.
+  - Pioniere bauen Panzersperren, Sandsäcke, Gräben und Minenfelder, räumen Minen und sprengen.
+  - Beschädigte Fahrzeuge werden von der Besatzung verlassen; Infanterie kann sie übernehmen.
+- **Sicht und Hinterhalt:**
+  - Hügelkämme, Wald und Häuser blockieren Sichtlinie und Schusslinie.
+  - Beobachter sehen im Stand mit dem Fernglas weit in einem Kegel.
+  - Infanterie kann Häuser besetzen und erhält dort Deckung sowie mehr Sicht und Reichweite.
+
 ## Online-Multiplayer
 
 Im Titelmenü öffnet **„Online-Gefecht"** das Online-Menü. Gespielt wird ein Gefecht (1v1 bis 6v6) mit Menschen und KI-Plätzen gemischt.

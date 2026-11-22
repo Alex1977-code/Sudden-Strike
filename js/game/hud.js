@@ -493,7 +493,8 @@ export class HUD {
       for (const p of g.playersOfTeam(team)) {
         let n = 0; for (const u of g.units) if (u.alive && u.owner === p.id && !u.type.structure && !u.type.kamikaze) n++;
         if (p.netUnits !== undefined) n = p.netUnits; // Online-Client: Zahl vom Host (Feinde sind nicht alle bekannt)
-        const st = p.defeated ? ' defeated' : p.waiting ? ' waiting' : '';
+        if (team !== ls || n < 0) n = '–'; // MP-T6: keine Feindstärke anzeigen (Nebel des Krieges)
+        const st = p.defeated ? ' defeated' : p.waiting && team === ls ? ' waiting' : '';
         rows.push(`<div class="tl-row${p.id === g.localPlayerId ? ' me' : ''}${st}"><i style="background:${p.color}"></i><span class="nm">${SK_ROLE[p.role] || ''} ${p.name}</span><span class="n">${n}</span><span class="kl">${p.stats.kills}/${p.stats.lost}</span></div>`);
       }
     }

@@ -84,6 +84,7 @@ export class AICommander {
     for (const id of [...this.retreat]) if (!alive.has(id)) this.retreat.delete(id);
     for (const [id, s] of [...this.stealers]) if (!alive.has(id) || s.cycle !== sk.reinfCycle) this.stealers.delete(id);
     for (const id of [...this.resup.keys()]) if (!alive.has(id)) this.resup.delete(id);
+    for (const id of [...this.orderT.keys()]) if (!alive.has(id)) this.orderT.delete(id); // MP-T6: tote ids nicht ansammeln
     const enemies = sk.intel[team].visibleEnemies();
 
     // 1) Rückzug stark beschädigter Einheiten

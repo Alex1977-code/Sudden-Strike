@@ -506,6 +506,8 @@ function paradrop(g, p, cp, type, n) {
         grp.rotation.y = k * 3;
         if (k >= 1 && grp.parent) {
           grp.parent.remove(grp);
+          // MP-T6: GPU-Ressourcen freigeben (Schirm-Geometrie ist geteilt)
+          mat.dispose(); man.geometry.dispose(); man.material.dispose();
           if (!g.ended && !p.defeated) applyFactionHp(g.spawn(type, p.team, x, z, { owner: p.id }));
         }
       },

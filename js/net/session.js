@@ -272,16 +272,21 @@ export class HostSession {
       common.sk = { p: netPointState(sk), s: [sk.scores.UA, sk.scores.RU], r: r1(sk.reinfT), c: sk.reinfCycle, i: sk.interval };
       if (sk.result) common.res = sk.result;
     }
-    if (withPlayers) common.pl = g.players.map((p) => {
-      let n = 0; for (const u of g.units) if (u.alive && u.owner === p.id && !u.type.structure && !u.type.kamikaze) n++;
-      const s = p.stats;
-      return [p.id, p.name, p.ai ? 1 : 0, p.defeated ? 1 : 0, p.waiting ? 1 : 0, s.kills, s.lost, s.captured || 0, s.reinf || 0, n, s.shots || 0, s.intercepts || 0];
-    });
+    // Spielerliste je Team: Einheitenzahl und „wartet“ nur für das eigene Team (MP-T6: keine Feindstärke über das Netz)
+    const plFor = {};
+    if (withPlayers) {
+      const rows = g.players.map((p) => {
+        let n = 0; for (const u of g.units) if (u.alive && u.owner === p.id && !u.type.structure && !u.type.kamikaze) n++;
+        const s = p.stats;
+        return [p.id, p.name, p.ai ? 1 : 0, p.defeated ? 1 : 0, p.waiting ? 1 : 0, s.kills, s.lost, s.captured || 0, s.reinf || 0, n, s.shots || 0, s.intercepts || 0];
+      });
+      for (const T of ['UA', 'RU']) plFor[T] = rows.map((r, i) => (g.players[i].team === T ? r : [r[0], r[1], r[2], r[3], 0, r[5], r[6], r[7], r[8], -1, r[10], r[11]]));
+    }
     const enc = {};
     for (const team of ['UA', 'RU']) if (this._teamHasRemote(team)) enc[team] = UNIT_CODEC.encode(this.teamEntries(team));
     for (const id of this.connected) {
       const p = g.playerById(id); if (!p) continue;
-      const msg = { ...common, u: enc[p.team], me: { ab: p.abilities.map((a) => [Math.round(a.cd * 10), a.charges === Infinity ? -1 : a.charges]) } };
+      const msg = { ...common, ...(withPlayers ? { pl: plFor[p.team] } : {}), u: enc[p.team], me: { ab: p.abilities.map((a) => [Math.round(a.cd * 10), a.charges === Infinity ? -1 : a.charges]) } };
       this._count('bytes', id, msg);
       this.lobby.sendSnap(msg, id);
     }
