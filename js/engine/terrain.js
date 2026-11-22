@@ -753,8 +753,9 @@ export class Terrain {
                 // Schneematsch an den Rändern und zwischen den Spuren
                 // schmaler Randstreifen mit klarer Kante (vorher ~1,5–2 m weicher Verlauf → wirkte unscharf)
                 const bank = smoothstep(w - 0.75 - nm * 0.45, w - 0.35 - nm * 0.2, d);
-                const tracks = 1 - smoothstep(0.2, 0.5, Math.abs(lanePos - 0.75));
-                const slush = clamp(bank * 0.85 + (1 - tracks) * 0.35 * smoothstep(0.35, 0.8, nm + (nf - 0.5) * 0.3), 0, 1);
+                // Fahrspuren frei, dazwischen Matschflecken mit klarer Kante (weiche Verläufe wirkten in der Nahsicht verwaschen)
+                const tracks = 1 - smoothstep(0.26, 0.38, Math.abs(lanePos - 0.75));
+                const slush = clamp(bank * 0.85 + (1 - tracks) * 0.4 * smoothstep(0.56, 0.64, nm + (nf - 0.5) * 0.35), 0, 1);
                 line *= 1 - slush * 0.6;
                 const lb = bank * 0.5; // Randwall heller (Schnee), Spurenmatsch grau
                 const sr = TP.snowDirty[0] + (TP.snowShade[0] - TP.snowDirty[0]) * lb, sgc = TP.snowDirty[1] + (TP.snowShade[1] - TP.snowDirty[1]) * lb, sb = TP.snowDirty[2] + (TP.snowShade[2] - TP.snowDirty[2]) * lb;
