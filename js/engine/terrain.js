@@ -724,7 +724,8 @@ export class Terrain {
             // Bankett/Schotter
             const sh = 1 - smoothstep(e + 0.35 + nm * 0.4, e + 1.2 + nm * 0.9, d);
             if (sh > 0) {
-              if (winter) mx(TP.snowDirty, sh * 0.8);
+              // Winter: nur ein schmaler, leicht grauer Schneewall statt eines breiten Matschstreifens
+              if (winter) mx(TP.snowDirty, sh * (0.3 + 0.2 * nf) * (1 - smoothstep(e + 0.2, e + 0.9, d)));
               else mxs(TP.gravel[0] * (0.85 + 0.3 * g), TP.gravel[1] * (0.85 + 0.3 * g), TP.gravel[2] * (0.85 + 0.3 * g), sh * (0.55 + 0.35 * nf));
             }
             const cov = 1 - smoothstep(e - aa, e + aa, d);
@@ -750,11 +751,14 @@ export class Terrain {
               line *= 0.65 + 0.35 * nf;
               if (winter) {
                 // Schneematsch an den Rändern und zwischen den Spuren
-                const bank = smoothstep(w - 1.3 - nm * 0.7, w - 0.1, d);
+                // schmaler Randstreifen mit klarer Kante (vorher ~1,5–2 m weicher Verlauf → wirkte unscharf)
+                const bank = smoothstep(w - 0.75 - nm * 0.45, w - 0.35 - nm * 0.2, d);
                 const tracks = 1 - smoothstep(0.2, 0.5, Math.abs(lanePos - 0.75));
-                const slush = clamp(bank + (1 - tracks) * 0.45 * smoothstep(0.3, 0.75, nm + (nf - 0.5) * 0.3), 0, 1);
-                line *= 1 - slush * 0.8;
-                r += (TP.snowDirty[0] - r) * slush; gg += (TP.snowDirty[1] - gg) * slush; b += (TP.snowDirty[2] - b) * slush;
+                const slush = clamp(bank * 0.85 + (1 - tracks) * 0.35 * smoothstep(0.35, 0.8, nm + (nf - 0.5) * 0.3), 0, 1);
+                line *= 1 - slush * 0.6;
+                const lb = bank * 0.5; // Randwall heller (Schnee), Spurenmatsch grau
+                const sr = TP.snowDirty[0] + (TP.snowShade[0] - TP.snowDirty[0]) * lb, sgc = TP.snowDirty[1] + (TP.snowShade[1] - TP.snowDirty[1]) * lb, sb = TP.snowDirty[2] + (TP.snowShade[2] - TP.snowDirty[2]) * lb;
+                r += (sr - r) * slush; gg += (sgc - gg) * slush; b += (sb - b) * slush;
               }
               r += (TP.line[0] - r) * line; gg += (TP.line[1] - gg) * line; b += (TP.line[2] - b) * line;
               mxs(r, gg, b, cov);
@@ -1183,8 +1187,8 @@ export class Terrain {
 // =====================================================================
 // Qualitätsstufen
 const QUALITY = {
-  low: { seg: 2.5, tex: 512, aniso: 2, cover: 0, bushes: 0, stones: 0, bump: false, treeDetail: 0 },
-  medium: { seg: 2, tex: 1024, aniso: 4, cover: 5000, bushes: 160, stones: 140, bump: false, treeDetail: 1 },
+  low: { seg: 2.5, tex: 1024, aniso: 2, cover: 0, bushes: 0, stones: 0, bump: false, treeDetail: 0 },
+  medium: { seg: 2, tex: 2048, aniso: 4, cover: 5000, bushes: 160, stones: 140, bump: false, treeDetail: 1 },
   high: { seg: 1.5, tex: 2048, aniso: 8, cover: 11000, bushes: 320, stones: 260, bump: true, treeDetail: 1 },
   ultra: { seg: 1, tex: 3072, aniso: 16, cover: 20000, bushes: 500, stones: 400, bump: true, treeDetail: 1 },
 };

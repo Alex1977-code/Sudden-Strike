@@ -126,6 +126,11 @@ const PARTICLE_VS = `
     vColor = aColor; vRot = aRot; vAge = aAge; vSeed = aSeed; vHeat = aHeat;
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     gl_PointSize = clamp(aSize * uScale / max(0.1, -mv.z), 0.0, 700.0);
+    // Sprite entlang des Sichtstrahls zur Kamera ziehen (Bildposition bleibt gleich): verhindert den
+    // harten, waagerechten Schnitt, wenn die flache Partikelscheibe den Boden schneidet.
+    float dist = length(mv.xyz);
+    float push = min(aSize * 0.4, max(0.0, dist - 1.0) * 0.5);
+    mv.xyz *= (dist - push) / max(dist, 1e-3);
     gl_Position = projectionMatrix * mv;
   }`;
 const ATLAS_LOOKUP = `
