@@ -520,7 +520,7 @@ export class Terrain {
     const G0 = new Float64Array(3);
 
     // --- Makro-Ebene (~0,5 m): Grundfarbe, Wald, Dorf, Fels, Ufer, Brandflächen ---
-    const MR = Math.min(R, Math.round(size * 2)), mpx = size / MR, MM = MR * MR;
+    const MR = Math.min(Math.round(R / 2), Math.round(size * 2)), mpx = size / MR, MM = MR * MR;
     const MCr = new Float32Array(MM), MCg = new Float32Array(MM), MCb = new Float32Array(MM);
     const MB = new Float32Array(MM), MNM = new Float32Array(MM), MFW = new Float32Array(MM), MBA = new Float32Array(MM);
     for (let j = 0; j < MR; j++) {
@@ -618,7 +618,8 @@ export class Terrain {
       let m = ((i + 0.5) * px) / mpx - 0.5; if (m < 0) m = 0; if (m > MR - 1.001) m = MR - 1.001;
       colI[i] = m | 0; colF[i] = m - (m | 0);
     }
-    for (let j = 0; j < R; j++) {
+    // eigene Funktion je Zeile: wird vom JIT schneller optimiert als der ganze Block
+    const texelRow = (j) => {
       const z = (j + 0.5) * px - half;
       const mzr = colI[j], fz = colF[j];
       for (let i = 0; i < R; i++) {
@@ -631,7 +632,9 @@ export class Terrain {
         C[2] = MCb[k00] * w00 + MCb[k10] * w10 + MCb[k01] * w01 + MCb[k11] * w11;
         const kn = fx < 0.5 ? (fz < 0.5 ? k00 : k01) : (fz < 0.5 ? k10 : k11);
         let bm = MB[kn];
-        const nm = MNM[kn], fw = MFW[kn], bare = MBA[kn];
+        const nm = MNM[k00] * w00 + MNM[k10] * w10 + MNM[k01] * w01 + MNM[k11] * w11;
+        const fw = MFW[k00] * w00 + MFW[k10] * w10 + MFW[k01] * w01 + MFW[k11] * w11;
+        const bare = MBA[k00] * w00 + MBA[k10] * w10 + MBA[k01] * w01 + MBA[k11] * w11;
         const nf = vn(x * 1.9 + 31.7, z * 1.9 - 17.3);
         let hs = Math.imul(i, 0x27d4eb2d) ^ Math.imul(j + 7919, 0x165667b1);
         hs = Math.imul(hs ^ (hs >>> 15), 0x2c1b3c6d); hs ^= hs >>> 12;
@@ -783,7 +786,8 @@ export class Terrain {
         const o = k * 4;
         dataC[o] = C[0] * 255; dataC[o + 1] = C[1] * 255; dataC[o + 2] = C[2] * 255; dataC[o + 3] = bm * 255;
       }
-    }
+    };
+    for (let j = 0; j < R; j++) texelRow(j);
 
     tp.push(performance.now());
     // --- Stempel: Baumschatten-/Laubflecken, Hausvorplätze, Krater ---
@@ -1180,7 +1184,7 @@ export class Terrain {
 // Qualitätsstufen
 const QUALITY = {
   low: { seg: 2.5, tex: 512, aniso: 2, cover: 0, bushes: 0, stones: 0, bump: false, treeDetail: 0 },
-  medium: { seg: 2, tex: 1024, aniso: 4, cover: 5000, bushes: 160, stones: 140, bump: true, treeDetail: 1 },
+  medium: { seg: 2, tex: 1024, aniso: 4, cover: 5000, bushes: 160, stones: 140, bump: false, treeDetail: 1 },
   high: { seg: 1.5, tex: 2048, aniso: 8, cover: 11000, bushes: 320, stones: 260, bump: true, treeDetail: 1 },
   ultra: { seg: 1, tex: 3072, aniso: 16, cover: 20000, bushes: 500, stones: 400, bump: true, treeDetail: 1 },
 };
