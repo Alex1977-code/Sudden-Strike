@@ -85,7 +85,7 @@ export default {
     if (this.escaped > 3) { g.setObjective('convoy', 'failed'); g.lose('Zu viele Fahrzeuge sind nach Kyjiw durchgebrochen.'); }
   },
   update(g) {
-    if (g.objState('spot') === 'open' && this.convoy.some((u) => u.alive && u.seenByPlayer)) {
+    if (g.objState('spot') === 'open' && this.convoy.some((u) => u.alive && u.visibleTo('UA'))) {
       g.setObjective('spot', 'done');
       g.say('Sova', 'Kolonne gesichtet! BTR an der Spitze, Lkw dahinter, ein T-72 am Ende. Feuer frei, wenn sie im Engpass sind.', 6);
     }

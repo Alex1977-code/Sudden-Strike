@@ -41,6 +41,8 @@ export class HUD {
     game.on('abilities', () => this.refreshAbilities());
     game.on('say', (s, t, d) => this.queueSay(s, t, d));
     game.on('alert', (t, d) => this.showAlert(t, d));
+    game.on('localPlayer', () => { this.refreshSelection(); this.refreshAbilities(); });
+    game.on('players', () => { this.refreshSelection(); this.refreshAbilities(); });
     game.on('loaded', () => { this.refreshObjectives(); this.refreshSelection(); this.refreshAbilities(); this.sayQueue = []; this.subEl.classList.add('hidden'); this.alertEl.classList.add('hidden'); });
     game.on('underAttack', (u) => {
       const now = performance.now();
@@ -50,10 +52,11 @@ export class HUD {
     // Befehlsknöpfe
     $('orders').addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return;
-      const own = game.selected.filter((u) => u.side === 'UA');
+      const own = game.selected.filter((u) => u.alive && game.isOwn(u));
+      const ids = own.map((u) => u.id);
       const o = b.dataset.order;
-      if (o === 'stop') own.forEach((u) => u.stop());
-      else if (o === 'hold') { const v = !own.every((u) => u.holdFire); own.forEach((u) => (u.holdFire = v)); this.refreshSelection(); }
+      if (o === 'stop') { if (ids.length) game.issueCommand({ t: 'stop', ids }); }
+      else if (o === 'hold') { if (ids.length) { game.issueCommand({ t: 'hold', ids, value: !own.every((u) => u.holdFire) }); this.refreshSelection(); } }
       else if (o === 'all') game.select(game.playerUnits().filter((u) => !u.type.kamikaze || true));
       else if (o === 'box') this.input.setBoxMode(!this.input.boxMode);
       game.audio.ui('click');
@@ -86,7 +89,7 @@ export class HUD {
     if (sel.length === 1) {
       const u = sel[0];
       const w = u.type.weaponDefs.map((w) => w.name).join(', ') || 'unbewaffnet';
-      const side = u.side === 'UA' ? '' : u.side === 'RU' ? '<span style="color:#ff6b6b">Feind</span> · ' : '<span class="muted">Neutral</span> · ';
+      const side = g.isOwn(u) ? '' : u.side === g.localSide ? `<span style="color:#5db8ff">Verbündet${g.playerById(u.owner) ? ' (' + g.playerById(u.owner).name + ')' : ''}</span> · ` : u.side === 'N' ? '<span class="muted">Neutral</span> · ' : '<span style="color:#ff6b6b">Feind</span> · ';
       this.selEl.innerHTML = `${this._unitBox(u, 1)}<div class="sel-detail"><b>${u.name}</b><br>${side}<span class="muted">${w}</span><br><span class="muted">${u.type.desc || ''}</span>${u.holdFire ? '<br><span style="color:#ffd500">Feuer halten</span>' : ''}<span class="hpnum"></span></div>`;
       this.selEl.firstChild.onclick = () => g.camera.focus(u.pos.x, u.pos.z);
       return;
@@ -161,7 +164,11 @@ export class HUD {
     const r = this.mm.getBoundingClientRect();
     const x = ((e.clientX - r.left) / r.width) * g.terrain.size - g.terrain.half;
     const z = ((e.clientY - r.top) / r.height) * g.terrain.size - g.terrain.half;
-    if (e.button === 2 && !drag) { g.issueOrder(g.selected, x, z, null); return; }
+    if (e.button === 2 && !drag) {
+      const ids = g.selected.filter((u) => u.alive && g.isOwn(u)).map((u) => u.id);
+      if (ids.length) g.issueCommand({ t: 'move', ids, x, z });
+      return;
+    }
     g.camera.focus(x, z);
   }
   drawMinimap() {
@@ -177,15 +184,17 @@ export class HUD {
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(this.mmFog, 0, 0, S, S);
     }
+    const ls = g.localSide;
     for (const u of g.units) {
       if (!u.alive || u.side === 'N') continue;
-      if (u.side === 'RU' && !u.root.visible) continue;
+      if (u.side !== ls && !u.root.visible) continue;
       const [x, y] = toM(u.pos.x, u.pos.z);
       const s = u.type.structure ? 5 : u.type.vehicle || u.type.naval ? 3.5 : 2.5;
-      ctx.fillStyle = u.side === 'UA' ? (g.selected.includes(u) ? '#ffffff' : '#5dff8a') : '#ff4d4d';
+      // Eigene grün, Verbündete blau, Feinde rot
+      ctx.fillStyle = g.isOwn(u) ? (g.selected.includes(u) ? '#ffffff' : '#5dff8a') : u.side === ls ? (g.selected.includes(u) ? '#d8ecff' : '#5db8ff') : '#ff4d4d';
       if (u.type.air) { ctx.beginPath(); ctx.moveTo(x, y - s); ctx.lineTo(x + s, y + s); ctx.lineTo(x - s, y + s); ctx.fill(); }
       else ctx.fillRect(x - s / 2, y - s / 2, s, s);
-      if (u.tags.has('target') && u.side === 'RU') { ctx.strokeStyle = '#ffd500'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 5, y - 5, 10, 10); }
+      if (u.tags.has('target') && u.side !== ls) { ctx.strokeStyle = '#ffd500'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 5, y - 5, 10, 10); }
     }
     // Missionsmarker
     for (const m of g.mission?.markers || []) {
@@ -199,9 +208,10 @@ export class HUD {
     if (g.warnings && blink) for (const w of g.warnings) { const [x, y] = toM(w.x, w.z); ctx.strokeStyle = '#ff2020'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 7, 0, 6.29); ctx.stroke(); }
     // Flugkörper
     for (const m of g.missiles) {
-      if (!m.threat || m.side !== 'RU' && m.threat !== 'cruise') continue;
+      const hostile = m.side !== ls;
+      if (!m.threat || !hostile && m.threat !== 'cruise') continue;
       const [x, y] = toM(m.pos.x, m.pos.z);
-      ctx.fillStyle = m.side === 'RU' ? '#ff9040' : '#80c0ff';
+      ctx.fillStyle = hostile ? '#ff9040' : '#80c0ff';
       ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
     }
     if (this.attackPing && blink) { const [x, y] = toM(this.attackPing.x, this.attackPing.z); ctx.strokeStyle = '#ff4040'; ctx.lineWidth = 2; ctx.strokeRect(x - 6, y - 6, 12, 12); }
@@ -225,9 +235,10 @@ export class HUD {
     const cam = g.gr.camera;
     const v = new THREE.Vector3();
     const zoomK = Math.max(0.6, Math.min(1.4, 70 / g.camera.dist));
+    const ls = g.localSide;
     for (const u of g.units) {
       if (!u.alive || u.side === 'N' && u.hp >= u.maxHp) continue;
-      if (u.side === 'RU' && !u.root.visible) continue;
+      if (u.side !== ls && u.side !== 'N' && !u.root.visible) continue;
       const sel = g.selected.includes(u);
       const target = u.tags.has('target') || u.tags.has('protect');
       if (!sel && u.hp >= u.maxHp && !target) continue;
@@ -238,7 +249,7 @@ export class HUD {
       const bw = (u.type.structure ? 46 : u.type.vehicle ? 30 : 18) * zoomK, bh = 4;
       const hp = Math.max(0, u.hp / u.maxHp);
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - bw / 2 - 1, y - 1, bw + 2, bh + 2);
-      ctx.fillStyle = u.side === 'UA' ? (hp > 0.5 ? '#46c46b' : hp > 0.25 ? '#e5b93e' : '#e5484d') : u.side === 'N' ? '#aaa' : '#e5484d';
+      ctx.fillStyle = g.isOwn(u) ? (hp > 0.5 ? '#46c46b' : hp > 0.25 ? '#e5b93e' : '#e5484d') : u.side === ls ? (hp > 0.25 ? '#5db8ff' : '#e5484d') : u.side === 'N' ? '#aaa' : '#e5484d';
       ctx.fillRect(x - bw / 2, y, bw * hp, bh);
       if (target) {
         ctx.fillStyle = u.tags.has('protect') ? '#5db8ff' : '#ffd500';
@@ -247,7 +258,7 @@ export class HUD {
         ctx.fillText(u.tags.has('protect') ? '◆ SCHÜTZEN' : '◆ ZIEL', x, y - 4);
       }
       // Munition (Flugabwehr)
-      if (sel && u.side === 'UA') {
+      if (sel && u.side === ls) {
         const w = u.weapons.find((w) => w.def.ammo);
         if (w) {
           ctx.fillStyle = '#9ec5ff'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';

@@ -8,6 +8,17 @@ export const MAP_SIZES = {
   large: { size: 520, maxPerTeam: 6, points: 7, label: 'Groß', maxFeatures: 64, scatterTrees: 70, camDist: 155, fog: 0.0022 },
 };
 
+export const MAP_PRESETS = [
+  { id: 'river', name: 'Flussübergang', description: 'Breiter Fluss quer durch die Mitte, Brücken und Brückenköpfe als Eroberungspunkte.', sizes: ['small', 'medium', 'large'] },
+  { id: 'city', name: 'Stadtkampf', description: 'Große urbane Ortschaft mit Straßenraster in der Mitte, Hauptbahnhof als Schlüsselpunkt.', sizes: ['small', 'medium', 'large'] },
+  { id: 'hills', name: 'Höhenzug', description: 'Hügelfestung in der Mitte mit bewaldeten Hängen und weitem Blick.', sizes: ['small', 'medium', 'large'] },
+  { id: 'railway', name: 'Eisenbahnknoten', description: 'Zwei Bahnlinien mit Verbindungsstrecke, Bahnhöfe als Eroberungspunkte.', sizes: ['small', 'medium', 'large'] },
+  { id: 'forest', name: 'Wald & Sumpf', description: 'Dichte Wälder, kleine Seen und schmale Schneisen.', sizes: ['small', 'medium', 'large'] },
+  { id: 'coast', name: 'Küste', description: 'Meer an beiden Seitenrändern, Hafendörfer als Eroberungspunkte.', sizes: ['small', 'medium', 'large'] },
+  { id: 'steppe', name: 'Offene Steppe', description: 'Weite Felder, Baumreihen und wenige Dörfer – Panzerschlachten.', sizes: ['small', 'medium', 'large'] },
+];
+const PRESET_IDS = MAP_PRESETS.map((p) => p.id);
+
 const VILLAGE_NAMES = ['Nowa Dolyna', 'Kamjanka', 'Wesele', 'Orichiw', 'Mala Bilosirka', 'Tokmak', 'Lukaschiw', 'Dniprowe', 'Pokrowka', 'Stepowe', 'Bilenke', 'Rosiwka'];
 const KIND_NAME = { airfield: 'Flugfeld', depot: 'Depot', radio: 'Funkturm', railway: 'Bahnhof', village: 'Dorf' };
 const CROPS = ['wheat', 'sunflower', 'stubble', 'green', 'plowed'];
@@ -29,6 +40,14 @@ function distSeg(px, pz, a, b) {
   return Math.hypot(px - (a[0] + dx * t), pz - (a[1] + dz * t));
 }
 function distPoly(px, pz, pts) { let d = Infinity; for (let i = 0; i < pts.length - 1; i++) d = Math.min(d, distSeg(px, pz, pts[i], pts[i + 1])); return d; }
+function pointInPoly(x, z, poly) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) c = !c;
+  }
+  return c;
+}
 function samplePoly(pts, step) {
   const out = [];
   for (let i = 0; i < pts.length - 1; i++) {

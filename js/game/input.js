@@ -157,13 +157,24 @@ export class Input {
     }
   }
 
+  // ---------- Befehle (nur über serialisierbare Kommandos) ----------
+  ownSelected() { return this.game.selected.filter((u) => u.alive && this.game.isOwn(u)); }
+  // Ziel unter dem Zeiger: Feind/Neutral → Angriff, sonst Bewegung zum Bodenpunkt
+  orderAt(own, x, y, u, attackMove = false) {
+    const g = this.game;
+    const ids = own.map((o) => o.id);
+    if (u && u.side !== g.localSide) { g.issueCommand({ t: 'attack', ids, target: u.id }); return; }
+    const p = this.ground(x, y);
+    if (p) g.issueCommand({ t: 'move', ids, x: p.x, z: p.z, attackMove });
+  }
+
   // ---------- Maus ----------
   leftClick(x, y, shift) {
     const g = this.game;
     if (this.pendingAbility) { this.fireAbility(x, y); return; }
     const u = g.pickUnit(x, y);
     const now = performance.now();
-    if (u && u.side === 'UA') {
+    if (u && g.isOwn(u)) {
       if (now - this.lastTap.t < 350 && this.lastTap.unit === u) this.selectSameType(u);
       else if (shift) { if (g.selected.includes(u)) g.select(g.selected.filter((s) => s !== u)); else g.select([u], true); }
       else g.select([u]);
@@ -175,12 +186,9 @@ export class Input {
   rightClick(x, y, ctrl) {
     const g = this.game;
     if (this.pendingAbility) { this.cancelAbility(); return; }
-    const own = g.selected.filter((u) => u.side === 'UA');
+    const own = this.ownSelected();
     if (!own.length) return;
-    const u = g.pickUnit(x, y);
-    if (u && u.side !== 'UA') { g.issueOrder(own, u.pos.x, u.pos.z, u); return; }
-    const p = this.ground(x, y);
-    if (p) g.issueOrder(own, p.x, p.z, null, { attackMove: ctrl });
+    this.orderAt(own, x, y, g.pickUnit(x, y), ctrl);
   }
   // ---------- Touch ----------
   tap(x, y) {
@@ -188,8 +196,8 @@ export class Input {
     if (this.pendingAbility) { this.fireAbility(x, y); return; }
     const u = g.pickUnit(x, y, 34);
     const now = performance.now();
-    const own = g.selected.filter((s) => s.side === 'UA');
-    if (u && u.side === 'UA') {
+    const own = this.ownSelected();
+    if (u && g.isOwn(u)) {
       if (now - this.lastTap.t < 380 && this.lastTap.unit === u) this.selectSameType(u);
       else if (own.length && own.includes(u) && own.length > 1) g.select([u]);
       else g.select([u]);
@@ -197,15 +205,12 @@ export class Input {
       g.audio.ui('click');
       return;
     }
-    if (own.length) {
-      if (u && u.side !== 'UA') { g.issueOrder(own, u.pos.x, u.pos.z, u); return; }
-      const p = this.ground(x, y);
-      if (p) g.issueOrder(own, p.x, p.z, null);
-    } else if (u) g.select([u]);
+    if (own.length) this.orderAt(own, x, y, u);
+    else if (u) g.select([u]);
   }
   selectSameType(u) {
     const g = this.game;
-    const list = g.units.filter((o) => o.side === 'UA' && o.alive && o.type.key === u.type.key && this.onScreen(o));
+    const list = g.units.filter((o) => g.isOwn(o) && o.alive && o.type.key === u.type.key && this.onScreen(o));
     g.select(list);
   }
   onScreen(u) {
@@ -218,7 +223,7 @@ export class Input {
     const w = window.innerWidth, h = window.innerHeight;
     const v = new THREE.Vector3();
     const list = g.units.filter((u) => {
-      if (!u.alive || u.side !== 'UA' || u.type.structure) return false;
+      if (!u.alive || !g.isOwn(u) || u.type.structure) return false;
       u.aimPoint(v); v.project(g.gr.camera);
       if (v.z > 1) return false;
       const px = (v.x * 0.5 + 0.5) * w, py = (-v.y * 0.5 + 0.5) * h;
@@ -271,8 +276,8 @@ export class Input {
     const a = this.pendingAbility;
     const p = this.ground(x, y);
     if (!p) return;
-    const ok = this.game.useAbility(a, p.x, p.z);
-    if (!ok) this.game.audio.ui('fail');
+    const ok = this.game.issueCommand({ t: 'ability', ability: a.id, x: p.x, z: p.z });
+    if (ok === false) this.game.audio.ui('fail');
     this.cancelAbility();
   }
 
@@ -287,10 +292,10 @@ export class Input {
     if (g.paused && k !== ' ') return;
     if (k === ' ') { e.preventDefault(); this.hud.togglePause(); return; }
     if (/^F[1-6]$/.test(k)) { e.preventDefault(); const a = g.abilities[+k.slice(1) - 1]; if (a) this.startAbility(a); return; }
-    const own = g.selected.filter((u) => u.side === 'UA');
+    const own = this.ownSelected();
     if ((k === 'a' || k === 'A') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); g.select(g.playerUnits()); return; }
-    if (k === 's' && !e.ctrlKey && own.length && !this.keys.has('w')) { /* S = Halt nur mit Auswahl, sonst Kamera */ own.forEach((u) => u.stop()); g.audio.ui('ack'); this.stopPressed = true; return; }
-    if (k === 'h') { const v = !own.every((u) => u.holdFire); own.forEach((u) => (u.holdFire = v)); this.hud.refreshSelection(); g.audio.ui('ack'); return; }
+    if (k === 's' && !e.ctrlKey && own.length && !this.keys.has('w')) { /* S = Halt nur mit Auswahl, sonst Kamera */ g.issueCommand({ t: 'stop', ids: own.map((u) => u.id) }); this.stopPressed = true; return; }
+    if (k === 'h') { if (own.length) { g.issueCommand({ t: 'hold', ids: own.map((u) => u.id), value: !own.every((u) => u.holdFire) }); this.hud.refreshSelection(); } return; }
     if (/^[1-9]$/.test(k)) {
       if (e.ctrlKey || e.metaKey) { e.preventDefault(); g.groups[k] = [...own]; g.alert(`Gruppe ${k} gespeichert (${own.length})`, 1.5); }
       else if (g.groups[k]) {
@@ -312,7 +317,7 @@ export class Input {
     let dx = 0, dz = 0;
     const ks = this.keys;
     if (ks.has('w') || ks.has('ArrowUp')) dz -= 1;
-    if ((ks.has('s') && !g.selected.some((u) => u.side === 'UA')) || ks.has('ArrowDown')) dz += 1;
+    if ((ks.has('s') && !g.selected.some((u) => g.isOwn(u))) || ks.has('ArrowDown')) dz += 1;
     if (ks.has('a') || ks.has('ArrowLeft')) dx -= 1;
     if (ks.has('d') || ks.has('ArrowRight')) dx += 1;
     if (ks.has('q')) g.camera.rotate(dt * 1.5);
