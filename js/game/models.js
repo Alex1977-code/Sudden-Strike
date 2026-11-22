@@ -255,6 +255,175 @@ function flushMerged(parent, merger, material, shadow = true) {
   return m;
 }
 
+// ---------------- Draw-Call-Reduktion ----------------
+// Nach dem Bau eines Modells werden alle statischen Teil-Meshes, die sich gemeinsam mit demselben
+// Transform-Knoten (Wurzel, Turm, Rohr, Bein, …) bewegen, zu möglichst wenigen Meshes zusammengeführt.
+// Unterschiedliche einfarbige Standard-Materialien werden dabei über ein "Sammelmaterial" vereint:
+// Farbe, Rauheit, Metallizität und Eigenleuchten liegen pro Vertex vor, die Textur (Tarnmuster,
+// Putz, Dach …) wird nur auf den Teilen gezeigt, die sie ursprünglich hatten (Gewicht pro Vertex).
+// Ergebnis: 1–2 Draw Calls je Transform-Knoten statt einem pro Teil, bei gleicher Optik.
+const _uberMats = new Map();
+function isFowMat(m) { try { return m.customProgramCacheKey() === 'fow'; } catch { return false; } }
+function uberEligible(m) {
+  return !!m && m.isMeshStandardMaterial && !m.isMeshPhysicalMaterial && !m.transparent && !m.flatShading && m.visible &&
+    m.side === THREE.FrontSide && m.opacity === 1 && !m.vertexColors && !m.normalMap && !m.bumpMap && !m.roughnessMap &&
+    !m.metalnessMap && !m.emissiveMap && !m.alphaMap && !m.aoMap && !m.lightMap && !m.envMap && !m.displacementMap &&
+    (m.envMapIntensity ?? 1) === 1 &&
+    (isFowMat(m) || m.onBeforeCompile === THREE.Material.prototype.onBeforeCompile);
+}
+function patchUber(s) {
+  s.vertexShader = s.vertexShader
+    .replace('#include <common>', `#include <common>
+      attribute vec3 ubCol; attribute vec3 ubRMT; attribute vec3 ubEm;
+      varying vec3 vUbCol; varying vec3 vUbRMT; varying vec3 vUbEm;`)
+    .replace('#include <begin_vertex>', `#include <begin_vertex>
+      vUbCol = ubCol; vUbRMT = ubRMT; vUbEm = ubEm;`);
+  s.fragmentShader = s.fragmentShader
+    .replace('#include <common>', `#include <common>
+      varying vec3 vUbCol; varying vec3 vUbRMT; varying vec3 vUbEm;`)
+    .replace('vec3 totalEmissiveRadiance = emissive;', 'vec3 totalEmissiveRadiance = vUbEm;')
+    .replace('#include <map_fragment>', `#ifdef USE_MAP
+        diffuseColor *= mix(vec4(1.0), texture2D(map, vMapUv), vUbRMT.z);
+      #endif
+      diffuseColor.rgb *= vUbCol;`)
+    .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vUbRMT.x;')
+    .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = vUbRMT.y;');
+}
+function uberMat(map, fow) {
+  const key = (map ? map.uuid : '-') + (fow ? 'f' : '');
+  let m = _uberMats.get(key);
+  if (m) return m;
+  m = new THREE.MeshStandardMaterial({ map: map || null, roughness: 1, metalness: 0 });
+  if (fow) applyFow(m);
+  const fowCompile = fow ? m.onBeforeCompile : null;
+  // Nebel-Patch zuerst (hängt sich hinter <map_fragment>), danach das Sammelmaterial (ersetzt <map_fragment>)
+  m.onBeforeCompile = (s, r) => { if (fowCompile) fowCompile(s, r); patchUber(s); };
+  m.customProgramCacheKey = () => (fow ? 'uberfow' : 'uber');
+  m.userData.uber = true;
+  _uberMats.set(key, m);
+  return m;
+}
+
+const _v3 = new THREE.Vector3(), _nm3 = new THREE.Matrix3();
+// parts: [{ geo, matrix, mat }] → indizierte BufferGeometry (Matrix eingebacken), optional mit Sammel-Attributen
+function mergeParts(parts, uber) {
+  let nv = 0, ni = 0;
+  for (const p of parts) { const c = p.geo.attributes.position.count; nv += c; ni += p.geo.index ? p.geo.index.count : c; }
+  const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), uv = new Float32Array(nv * 2);
+  const col = uber ? new Float32Array(nv * 3) : null, rmt = uber ? new Float32Array(nv * 3) : null, em = uber ? new Float32Array(nv * 3) : null;
+  const idx = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
+  let vo = 0, io = 0;
+  for (const p of parts) {
+    const g = p.geo, P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv, m = p.mat;
+    _nm3.getNormalMatrix(p.matrix);
+    const flip = p.matrix.determinant() < 0;
+    const cr = m.color ? m.color.r : 1, cg = m.color ? m.color.g : 1, cb = m.color ? m.color.b : 1;
+    const ei = m.emissive ? (m.emissiveIntensity ?? 1) : 0;
+    const er = m.emissive ? m.emissive.r * ei : 0, eg = m.emissive ? m.emissive.g * ei : 0, eb = m.emissive ? m.emissive.b * ei : 0;
+    const tw = m.map ? 1 : 0;
+    for (let i = 0; i < P.count; i++) {
+      const k = (vo + i) * 3;
+      _v3.fromBufferAttribute(P, i).applyMatrix4(p.matrix);
+      pos[k] = _v3.x; pos[k + 1] = _v3.y; pos[k + 2] = _v3.z;
+      if (N) _v3.fromBufferAttribute(N, i).applyMatrix3(_nm3).normalize(); else _v3.set(0, 1, 0);
+      nor[k] = _v3.x; nor[k + 1] = _v3.y; nor[k + 2] = _v3.z;
+      if (U) { uv[(vo + i) * 2] = U.getX(i); uv[(vo + i) * 2 + 1] = U.getY(i); }
+      if (uber) {
+        col[k] = cr; col[k + 1] = cg; col[k + 2] = cb;
+        rmt[k] = m.roughness; rmt[k + 1] = m.metalness; rmt[k + 2] = tw;
+        em[k] = er; em[k + 1] = eg; em[k + 2] = eb;
+      }
+    }
+    const I = g.index;
+    const tri = I ? I.count : P.count;
+    for (let i = 0; i < tri; i += 3) {
+      const a = I ? I.getX(i) : i, b = I ? I.getX(i + 1) : i + 1, c = I ? I.getX(i + 2) : i + 2;
+      idx[io++] = vo + a;
+      if (flip) { idx[io++] = vo + c; idx[io++] = vo + b; } else { idx[io++] = vo + b; idx[io++] = vo + c; }
+    }
+    vo += P.count;
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  out.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  if (uber) {
+    out.setAttribute('ubCol', new THREE.BufferAttribute(col, 3));
+    out.setAttribute('ubRMT', new THREE.BufferAttribute(rmt, 3));
+    out.setAttribute('ubEm', new THREE.BufferAttribute(em, 3));
+  }
+  out.setIndex(new THREE.BufferAttribute(idx, 1));
+  out.computeBoundingBox(); out.computeBoundingSphere();
+  return out;
+}
+
+// Gemergte Geometrien je Modelltyp/Seite/Saison (geteilt zwischen allen gleichen Einheiten)
+const _mergeCache = new Map();
+const _inv = new THREE.Matrix4();
+// Führt die statischen Teile von root zusammen. keep: Objekte, die eigene Transformationen behalten
+// (Turm, Rohr, Beine, Rotoren, …); deren Kinder werden relativ zu ihnen zusammengeführt.
+// Rückgabe: Map Original-Mesh → zusammengeführtes Mesh.
+function optimize(root, keep = [], cacheKey = null) {
+  const keepSet = new Set(keep.filter(Boolean));
+  root.updateMatrixWorld(true);
+  const nodes = [];
+  const groups = new Map();
+  const collect = (o, nodeI) => {
+    for (const c of o.children) {
+      const isKeep = keepSet.has(c);
+      if (c.isMesh && !isKeep && !c.userData.noWreck && !c.children.length && !c.isInstancedMesh && !c.isSkinnedMesh &&
+          c.visible && !Array.isArray(c.material) && c.geometry.attributes.position && !c.geometry.morphAttributes.position) {
+        const node = nodes[nodeI];
+        const mat = c.material;
+        const uber = uberEligible(mat);
+        const fow = uber && isFowMat(mat);
+        const part = { mesh: c, geo: c.geometry, mat, matrix: new THREE.Matrix4().multiplyMatrices(node.inv, c.matrixWorld), uber, fow };
+        const key = uber ? `${nodeI}|U${fow ? 'f' : ''}` : `${nodeI}|M${mat.uuid}`;
+        let gr = groups.get(key);
+        if (!gr) groups.set(key, (gr = { nodeI, uber, fow, parts: [] }));
+        gr.parts.push(part);
+      }
+      if (c.children.length) collect(c, isKeep ? addNode(c) : nodeI);
+    }
+  };
+  const addNode = (o) => { nodes.push({ obj: o, inv: new THREE.Matrix4().copy(o.matrixWorld).invert() }); return nodes.length - 1; };
+  collect(root, addNode(root));
+  // Sammelgruppen nach Textur aufteilen; einfarbige Teile kommen in die erste Texturgruppe des Knotens
+  const final = [];
+  for (const gr of groups.values()) {
+    if (!gr.uber) { final.push({ key: `${gr.parts[0].mesh.material.uuid}`, ...gr, mat: gr.parts[0].mat }); continue; }
+    const byMap = new Map();
+    for (const p of gr.parts) if (p.mat.map && !byMap.has(p.mat.map)) byMap.set(p.mat.map, []);
+    if (!byMap.size) byMap.set(null, []);
+    const first = byMap.keys().next().value;
+    for (const p of gr.parts) byMap.get(p.mat.map || first).push(p);
+    for (const [map, parts] of byMap) final.push({ key: `${map ? map.uuid : '-'}`, nodeI: gr.nodeI, uber: true, fow: gr.fow, parts, mat: uberMat(map, gr.fow) });
+  }
+  let cache = null;
+  if (cacheKey) { cache = _mergeCache.get(cacheKey); if (!cache) _mergeCache.set(cacheKey, (cache = new Map())); }
+  const mapping = new Map();
+  for (const f of final) {
+    if (f.parts.length < 2) continue; // Einzelteil: kein Gewinn
+    const gk = `${f.nodeI}|${f.uber ? 'U' : 'M'}${f.fow ? 'f' : ''}|${f.key}|${f.parts.length}`;
+    let geo = cache && cache.get(gk);
+    if (!geo) {
+      geo = mergeParts(f.parts, f.uber);
+      if (cache) { geo.userData.shared = true; cache.set(gk, geo); }
+    }
+    const mesh = new THREE.Mesh(geo, f.mat);
+    mesh.castShadow = f.parts.some((p) => p.mesh.castShadow);
+    mesh.receiveShadow = f.parts.some((p) => p.mesh.receiveShadow);
+    mesh.userData.merged = true;
+    nodes[f.nodeI].obj.add(mesh);
+    for (const p of f.parts) {
+      mapping.set(p.mesh, mesh);
+      p.mesh.removeFromParent();
+      if (!p.geo.userData.shared) p.geo.dispose();
+    }
+  }
+  return mapping;
+}
+
 // Kontaktschatten (weicher Blob unter Boden-Einheiten & Strukturen)
 let _blobGeo = null;
 function addBlob(root, w, d, cx = 0, cz = 0) {
@@ -948,8 +1117,9 @@ export function house(h) {
     flushMerged(g, tr, M.concreteDark);
   }
   flushMerged(g, trim, M.concrete);
+  const merged = optimize(g); // Einzelhaus (Zufallsfenster) → nicht gecacht
   addBlob(g, w + 5, d + 5);
-  return { root: g, height: H + 2, body };
+  return { root: g, height: H + 2, body: merged.get(body) || body };
 }
 
 export function rubble(w, d) {
@@ -974,6 +1144,7 @@ export function rubble(w, d) {
   // verkohlte Balken und Deckenplatten
   for (let i = 0; i < 5; i++) add(g, boxG(0.25, 0.25, 2.5 + rnd() * 2.5), i % 2 ? M.charred : M.wood, (rnd() - 0.5) * w * 0.7, 0.9 + rnd() * 0.6, (rnd() - 0.5) * d * 0.7, (rnd() - 0.5) * 0.6, rnd() * 3, (rnd() - 0.5) * 0.6);
   add(g, boxG(w * 0.45, 0.25, d * 0.4), M.concrete, (rnd() - 0.5) * 2, 0.9, (rnd() - 0.5) * 2, 0.2, rnd(), 0.15);
+  optimize(g);
   return g;
 }
 
@@ -1124,6 +1295,7 @@ export function bridgeDecor(x0, x1, z, deckY, seaLevel, gapCenters = [], gapLen 
       cyl(g, 0.08, 0.08, p.y - deckY, M.darkMetal, p.x, (p.y + deckY) / 2, p.z, 0, 0, 0, 4);
     }
   }
+  optimize(g);
   return g;
 }
 
@@ -1131,7 +1303,7 @@ export function bridgeDecor(x0, x1, z, deckY, seaLevel, gapCenters = [], gapLen 
 const NO_BLOB = new Set(['quad', 'reconquad', 'shahed', 'lancet', 'orlan', 'recon_wing', 'heli', 'seadrone', 'boat', 'bridge_road', 'bridge_rail']);
 const TURRET_SKIP = new Set(['leopard', 't72', 't90', 'bradley', 'bmp', 'gepard', 'spg']);
 
-export function buildModel(type, side, season) {
+export function buildModel(type, side, season, quality) {
   initMats();
   let r;
   switch (type.model) {
@@ -1162,6 +1334,13 @@ export function buildModel(type, side, season) {
     case 'bridge_rail': r = bridgeSpan(type.spanLen || 28, 'rail'); break;
     default: r = structure(type.model, side);
   }
+  // Winter-Tarnung
+  if (season === 'winter' && side === 'UA') r.root.traverse((o) => { if (o.material === M.camoUA) o.material = M.camoWinter; });
+  // Statische Teile je Transform-Knoten zusammenführen (Geometrie je Typ/Seite/Saison gecacht)
+  const keep = [r.turret, r.barrel, r.muzzle, r.body, r.arm, r.radar, r.radar2, r.hull, r.deck, ...(r.legs || []), ...(r.rotors || [])];
+  optimize(r.root, keep, `${type.model}|${side}|${season === 'winter' && side === 'UA' ? 'w' : ''}|${type.weaponModel || ''}|${type.modelSize || ''}|${type.spanLen || ''}`);
+  // Infanterie wirft auf low/medium keinen Echtzeit-Schatten (Kontaktschatten reicht)
+  if (type.model === 'soldier' && (quality === 'low' || quality === 'medium')) r.root.traverse((o) => { if (o.isMesh) o.castShadow = false; });
   // Kontaktschatten für Boden-Einheiten und Strukturen
   if (!NO_BLOB.has(type.model)) {
     const bb = footprint(r.root, TURRET_SKIP.has(type.model) ? r.turret : null);
@@ -1172,11 +1351,14 @@ export function buildModel(type, side, season) {
       addBlob(r.root, sx * (inf ? 1.2 : 1.12) + 0.5 * s, sz * (inf ? 1.2 : 1.1) + 0.5 * s, (bb.max.x + bb.min.x) / 2, (bb.max.z + bb.min.z) / 2);
     }
   }
-  // Winter-Tarnung
-  if (season === 'winter' && side === 'UA') r.root.traverse((o) => { if (o.material === M.camoUA) o.material = M.camoWinter; });
   return r;
 }
-export function projectileModel(kind) { initMats(); return fixedWing('UA', kind); }
+export function projectileModel(kind) {
+  initMats();
+  const r = fixedWing('UA', kind);
+  optimize(r.root, [r.muzzle, ...(r.rotors || [])], `proj|${kind}`);
+  return r;
+}
 export function wreckify(root) {
   initMats();
   root.traverse((o) => { if (o.isMesh && o.material !== M.rotor && !o.userData.noWreck) { o.material = M.wreck; } });

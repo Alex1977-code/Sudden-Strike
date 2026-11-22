@@ -52,7 +52,7 @@ export class Unit {
       this.radius = Math.max(opts.house.w, opts.house.d) / 2;
       this.heading = opts.house.rot;
     } else {
-      this.model = buildModel(type, side, game.terrain.season);
+      this.model = buildModel(type, side, game.terrain.season, game.settings?.quality);
     }
     this.root = this.model.root;
     this.root.userData.unit = this;
