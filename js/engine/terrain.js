@@ -415,6 +415,7 @@ export class Terrain {
     // --- grobe Hilfsgitter (1 m, an den Höhenknoten) ---
     const NN = n * n;
     const NY = new Float32Array(NN), FW = new Float32Array(NN), VW = new Float32Array(NN), NL = new Float32Array(NN);
+    const UW = new Float32Array(NN); // städtische Bebauung (Pflaster/Beton)
     for (let j = 0; j < n; j++) {
       const jm = j > 0 ? j - 1 : 0, jp = j < n - 1 ? j + 1 : n - 1;
       for (let i = 0; i < n; i++) {
@@ -448,7 +449,9 @@ export class Terrain {
         }
       } else if (f.type === 'village') {
         gridBox(f.x - f.r - 5, f.z - f.r - 5, f.x + f.r + 5, f.z + f.r + 5, (k, x, z) => {
-          VW[k] = Math.max(VW[k], 1 - smoothstep(f.r * 0.35, f.r + 5, Math.hypot(x - f.x, z - f.z)));
+          const vv = 1 - smoothstep(f.r * 0.35, f.r + 5, Math.hypot(x - f.x, z - f.z));
+          VW[k] = Math.max(VW[k], vv);
+          if (f.urban) UW[k] = Math.max(UW[k], 1 - smoothstep(f.r * 0.55, f.r + 2, Math.hypot(x - f.x, z - f.z)));
         });
       }
     }
@@ -535,6 +538,7 @@ export class Terrain {
         const fw = FW[k00] * w00 + FW[k10] * w10 + FW[k01] * w01 + FW[k11] * w11;
         const vw = VW[k00] * w00 + VW[k10] * w10 + VW[k01] * w01 + VW[k11] * w11;
         const nl = NL[k00] * w00 + NL[k10] * w10 + NL[k01] * w01 + NL[k11] * w11;
+        const uw = UW[k00] * w00 + UW[k10] * w10 + UW[k01] * w01 + UW[k11] * w11;
         const nm = vn(x * 0.42, z * 0.42);
         const nh = vn(x * 0.95 + 11.3, z * 0.95 - 5.1);
         const mk = j * MR + i;
@@ -569,6 +573,11 @@ export class Terrain {
         }
         // Dorfboden (zertrampelt)
         if (vw > 0.01) mx(TP.village, vw * smoothstep(0.35, 0.7, nm * 0.7 + nh * 0.3) * 0.55);
+        if (uw > 0.01) {
+          const pv = uw * (0.35 + 0.45 * smoothstep(0.3, 0.7, nm));
+          mxs(TP.pave[0] * (0.92 + 0.16 * nh), TP.pave[1] * (0.92 + 0.16 * nh), TP.pave[2] * (0.92 + 0.16 * nh), pv);
+          bm -= pv * 0.4; bare *= 1 - pv;
+        }
         // Fels an steilen Hängen
         const rk = smoothstep(0.08, 0.26, 1 - ny + (nh - 0.5) * 0.05);
         if (rk > 0) {
@@ -653,11 +662,10 @@ export class Terrain {
           const crop = fd.crop;
           bm = 0.85;
           if (winter) {
-            const per = crop === 'plowed' ? 0.9 : 0.5, fa = fieldAA(per);
-            const ridge = (sin(u * TWO_PI / per) * 0.5 + 0.5);
-            const show = smoothstep(0.6, 1.0, ridge) * fa * (0.12 + 0.3 * nm) * (crop === 'plowed' ? 1 : 0.5);
+            const per = crop === 'plowed' ? 1.0 : 0.5, fa = fieldAA(per);
+            const ridge = sin(u * TWO_PI / per) * 0.5 + 0.5;
+            const show = smoothstep(0.7, 1.0, ridge) * smoothstep(0.5, 0.8, nf + (g - 0.5) * 0.3) * fa * (crop === 'plowed' ? 0.6 : 0.3);
             mx(crop === 'plowed' ? TP.furrow : TP.stubble, show);
-            mul(1 - 0.05 * (1 - ridge) * fa);
           } else if (crop === 'plowed') {
             const per = 0.9, fa = fieldAA(per);
             const ridge = 0.5 + (sin(u * TWO_PI / per + nf * 0.6) * 0.5) * fa;
@@ -675,15 +683,13 @@ export class Terrain {
           } else if (crop === 'sunflower') {
             const per = 0.75, fa = fieldAA(per);
             const row = sin(u * TWO_PI / per);
-            const rowM = smoothstep(-0.1, 0.5, row);
-            const head = cos(v * TWO_PI / 0.55) * 0.5 + 0.5;
-            const yel = smoothstep(0.55, 0.85, head * (row * 0.5 + 0.5)) * fa;
-            const avg = autumn ? TP.sunDry : TP.sunLeaf;
-            C[0] = TP.soilGreen[0] + (avg[0] - TP.soilGreen[0]) * (0.55 + (rowM - 0.55) * fa);
-            C[1] = TP.soilGreen[1] + (avg[1] - TP.soilGreen[1]) * (0.55 + (rowM - 0.55) * fa);
-            C[2] = TP.soilGreen[2] + (avg[2] - TP.soilGreen[2]) * (0.55 + (rowM - 0.55) * fa);
-            mx(autumn ? TP.sunDryHead : TP.sunHead, yel * 0.9 + (1 - fa) * 0.3);
-            mul(0.88 + 0.2 * nm + 0.08 * g);
+            const gap = (1 - smoothstep(-0.95, -0.45, row)) * fa;
+            const leaf = autumn ? TP.sunDry : TP.sunLeaf, head = autumn ? TP.sunDryHead : TP.sunHead;
+            const hy = smoothstep(0.42, 0.78, nf * 0.6 + g * 0.2 + nm * 0.3);
+            C[0] = leaf[0]; C[1] = leaf[1]; C[2] = leaf[2];
+            mx(head, hy * 0.85);
+            mx(TP.soilGreen, gap * 0.7);
+            mul(0.88 + 0.2 * nm + 0.1 * g);
           } else if (crop === 'green') {
             const per = 0.6, fa = fieldAA(per);
             const row = smoothstep(-0.3, 0.4, sin(u * TWO_PI / per));
@@ -955,13 +961,13 @@ export class Terrain {
       g.add(im); total += grassPts.length;
     }
 
-    // Büsche (Winter: kahle, schneebedeckte Sträucher) bzw. Schneehügel
+    // Büsche (Winter: kahle, schneebedeckte Sträucher)
     const bushPts = place(winter ? Math.round(nBush * 0.6) : nBush, 1);
     if (bushPts.length) {
       const geo = bushGeometry(winter, cfg.treeDetail);
       const mat = applyFow(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
       const im = new THREE.InstancedMesh(geo, mat, bushPts.length);
-      const pal = winter ? [[0.92, 0.92, 0.95], [0.85, 0.82, 0.80]] : autumn ? [[0.60, 0.42, 0.18], [0.48, 0.40, 0.18], [0.36, 0.38, 0.17], [0.62, 0.30, 0.14]] : [[0.27, 0.38, 0.15], [0.22, 0.33, 0.13], [0.32, 0.40, 0.17]];
+      const pal = winter ? [[0.92, 0.92, 0.95], [0.85, 0.82, 0.80]] : autumn ? [[0.60, 0.42, 0.18], [0.48, 0.40, 0.18], [0.36, 0.38, 0.17], [0.62, 0.30, 0.14]] : [[0.33, 0.45, 0.17], [0.28, 0.40, 0.15], [0.38, 0.47, 0.20], [0.30, 0.42, 0.14]];
       bushPts.forEach(([x, z], i) => {
         const s = (winter ? 0.55 : 0.7) + rnd() * (winter ? 0.6 : 0.9);
         p.set(x, this.height(x, z) - 0.1, z);
@@ -974,24 +980,6 @@ export class Terrain {
       });
       im.castShadow = false; im.receiveShadow = true;
       g.add(im); total += bushPts.length;
-      if (winter) {
-        // Schneeverwehungen/-hügel
-        const moundPts = place(Math.round(nBush * 0.8), 1);
-        if (moundPts.length) {
-          const mg = new THREE.SphereGeometry(1, 9, 4, 0, Math.PI * 2, 0, Math.PI / 2);
-          const mm = applyFow(new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.80, 0.85, 0.93, THREE.SRGBColorSpace), roughness: 0.95 }));
-          const im2 = new THREE.InstancedMesh(mg, mm, moundPts.length);
-          moundPts.forEach(([x, z], i) => {
-            const s = 1.2 + rnd() * 1.8;
-            p.set(x, this.height(x, z) - 0.12, z);
-            e.set(0, rnd() * 6.28, 0); q.setFromEuler(e);
-            sc.set(s * (1 + rnd() * 0.8), s * (0.07 + rnd() * 0.07), s);
-            im2.setMatrixAt(i, m4.compose(p, q, sc));
-          });
-          im2.castShadow = false; im2.receiveShadow = true;
-          g.add(im2); total += moundPts.length;
-        }
-      }
     }
 
     // Steine
@@ -1194,14 +1182,14 @@ const QUALITY = {
   low: { seg: 2.5, tex: 512, aniso: 2, cover: 0, bushes: 0, stones: 0, bump: false, treeDetail: 0 },
   medium: { seg: 2, tex: 1024, aniso: 4, cover: 5000, bushes: 160, stones: 140, bump: true, treeDetail: 1 },
   high: { seg: 1.5, tex: 2048, aniso: 8, cover: 11000, bushes: 320, stones: 260, bump: true, treeDetail: 1 },
-  ultra: { seg: 1, tex: 4096, aniso: 16, cover: 20000, bushes: 500, stones: 400, bump: true, treeDetail: 1 },
+  ultra: { seg: 1, tex: 3072, aniso: 16, cover: 20000, bushes: 500, stones: 400, bump: true, treeDetail: 1 },
 };
 
 // Bodenpaletten der Textur (sRGB)
 const TEX_PAL = {
   summer: {
     grassA: [0.31, 0.40, 0.17], grassB: [0.42, 0.47, 0.22], dry: [0.58, 0.53, 0.31], moss: [0.22, 0.31, 0.13], dirt: [0.42, 0.34, 0.24],
-    forestFloor: [0.25, 0.22, 0.14], needle: [0.33, 0.25, 0.16], village: [0.45, 0.39, 0.29], yard: [0.47, 0.43, 0.37],
+    forestFloor: [0.25, 0.22, 0.14], needle: [0.33, 0.25, 0.16], village: [0.45, 0.39, 0.29], pave: [0.47, 0.46, 0.44], yard: [0.47, 0.43, 0.37],
     rock: [0.47, 0.45, 0.42], sand: [0.72, 0.66, 0.50], wetSand: [0.48, 0.43, 0.33], mud: [0.27, 0.28, 0.22],
     asphalt: [0.25, 0.25, 0.26], gravel: [0.52, 0.49, 0.44], line: [0.88, 0.88, 0.84], dirtroad: [0.50, 0.41, 0.29], rut: [0.38, 0.30, 0.22],
     furrow: [0.24, 0.18, 0.13], ridge: [0.42, 0.33, 0.24], wheat: [0.78, 0.66, 0.36], stubble: [0.68, 0.60, 0.40], crop: [0.30, 0.48, 0.17],
@@ -1210,7 +1198,7 @@ const TEX_PAL = {
   },
   autumn: {
     grassA: [0.36, 0.37, 0.18], grassB: [0.46, 0.43, 0.23], dry: [0.56, 0.46, 0.27], moss: [0.26, 0.30, 0.14], dirt: [0.38, 0.30, 0.21],
-    forestFloor: [0.36, 0.24, 0.13], needle: [0.45, 0.28, 0.12], village: [0.40, 0.33, 0.25], yard: [0.43, 0.38, 0.32],
+    forestFloor: [0.36, 0.24, 0.13], needle: [0.45, 0.28, 0.12], village: [0.40, 0.33, 0.25], pave: [0.44, 0.43, 0.41], yard: [0.43, 0.38, 0.32],
     rock: [0.44, 0.42, 0.40], sand: [0.66, 0.60, 0.46], wetSand: [0.44, 0.39, 0.30], mud: [0.25, 0.25, 0.20],
     asphalt: [0.24, 0.24, 0.25], gravel: [0.48, 0.46, 0.42], line: [0.84, 0.84, 0.80], dirtroad: [0.42, 0.33, 0.24], rut: [0.31, 0.25, 0.18],
     furrow: [0.21, 0.16, 0.12], ridge: [0.37, 0.29, 0.21], wheat: [0.70, 0.58, 0.32], stubble: [0.62, 0.54, 0.36], crop: [0.34, 0.42, 0.18],
@@ -1219,7 +1207,7 @@ const TEX_PAL = {
   },
   winter: {
     grassA: [0.50, 0.46, 0.37], grassB: [0.50, 0.46, 0.37], dry: [0.55, 0.50, 0.40], moss: [0.36, 0.38, 0.30], dirt: [0.40, 0.36, 0.32],
-    forestFloor: [0.62, 0.64, 0.67], needle: [0.38, 0.34, 0.29], village: [0.70, 0.71, 0.74], yard: [0.66, 0.67, 0.70],
+    forestFloor: [0.62, 0.64, 0.67], needle: [0.38, 0.34, 0.29], village: [0.70, 0.71, 0.74], pave: [0.64, 0.65, 0.68], yard: [0.66, 0.67, 0.70],
     rock: [0.46, 0.47, 0.49], sand: [0.66, 0.66, 0.66], wetSand: [0.45, 0.45, 0.46], mud: [0.30, 0.31, 0.30],
     asphalt: [0.30, 0.30, 0.32], gravel: [0.55, 0.55, 0.56], line: [0.86, 0.86, 0.84], dirtroad: [0.76, 0.77, 0.80], rut: [0.47, 0.42, 0.38],
     furrow: [0.30, 0.25, 0.21], ridge: [0.40, 0.34, 0.28], wheat: [0.70, 0.66, 0.55], stubble: [0.62, 0.56, 0.42], crop: [0.50, 0.55, 0.45],
