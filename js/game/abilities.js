@@ -42,6 +42,26 @@ export const ABILITIES = {
       if (teamLocal(game, p)) game.effects.marker(x, z, 0xffd500, 2, 14);
     },
   },
+  // Gefechtsmodus: russisches Gegenstück zum FPV-Schwarm (Orlan-/Lancet-Operator)
+  lancet: {
+    name: 'Lancet-Schlag', icon: '✈️', cooldown: 24, charges: 6, requires: 'e_recon', radius: 14,
+    desc: 'Operator startet 3 Lancet-Kamikazedrohnen auf das Zielgebiet.',
+    exec(game, x, z, p) {
+      const ops = game.units.filter((u) => u.owner === p.id && u.alive && u.type.key === 'e_recon');
+      if (!ops.length) return false;
+      ops.sort((a, b) => Math.hypot(a.pos.x - x, a.pos.z - z) - Math.hypot(b.pos.x - x, b.pos.z - z));
+      const op = ops[0];
+      for (let i = 0; i < 3; i++) {
+        game.later(i * 0.45, () => {
+          const d = game.spawn('lancet', p.team, op.pos.x + rand(-2, 2), op.pos.z + rand(-2, 2), { startAlt: 2, owner: p.id });
+          d.moveTo(x + rand(-6, 6), z + rand(-6, 6), { attackMove: true });
+          d.ai = null;
+          game.audio.drone(op.pos.x, op.pos.z);
+        });
+      }
+      if (teamLocal(game, p)) game.effects.marker(x, z, 0xff8030, 2, 14);
+    },
+  },
   himars: {
     name: 'HIMARS-Schlag', icon: '🎆', cooldown: 50, requires: 'himars', radius: 12,
     desc: '6 GMLRS-Präzisionsraketen. Ohne Sicht auf das Ziel deutlich ungenauer.',

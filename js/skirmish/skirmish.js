@@ -1,0 +1,549 @@
+// Gefechtsmodus (MP-T4a): 1v1 … 6v6 gegen/mit KI um Eroberungspunkte (Zeppeline, Ballone, Flugfelder …)
+//
+// API:
+//   normalizeSetup(setup) → vollständiges Setup (Defaults ergänzt, Größe/Preset aufgelöst)
+//   createSkirmish(setup) → Missionsobjekt für game.load (map, env, camera, players, setup(g), update(g, dt), onKill …)
+//   startSkirmish(game, setup) → game.setupPlayers(...) + game.load(mission); gibt die Mission zurück
+//   mission.skirmish = Laufzeitzustand (points, scores, reinfT, interval, log, players, ais …) – auch für HUD/Tests
+//
+// Setup: { mode 1..6, preset 'random'|MAP_PRESETS.id, size 'auto'|'small'|'medium'|'large', season, night, team 'UA'|'RU',
+//          role 'armor'|'infantry'|'support'|'logistics', difficulty 'easy'|'normal'|'hard', reinforce Sekunden (120/180/300),
+//          victory 'annihilation'|'points'|'time30'|'time60'|'time90', seed, spectate (lokaler Spieler ebenfalls KI),
+//          timeLimit (Sek., überschreibt time*), pointsLimit }
+import * as THREE from 'three';
+import { generateSkirmishMap, MAP_PRESETS, MAP_SIZES } from './maps.js';
+import { AICommander, TeamIntel } from './ai.js';
+import { UNIT_TYPES } from '../game/unitTypes.js';
+
+export const TEAM_NAME = { UA: 'Ukraine', RU: 'Russland' };
+export const TEAM_COLOR = { UA: '#2f7de1', RU: '#e5484d', N: '#8c9096' };
+export const ROLES = {
+  armor: { name: 'Panzerkeil', icon: '🛡️', desc: 'Kampfpanzer und Schützenpanzer mit Begleitinfanterie.' },
+  infantry: { name: 'Infanterie & Aufklärung', icon: '🪖', desc: 'Infanterie, Scharfschütze, Panzerabwehr, Drohnen.' },
+  support: { name: 'Artillerie & Flugabwehr', icon: '💥', desc: 'Raketen-/Rohrartillerie, Flugabwehr, Aufklärung.' },
+  logistics: { name: 'Logistik & Reserve', icon: '🚚', desc: 'Gemischte Reserve und Lkw (Versorgung folgt).' },
+};
+export const DIFFICULTIES = { easy: 'Leicht', normal: 'Normal', hard: 'Schwer' };
+export const VICTORY = { annihilation: 'Vernichtung', points: 'Punkte-Limit', time30: 'Zeitlimit 30 min', time60: 'Zeitlimit 60 min', time90: 'Zeitlimit 90 min' };
+export const CP_ICON = { zeppelin: 'Z', aerostat: 'B', airfield: 'F', depot: 'D', radio: 'T', railway: 'H', village: 'O' };
+export const CAPTURE_TIME = 6; // Sekunden bis zum Besitzerwechsel
+
+// ---------- Startarmeen je Rolle und Fraktion ----------
+const ARMIES = {
+  armor: {
+    UA: [['leopard', 3], ['bradley', 2], ['rifle', 4], ['javelin', 1], ['mg', 1], ['stinger', 1]],
+    RU: [['t90', 2], ['t72', 2], ['bmp', 2], ['btr', 1], ['e_rifle', 5], ['e_atgm', 1], ['e_igla', 1]],
+  },
+  infantry: {
+    UA: [['rifle', 5], ['mg', 2], ['javelin', 2], ['sniper', 1], ['dronepilot', 1], ['sso', 1], ['recon', 1]],
+    RU: [['e_rifle', 6], ['e_mg', 2], ['e_atgm', 2], ['e_sniper', 1], ['e_recon', 1], ['e_spetsnaz', 1], ['orlan', 1]],
+  },
+  support: {
+    UA: [['himars', 1], ['gepard', 1], ['pickup', 1], ['stinger', 1], ['rifle', 4], ['mg', 1], ['javelin', 1], ['recon', 1]],
+    RU: [['msta', 1], ['pantsir', 1], ['btr', 1], ['e_igla', 1], ['e_rifle', 5], ['e_mg', 1], ['e_atgm', 1], ['orlan', 1]],
+  },
+  logistics: {
+    UA: [['ua_truck', 2], ['leopard', 1], ['bradley', 1], ['pickup', 2], ['rifle', 4], ['mg', 1], ['javelin', 1]],
+    RU: [['truck', 2], ['t72', 2], ['bmp', 1], ['btr', 2], ['e_rifle', 5], ['e_mg', 1], ['e_atgm', 1]],
+  },
+};
+// Fähigkeiten je Rolle
+const ABIL = {
+  armor: { UA: ['scan', { id: 'artillery', charges: 3 }], RU: ['scan', { id: 'artillery', charges: 3 }] },
+  infantry: { UA: [{ id: 'fpv', charges: 6 }, 'scan'], RU: [{ id: 'lancet', charges: 6 }, 'scan'] },
+  support: { UA: ['himars', 'artillery', 'scan', 'ew'], RU: ['artillery', 'scan', 'ew'] },
+  logistics: { UA: ['scan', { id: 'artillery', charges: 3 }], RU: ['scan', { id: 'artillery', charges: 3 }] },
+};
+// Verstärkungs-Reihenfolge je Rolle (wird zyklisch abgearbeitet)
+const REINF = {
+  armor: { UA: ['leopard', 'rifle', 'bradley', 'rifle', 'javelin', 'leopard', 'mg', 'bradley'], RU: ['t90', 'e_rifle', 'bmp', 'e_rifle', 'e_rpg', 't72', 'e_mg', 'btr'] },
+  infantry: { UA: ['rifle', 'rifle', 'javelin', 'mg', 'sniper', 'rifle', 'sso', 'javelin'], RU: ['e_rifle', 'e_rifle', 'e_atgm', 'e_mg', 'e_sniper', 'e_rifle', 'e_spetsnaz', 'e_atgm'] },
+  support: { UA: ['rifle', 'gepard', 'javelin', 'rifle', 'stinger', 'pickup'], RU: ['e_rifle', 'pantsir', 'e_atgm', 'e_rifle', 'e_igla', 'btr'] },
+  logistics: { UA: ['ua_truck', 'rifle', 'bradley', 'rifle', 'pickup', 'javelin'], RU: ['truck', 'e_rifle', 'bmp', 'e_rifle', 'btr', 'e_rpg'] },
+};
+const PARA = { UA: 'rifle', RU: 'e_rifle' };
+// Fraktionsausgleich nur im Gefecht (Kampagnenwerte bleiben unverändert): die ukrainischen Typen sind für die
+// Kampagne qualitativ überlegen (Leopard ≈ 1,7× Feuerkraft eines T-90, Bradley mit TOW …). Russland erhält dafür
+// mehr Einheiten (Masse statt Klasse) und robustere Fahrzeuge/Infanterie (hpMul beim Spawnen).
+export const FACTION_HP = { t90: 1.35, t72: 1.3, bmp: 1.3, btr: 1.2, pantsir: 1.15, msta: 1.1, e_rifle: 1.1, e_mg: 1.1, e_atgm: 1.1, e_rpg: 1.1 };
+export const REINF_BONUS = { UA: 0, RU: 0 }; // Zusatz-Einheit je Paket ab 3 Einheiten (derzeit aus)
+// Reserve (Aufholmechanik): Beim Countdown erhält das Team mit weniger gehaltenen Punkten je Spieler mit < 8 Bodeneinheiten
+// einen kleinen Reservetrupp am eigenen Aufmarschraum.
+const RESERVE = { UA: ['rifle', 'rifle', 'javelin'], RU: ['e_rifle', 'e_rifle', 'e_atgm'] };
+// Verstärkungsumfang je Punkt (value: Zentrum-Zeppelin 3, sonst 1–2)
+export function reinforceSize(cp) {
+  if (cp.kind === 'zeppelin') return 3 + cp.value; // 5–6 (+ Fallschirmtrupp)
+  if (cp.kind === 'aerostat') return 1 + cp.value; // 2–3
+  return 2 + cp.value; // 3–4
+}
+
+const PLAYER_COLORS = { UA: ['#4da3ff', '#ffd500', '#5dff8a', '#38e0d0', '#a98bff', '#9fd36b'], RU: ['#ff4d4d', '#ff9a3c', '#e05cb0', '#c9a26b', '#ff6f91', '#d0d0d0'] };
+const CALLSIGNS = { UA: ['Sokil', 'Bars', 'Wowk', 'Orel', 'Tur', 'Lys'], RU: ['Medwed', 'Wolk', 'Grom', 'Schtorm', 'Kedr', 'Berkut'] };
+const ROLE_ORDER = ['armor', 'infantry', 'support', 'logistics', 'armor', 'infantry'];
+
+const other = (t) => (t === 'UA' ? 'RU' : 'UA');
+const isGround = (u) => u.alive && !u.type.air && !u.type.structure && !u.type.naval && !u.type.kamikaze && u.side !== 'N';
+
+export function normalizeSetup(s = {}) {
+  const o = {
+    mode: Math.max(1, Math.min(6, Math.round(+s.mode || 2))),
+    preset: s.preset || 'random', size: s.size || 'auto', season: ['summer', 'autumn', 'winter'].includes(s.season) ? s.season : 'summer',
+    night: !!s.night, team: s.team === 'RU' ? 'RU' : 'UA', role: ROLES[s.role] ? s.role : 'armor',
+    difficulty: DIFFICULTIES[s.difficulty] ? s.difficulty : 'normal', reinforce: [120, 180, 300].includes(+s.reinforce) ? +s.reinforce : (+s.reinforce > 0 ? +s.reinforce : 180),
+    victory: VICTORY[s.victory] ? s.victory : 'points', seed: (Number.isFinite(+s.seed) && +s.seed > 0) ? Math.floor(+s.seed) : Math.floor(Math.random() * 99999) + 1,
+    spectate: !!s.spectate, timeLimit: +s.timeLimit > 0 ? +s.timeLimit : null, pointsLimit: +s.pointsLimit > 0 ? +s.pointsLimit : null,
+    startArmyMul: +s.startArmyMul > 0 ? +s.startArmyMul : 1,
+  };
+  // Preset/Größe auflösen (Auto = Empfehlung des Generators; zu kleine Karten werden vergrößert)
+  const probe = generateSkirmishMap({ size: 'large', seed: o.seed, playersPerTeam: o.mode, preset: o.preset });
+  o.presetResolved = probe.preset;
+  let size = o.size === 'auto' ? probe.recommendedSize : (MAP_SIZES[o.size] ? o.size : 'medium');
+  o.sizeAdjusted = false;
+  if (MAP_SIZES[size].maxPerTeam < o.mode) { size = ['small', 'medium', 'large'].find((k) => MAP_SIZES[k].maxPerTeam >= o.mode); o.sizeAdjusted = true; }
+  o.sizeResolved = size;
+  return o;
+}
+
+// Spielerliste (lokal + KI) mit Rollen: Gegnerteam spiegelt die Rollenverteilung
+function buildPlayers(S) {
+  const n = S.mode;
+  const roles = [S.role];
+  for (const r of ROLE_ORDER) { if (roles.length >= n) break; if (!roles.includes(r) || roles.length >= 4) roles.push(r); }
+  while (roles.length < n) roles.push(ROLE_ORDER[roles.length % ROLE_ORDER.length]);
+  const list = [];
+  for (const team of [S.team, other(S.team)]) {
+    for (let i = 0; i < n; i++) {
+      const local = team === S.team && i === 0;
+      list.push({
+        id: list.length, team, role: roles[i], slot: i, local,
+        name: local ? (S.spectate ? `Du (Autopilot)` : 'Du') : `${CALLSIGNS[team][i]} (KI)`,
+        color: PLAYER_COLORS[team][i], ai: !local || S.spectate,
+        abilities: ABIL[roles[i]][team],
+      });
+    }
+  }
+  return list;
+}
+
+export function createSkirmish(setup) {
+  const S = setup.presetResolved ? setup : normalizeSetup(setup);
+  const gen = generateSkirmishMap({ size: S.sizeResolved, seed: S.seed, playersPerTeam: S.mode, season: S.season, night: S.night, preset: S.presetResolved });
+  const players = buildPlayers(S);
+  const half = gen.map.size / 2;
+  const nPlayers = players.length;
+  const popCap = Math.max(18, Math.min(40, Math.floor(220 / nPlayers)));
+  const totalValue = gen.capturePoints.reduce((s, c) => s + c.value, 0);
+  const timeLimit = S.timeLimit || (S.victory.startsWith('time') ? +S.victory.slice(4) * 60 : null);
+  const pointsLimit = S.victory === 'points' ? (S.pointsLimit || totalValue * 100) : null;
+  const localPl = players.find((p) => p.local);
+  const mySpawn = gen.spawns[S.team][localPl.slot] || gen.spawns[S.team][0];
+  const camBase = gen.camera[S.team];
+
+  const mission = {
+    id: 'skirmish', skirmishMission: true,
+    title: `Gefecht ${S.mode}v${S.mode} – ${gen.title}`,
+    place: gen.place, description: gen.description,
+    map: gen.map, env: gen.env,
+    camera: { x: mySpawn.x, z: mySpawn.z + (S.team === 'UA' ? -16 : 16), dist: camBase.dist, yaw: camBase.yaw },
+    players: players.map((p) => ({ ...p })),
+    noDefaultDefeat: true,
+    friendlyEdges: { UA: [0, half + 40], RU: [0, -half - 40] },
+    markers: [],
+    setupData: S,
+    gen,
+    skirmish: null,
+
+    setup(g) {
+      const sk = this.skirmish = {
+        setup: S, gen, popCap, timeLimit, pointsLimit, totalValue,
+        interval: S.reinforce, reinfT: S.reinforce, reinfCycle: 0,
+        scores: { UA: 0, RU: 0 }, scoreT: 10, capT: 0, checkT: 1,
+        points: [], log: [], result: null, roles: {}, reinfIdx: {}, rr: { UA: 0, RU: 0 },
+        intel: { UA: new TeamIntel(g, 'UA'), RU: new TeamIntel(g, 'RU') },
+        ais: [], perf: { aiMs: 0, capMs: 0 },
+        // Test-/Debughilfe: Besitzer direkt setzen
+        debugSetOwner: (id, team) => { const p = sk.points.find((q) => q.id === id); if (!p) return; p.owner = team; p.capTeam = null; p.progress = 0; setOwnerVisual(p, team); },
+      };
+      for (const p of g.players) {
+        const spec = players.find((q) => q.id === p.id);
+        p.role = spec.role; p.slot = spec.slot;
+        p.spawn = gen.spawns[p.team][spec.slot] || gen.spawns[p.team][0];
+        Object.assign(p.stats, { captured: 0, reinf: 0 });
+        sk.reinfIdx[p.id] = 0;
+      }
+      // Eroberungspunkte
+      const houses = g.terrain.objects.houses;
+      for (const c of gen.capturePoints) {
+        const rot = cpRotation(gen.map.features, c);
+        let mx = c.x, mz = c.z;
+        if (c.kind === 'village') [mx, mz] = freeSpot(houses, c.x, c.z, 7);
+        const u = g.spawn('cp_' + c.kind, 'N', mx, mz, { invulnerable: true, rot, noBlock: c.kind !== 'zeppelin' && c.kind !== 'aerostat' });
+        u.name = c.name;
+        const pt = { ...c, unit: u, owner: null, capTeam: null, progress: 0, contested: false, presence: { UA: 0, RU: 0 }, captures: 0 };
+        pt.ring = makeRing(g, c.x, c.z, c.radius);
+        sk.points.push(pt);
+        setOwnerVisual(pt, null);
+      }
+      // Startarmeen
+      for (const p of g.players) spawnArmy(g, p, S, sk);
+      // KI-Kommandeure (gestaffelt)
+      let k = 0;
+      for (const p of g.players) {
+        if (!p.ai) continue;
+        sk.ais.push(new AICommander(g, sk, p, { difficulty: S.difficulty, phase: 0.5 + (k++ % 8) * 0.35 }));
+      }
+      g.addObjective('cp', 'Eroberungspunkte halten – beim Verstärkungs-Countdown erhält der Besitzer Nachschub');
+      g.addObjective('win', victoryText(S, pointsLimit, timeLimit));
+      g.later(1.5, () => g.say('Stab', `${gen.title}: ${S.mode}v${S.mode}, Team ${TEAM_NAME[S.team]}. Nehmt die Zeppeline und Punkte ein – wer sie beim Countdown hält, bekommt Verstärkung!`, 7));
+    },
+
+    update(g, dt) {
+      const sk = this.skirmish;
+      if (!sk || sk.result) return;
+      const t0 = performance.now();
+      // Eroberung (4×/s)
+      sk.capT -= dt;
+      if (sk.capT <= 0) { const step = 0.25 - sk.capT; sk.capT = 0.25; updateCapture(g, sk, step); }
+      const t1 = performance.now();
+      // Verstärkungs-Countdown
+      sk.reinfT -= dt;
+      if (sk.reinfT <= 0) { deliverReinforcements(g, sk); sk.reinfT += sk.interval; sk.reinfCycle++; }
+      // Punkte: alle 10 s Wert der gehaltenen Punkte
+      sk.scoreT -= dt;
+      if (sk.scoreT <= 0) { sk.scoreT += 10; for (const p of sk.points) if (p.owner) sk.scores[p.owner] += p.value; }
+      // KI
+      for (const ai of sk.ais) ai.update(dt);
+      animateSkirmish(g, dt);
+      const t2 = performance.now();
+      sk.perf.capMs = sk.perf.capMs * 0.95 + (t1 - t0) * 0.05;
+      sk.perf.aiMs = sk.perf.aiMs * 0.95 + (t2 - t1) * 0.05;
+      // Siegbedingungen (1×/s)
+      sk.checkT -= dt;
+      if (sk.checkT <= 0) { sk.checkT = 1; checkVictory(g, sk); }
+    },
+    // Visuelles (jedes Frame, auch pausiert unkritisch): Schaukeln, Fahnen
+    onKill(g, u, killer) {
+      const sk = this.skirmish;
+      if (!sk || u.side === 'N' || u.type.kamikaze || u.type.structure) return;
+      sk.scores[other(u.side)] += u.type.vehicle ? 2 : 1;
+    },
+  };
+  return mission;
+}
+
+export function startSkirmish(game, setup) {
+  const S = normalizeSetup(setup);
+  const m = createSkirmish(S);
+  game.setupPlayers(m.players);
+  game.load(m);
+  return m;
+}
+
+function victoryText(S, pl, tl) {
+  if (S.victory === 'annihilation') return 'Sieg: alle gegnerischen Spieler vernichten (ohne Einheiten und Punkte)';
+  // Punkte/Zeit: kein Ausscheiden – Spieler ohne Einheiten warten auf Verstärkung bzw. Reserve
+  if (S.victory === 'points') return `Sieg: zuerst ${pl} Punkte (Punkte halten + Abschüsse)`;
+  return `Sieg: meiste Punkte nach ${Math.round(tl / 60)} min`;
+}
+
+// Ausrichtung eines Punkts an der zugehörigen Piste/Bahnlinie des Generators
+function cpRotation(features, c) {
+  if (c.kind !== 'airfield' && c.kind !== 'railway') return 0;
+  const w = c.kind === 'airfield' ? 10 : 3;
+  let best = null, bd = 3;
+  for (const f of features) {
+    if (f.type !== 'road' || f.width !== w || f.pts.length !== 2) continue;
+    const [a, b] = f.pts;
+    const d = Math.hypot((a[0] + b[0]) / 2 - c.x, (a[1] + b[1]) / 2 - c.z);
+    if (d < bd) { bd = d; best = f; }
+  }
+  if (!best) return 0;
+  const [a, b] = best.pts;
+  return -Math.atan2(b[1] - a[1], b[0] - a[0]);
+}
+function freeSpot(houses, x, z, r) {
+  const ok = (px, pz) => !houses.some((h) => Math.hypot(h.x - px, h.z - pz) < r + Math.max(h.w, h.d) * 0.5);
+  if (ok(x, z)) return [x, z];
+  for (let d = 2; d <= 14; d += 2) for (let a = 0; a < 12; a++) { const px = x + Math.cos(a * 0.5236) * d, pz = z + Math.sin(a * 0.5236) * d; if (ok(px, pz)) return [px, pz]; }
+  return [x, z];
+}
+
+// ---------- Bodenring (dem Gelände folgend) + Fortschrittsbogen ----------
+function ringGeo(terrain, x, z, r0, r1, segs) {
+  const pos = new Float32Array(segs * 6 * 3);
+  let o = 0;
+  const pt = (a, r) => { const px = x + Math.sin(a) * r, pz = z - Math.cos(a) * r; return [px, terrain.surface(px, pz) + 0.35, pz]; };
+  for (let i = 0; i < segs; i++) {
+    const a0 = (i / segs) * Math.PI * 2, a1 = ((i + 1) / segs) * Math.PI * 2;
+    const p00 = pt(a0, r0), p01 = pt(a0, r1), p10 = pt(a1, r0), p11 = pt(a1, r1);
+    for (const p of [p00, p10, p01, p01, p10, p11]) { pos[o++] = p[0]; pos[o++] = p[1]; pos[o++] = p[2]; }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  return g;
+}
+function makeRing(g, x, z, r) {
+  const T = g.terrain, segs = 72;
+  const mat = new THREE.MeshBasicMaterial({ color: 0x8c9096, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  const ring = new THREE.Mesh(ringGeo(T, x, z, r - 0.6, r + 0.6, segs), mat);
+  const fillMat = new THREE.MeshBasicMaterial({ color: 0x8c9096, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+  const fill = new THREE.Mesh(ringGeo(T, x, z, r * 0.55, r - 0.6, segs), fillMat);
+  const progMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 });
+  const prog = new THREE.Mesh(ringGeo(T, x, z, r - 2.6, r - 1.0, segs), progMat);
+  prog.geometry.setDrawRange(0, 0);
+  for (const m of [ring, fill, prog]) { m.renderOrder = 3; m.castShadow = m.receiveShadow = false; m.raycast = () => {}; g.world.add(m); }
+  return { ring, fill, prog, segs };
+}
+function setOwnerVisual(pt, team) {
+  const t = team || 'N';
+  pt.unit.model.setOwner?.(t);
+  const col = new THREE.Color(TEAM_COLOR[t]);
+  pt.ring.ring.material.color.copy(col);
+  pt.ring.fill.material.color.copy(col);
+  pt.ring.fill.material.opacity = team ? 0.16 : 0.08;
+}
+
+// ---------- Startarmee ----------
+function spawnArmy(g, p, S, sk) {
+  const team = p.team, sp = p.spawn;
+  const dir = team === 'UA' ? -1 : 1; // Richtung zur Kartenmitte (z)
+  let list = ARMIES[p.role][team].map(([t, n]) => [t, n]);
+  // Große Gefechte: etwas kleinere Startarmeen (Leistung, < 250 Einheiten)
+  const cut = (S.mode >= 5 ? 2 : S.mode >= 4 ? 1 : 0) + Math.round((1 - S.startArmyMul) * 6);
+  for (let i = 0, k = cut; k > 0 && i < list.length; i++) {
+    const key = list[i][0];
+    if ((key === 'rifle' || key === 'e_rifle') && list[i][1] > 1) { const d = Math.min(k, list[i][1] - 1); list[i][1] -= d; k -= d; }
+  }
+  const veh = [], inf = [], air = [];
+  for (const [t, n] of list) { const ty = UNIT_TYPES[t]; (ty.air ? air : ty.vehicle ? veh : inf).push([t, n]); }
+  const heading = sp.heading ?? (team === 'UA' ? Math.PI : 0);
+  const opts = { owner: p.id, heading };
+  const out = [
+    ...g.spawnGroup(veh, team, sp.x, sp.z, { ...opts, spacing: 9, cols: 4 }),
+    ...g.spawnGroup(inf, team, sp.x, sp.z + dir * 11, { ...opts, spacing: 3.2, cols: 6 }),
+  ];
+  for (const [t, n] of air) for (let i = 0; i < n; i++) out.push(g.spawn(t, team, sp.x + (i - 0.5) * 4, sp.z + dir * 4, opts));
+  for (const u of out) applyFactionHp(u);
+}
+
+function applyFactionHp(u) {
+  const k = FACTION_HP[u.type.key];
+  if (k) { u.maxHp = Math.round(u.maxHp * k); u.hp = u.maxHp; }
+}
+
+// ---------- Eroberung ----------
+function updateCapture(g, sk, dt) {
+  const pts = sk.points;
+  for (const p of pts) { p.presence.UA = 0; p.presence.RU = 0; p.byPlayer = null; }
+  for (const u of g.units) {
+    if (!isGround(u)) continue;
+    for (const p of pts) {
+      const dx = u.pos.x - p.x, dz = u.pos.z - p.z;
+      if (dx * dx + dz * dz > p.radius * p.radius) continue;
+      p.presence[u.side]++;
+      (p.byPlayer ||= {})[u.owner] = (p.byPlayer[u.owner] || 0) + 1;
+    }
+  }
+  const rate = dt / CAPTURE_TIME;
+  for (const p of pts) {
+    const ua = p.presence.UA, ru = p.presence.RU;
+    p.contested = ua > 0 && ru > 0;
+    if (p.contested) { /* Fortschritt friert ein */ }
+    else if (ua || ru) {
+      const T = ua ? 'UA' : 'RU';
+      if (p.owner === T) {
+        if (p.capTeam) { p.progress -= rate * 2; if (p.progress <= 0) { p.progress = 0; p.capTeam = null; } }
+      } else if (p.capTeam && p.capTeam !== T) {
+        p.progress -= rate * 2;
+        if (p.progress <= 0) { p.progress = 0; p.capTeam = T; }
+      } else {
+        p.capTeam = T;
+        p.progress += rate;
+        if (p.progress >= 1) capture(g, sk, p, T);
+      }
+    } else if (p.capTeam) {
+      p.progress -= rate * 0.5;
+      if (p.progress <= 0) { p.progress = 0; p.capTeam = null; }
+    }
+    // Fortschrittsbogen
+    const r = p.ring;
+    if (p.capTeam && p.progress > 0) {
+      r.prog.material.color.set(p.contested ? '#ffa030' : TEAM_COLOR[p.capTeam]);
+      r.prog.geometry.setDrawRange(0, Math.round(r.segs * Math.min(1, p.progress)) * 6);
+    } else r.prog.geometry.setDrawRange(0, 0);
+  }
+}
+function capture(g, sk, p, T) {
+  const prev = p.owner;
+  p.owner = T; p.capTeam = null; p.progress = 0; p.captures++;
+  setOwnerVisual(p, T);
+  // Gutschrift: Spieler mit den meisten Einheiten im Radius
+  let best = null, bn = 0;
+  for (const [pid, n] of Object.entries(p.byPlayer || {})) { const pl = g.playerById(+pid); if (pl && pl.team === T && n > bn) { bn = n; best = pl; } }
+  if (best) best.stats.captured++;
+  sk.log.push({ t: g.time, type: 'capture', cp: p.id, name: p.name, team: T, prev, player: best?.id ?? null });
+  const ls = g.localSide;
+  if (T === ls) { g.say('Stab', `${p.name} eingenommen${best ? ` (${best.name})` : ''}!`, 3); g.audio.ui('obj'); }
+  else if (prev === ls) { g.alert(`⚠ ${p.name} verloren!`, 3); g.audio.ui('fail'); }
+  g.emit('cpCaptured', p, T, prev);
+}
+
+// ---------- Verstärkung ----------
+function nextRecipient(g, sk, team) {
+  const ps = g.playersOfTeam(team).filter((p) => !p.defeated);
+  if (!ps.length) return null;
+  for (let k = 0; k < ps.length; k++) {
+    const p = ps[(sk.rr[team] + k) % ps.length];
+    if (unitCount(g, p) < sk.popCap) { sk.rr[team] = (sk.rr[team] + k + 1) % ps.length; return p; }
+  }
+  return null;
+}
+function unitCount(g, p) { let n = 0; for (const u of g.units) if (u.alive && u.owner === p.id && !u.type.structure && !u.type.kamikaze) n++; return n; }
+function deliverReinforcements(g, sk) {
+  const summary = { UA: 0, RU: 0 };
+  let said = 0;
+  for (const cp of sk.points) {
+    if (!cp.owner) continue;
+    const team = cp.owner;
+    const p = nextRecipient(g, sk, team);
+    if (!p) { sk.log.push({ t: g.time, type: 'reinforceSkipped', cp: cp.id, team }); continue; }
+    const room = sk.popCap - unitCount(g, p);
+    const base = reinforceSize(cp);
+    const n = Math.min(base + (base >= 3 ? REINF_BONUS[team] : 0), room);
+    const types = [];
+    const q = REINF[p.role][team];
+    for (let i = 0; i < n; i++) types.push(q[(sk.reinfIdx[p.id]++) % q.length]);
+    spawnColumn(g, p, types);
+    let para = 0;
+    if (cp.kind === 'zeppelin' && room - n >= 2) { para = 2; paradrop(g, p, cp, PARA[team], para); }
+    if (cp.kind === 'zeppelin') for (const a of p.abilities) if (a.charges !== Infinity) a.charges += 1;
+    p.stats.reinf += n + para;
+    summary[team]++;
+    sk.log.push({ t: g.time, type: 'reinforce', cp: cp.id, name: cp.name, kind: cp.kind, team, player: p.id, n: n + para, types });
+    if (said < 3) { said++; g.say(team === g.localSide ? 'Stab' : 'Aufklärung', `${cp.name}: Verstärkung für Team ${TEAM_NAME[team]} (${p.name})`, 3.5); }
+  }
+  // Reserve für das unterlegene Team
+  const held = { UA: 0, RU: 0 };
+  for (const cp of sk.points) if (cp.owner) held[cp.owner]++;
+  for (const team of ['UA', 'RU']) {
+    if (held[team] >= held[other(team)] && !(held.UA === 0 && held.RU === 0)) continue;
+    for (const p of g.playersOfTeam(team)) {
+      if (p.defeated) continue;
+      let ground = 0; for (const u of g.units) if (u.owner === p.id && isGround(u)) ground++;
+      const room = sk.popCap - unitCount(g, p);
+      if (ground >= 8 || room <= 0) continue;
+      const types = RESERVE[team].slice(0, room);
+      spawnColumn(g, p, types);
+      p.stats.reinf += types.length;
+      sk.log.push({ t: g.time, type: 'reserve', team, player: p.id, n: types.length, types });
+    }
+  }
+  g.emit('abilities');
+  const ls = g.localSide;
+  g.alert(`Verstärkung! ${TEAM_NAME[ls]}: ${summary[ls]} Punkt(e) · ${TEAM_NAME[other(ls)]}: ${summary[other(ls)]} Punkt(e)`, 4);
+  g.audio.ui(summary[ls] >= summary[other(ls)] ? 'obj' : 'fail');
+  g.emit('reinforcements', summary);
+}
+// Kolonne rückt vom Kartenrand hinter dem Spawn ein
+function spawnColumn(g, p, types) {
+  const team = p.team, sp = p.spawn, half = g.terrain.half;
+  const sgn = team === 'UA' ? 1 : -1;
+  let ex = sp.x, ez = sgn * (half - 6);
+  const pf = g.pathfinder;
+  const k = g.terrain.cellIndex(ex, ez);
+  if (k < 0 || !pf.passable(k, 'ground')) { ex = sp.x; ez = sp.z; }
+  types.forEach((t, i) => {
+    g.later(0.2 + i * 0.9, () => {
+      if (g.ended) return;
+      const u = g.spawn(t, team, ex + (Math.random() - 0.5) * 2, ez, { owner: p.id, heading: team === 'UA' ? Math.PI : 0 });
+      applyFactionHp(u);
+      const col = i % 3 - 1, row = Math.floor(i / 3);
+      u.moveTo(sp.x + col * 6, sp.z - sgn * (6 + row * 6));
+    });
+  });
+}
+// Fallschirmtrupp über dem Zeppelin-Mast (sichtbarer Abwurf, Einheiten erscheinen bei der Landung)
+let _chuteGeo = null;
+function paradrop(g, p, cp, type, n) {
+  if (!_chuteGeo) { _chuteGeo = new THREE.SphereGeometry(2.2, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2); _chuteGeo.userData.shared = true; }
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, d = 5 + Math.random() * 6;
+    const x = cp.x + Math.cos(a) * d, z = cp.z + Math.sin(a) * d;
+    const grp = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: p.team === 'UA' ? 0xd8d2b0 : 0xa8b090, roughness: 0.9, side: THREE.DoubleSide });
+    const c = new THREE.Mesh(_chuteGeo, mat); c.position.y = 4.5; c.scale.y = 0.6; grp.add(c);
+    const man = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.6, 0.4), new THREE.MeshStandardMaterial({ color: 0x4a4f36 })); man.position.y = 0.8; grp.add(man);
+    const y0 = g.terrain.surface(x, z);
+    grp.position.set(x, y0 + 32, z);
+    g.world.add(grp);
+    const delay = i * 0.8;
+    g.later(delay, () => g.animations.push({
+      t: 0, dur: 5, fn: (k) => {
+        grp.position.y = y0 + 32 * (1 - k);
+        grp.rotation.y = k * 3;
+        if (k >= 1 && grp.parent) {
+          grp.parent.remove(grp);
+          if (!g.ended && !p.defeated) applyFactionHp(g.spawn(type, p.team, x, z, { owner: p.id }));
+        }
+      },
+    }));
+  }
+}
+
+// ---------- Niederlage / Sieg ----------
+function checkVictory(g, sk) {
+  const holds = { UA: false, RU: false };
+  for (const p of sk.points) if (p.owner) holds[p.owner] = true;
+  const ground = new Set();
+  for (const u of g.units) if (isGround(u)) ground.add(u.owner);
+  for (const p of g.players) {
+    if (p.defeated) continue;
+    p.waiting = !ground.has(p.id);
+    if (p.waiting && !p._waitNote && p.id === g.localPlayerId && sk.setup.victory !== 'annihilation') { p._waitNote = true; g.alert('Keine Bodeneinheiten mehr – Verstärkung/Reserve beim nächsten Countdown.', 5); }
+    if (!p.waiting) p._waitNote = false;
+    // Ausscheiden nur im Modus „Vernichtung"; bei Punkte-/Zeitsieg warten Spieler ohne Einheiten auf Verstärkung/Reserve
+    if (p.waiting && !holds[p.team] && sk.setup.victory === 'annihilation') {
+      p.defeated = true;
+      g.emit('playerDefeated', p);
+      if (p.id === g.localPlayerId) g.alert('Keine Einheiten mehr – dein Team kämpft weiter.', 5);
+      else g.say('Stab', `${p.name} (${TEAM_NAME[p.team]}) ist ausgeschaltet.`, 3);
+    }
+  }
+  const down = (t) => g.playersOfTeam(t).every((p) => p.defeated);
+  let winner, reason;
+  if (down('UA') && down('RU')) { winner = null; reason = 'Beide Teams wurden aufgerieben.'; }
+  else if (down('UA')) { winner = 'RU'; reason = 'Alle Spieler der Ukraine wurden besiegt.'; }
+  else if (down('RU')) { winner = 'UA'; reason = 'Alle Spieler Russlands wurden besiegt.'; }
+  else if (sk.pointsLimit && (sk.scores.UA >= sk.pointsLimit || sk.scores.RU >= sk.pointsLimit)) {
+    winner = sk.scores.UA === sk.scores.RU ? null : sk.scores.UA > sk.scores.RU ? 'UA' : 'RU';
+    reason = `Punkte-Limit ${sk.pointsLimit} erreicht (${sk.scores.UA} : ${sk.scores.RU}).`;
+  } else if (sk.timeLimit && g.time >= sk.timeLimit) {
+    winner = sk.scores.UA === sk.scores.RU ? null : sk.scores.UA > sk.scores.RU ? 'UA' : 'RU';
+    reason = `Zeit abgelaufen – Punktestand ${sk.scores.UA} : ${sk.scores.RU}.`;
+  } else return;
+  sk.result = { winner, reason, time: g.time, scores: { ...sk.scores } };
+  sk.log.push({ t: g.time, type: 'end', winner, reason });
+  const ls = g.localSide;
+  if (winner === ls) g.win(`Sieg für Team ${TEAM_NAME[ls]}! ${reason}`);
+  else if (winner) g.lose(`Team ${TEAM_NAME[winner]} gewinnt. ${reason}`);
+  else g.lose(`Unentschieden. ${reason}`);
+}
+
+// ---------- Animation der Punkte (pro Frame, von main.js/HUD aufgerufen) ----------
+export function animateSkirmish(g, dt) {
+  const sk = g.mission?.skirmish;
+  if (!sk || !g.active) return;
+  const t = g.time;
+  for (const p of sk.points) {
+    const m = p.unit.model;
+    const ph = p.x * 0.013 + p.z * 0.007;
+    if (m.sway) {
+      if (p.kind === 'zeppelin') m.sway.rotation.set(Math.sin(t * 0.21 + ph) * 0.025, Math.sin(t * 0.13 + ph) * 0.11, Math.sin(t * 0.33 + ph) * 0.03);
+      else m.sway.rotation.set(Math.sin(t * 0.27 + ph) * 0.05, 0, Math.sin(t * 0.19 + ph) * 0.06);
+      if (m.balloon) m.balloon.rotation.y = Math.sin(t * 0.15 + ph) * 0.4;
+    }
+    if (m.flag) { m.flag.rotation.y = Math.sin(t * 1.7 + ph) * 0.25 - 0.4; m.flag.scale.x = 1 + Math.sin(t * 3.1 + ph) * 0.04; }
+  }
+}
+
+export { MAP_PRESETS, MAP_SIZES };

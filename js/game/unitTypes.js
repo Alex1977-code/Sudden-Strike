@@ -31,6 +31,11 @@ export const W = {
   vikhr: { name: 'Vikhr-Lenkflugkörper', kind: 'atgm', range: 50, dmg: 420, reload: 9, acc: 0.8, vs: { soft: 0.2, light: 1, heavy: 1, air: 0, struct: 0.3 }, speed: 60, splash: 2, sound: 'missile', groundTargetsOnly: true, prefer: ['heavy', 'light'], straight: true },
   heli30: { name: '30-mm-Kanone', kind: 'bullet', range: 36, dmg: 24, reload: 1.2, acc: 0.5, vs: { soft: 1, light: 0.7, heavy: 0.05, air: 0.3, struct: 0.1 }, sound: 'autocannon', tracer: 'r', burst: 4, splash: 1, groundTargetsOnly: true },
   artillery: { name: '152-mm-Haubitze', kind: 'artillery', range: 220, minRange: 30, dmg: 220, reload: 11, acc: 0.5, vs: { soft: 1, light: 0.9, heavy: 0.5, air: 0, struct: 0.5 }, splash: 7, sound: 'cannon', groundTargetsOnly: true, indirect: true, spread: 9 },
+  // Gefechtsmodus (MP-T4a): russische Gegenstücke
+  sniperRU: { name: 'SV-98', kind: 'bullet', range: 42, dmg: 72, reload: 3.3, acc: 0.84, vs: { soft: 1, light: 0.05, heavy: 0, air: 0.4, struct: 0 }, sound: 'rifle', tracer: null },
+  kornet: { name: '9M133 Kornet', kind: 'atgm', range: 50, dmg: 480, reload: 11, acc: 0.86, vs: { soft: 0.3, light: 1, heavy: 1, air: 0, struct: 0.4 }, speed: 40, splash: 2.5, sound: 'missile', groundTargetsOnly: true, prefer: ['heavy', 'light'], straight: true },
+  igla: { name: '9K38 Igla', kind: 'sam', range: 40, dmg: 360, reload: 7, acc: 0.78, vs: { air: 1 }, canAir: true, airOnly: true, airAcc: 0.7, speed: 88, sound: 'missile', ammo: 4, reloadAmmo: 30, intercept: { drone: 0.7, cruise: 0.28 } },
+  spetsnaz: { name: 'AK-12 (Speznas)', kind: 'bullet', range: 27, dmg: 10, reload: 1.15, acc: 0.68, vs: { soft: 1, light: 0.08, heavy: 0, air: 0.5, struct: 0.02 }, canAir: true, airAcc: 0.16, sound: 'rifle', tracer: 'r', burst: 3 },
   fpv: { name: 'FPV-Gefechtskopf', kind: 'kamikaze', range: 3, dmg: 480, reload: 0, acc: 1, vs: { soft: 0.6, light: 1, heavy: 1, air: 0, struct: 0.4 }, topAttack: true, splash: 3, groundTargetsOnly: true, prefer: ['heavy', 'light'] },
   lancet: { name: 'Lancet-Gefechtskopf', kind: 'kamikaze', range: 3, dmg: 420, reload: 0, acc: 1, vs: { soft: 0.6, light: 1, heavy: 0.9, air: 0, struct: 0.4 }, topAttack: true, splash: 3, groundTargetsOnly: true, prefer: ['heavy', 'light'] },
   shahed: { name: 'Shahed-Gefechtskopf', kind: 'kamikaze', range: 4, dmg: 700, reload: 0, acc: 1, vs: { soft: 1, light: 1, heavy: 0.7, air: 0, struct: 1 }, splash: 7, groundTargetsOnly: true, prefer: ['struct'] },
@@ -78,6 +83,14 @@ export const UNIT_TYPES = {
   ka52: { name: 'Ka-52', icon: '🚁', cls: 'air', model: 'heli', hp: 520, armor: 'air', speed: 14, sight: 46, radius: 4, weapons: ['vikhr', 'heli30'], alt: 18, turnRate: 1.4, turretRate: 2 },
   boat: { name: 'Patrouillenboot', icon: '🚢', cls: 'naval', model: 'boat', hp: 600, armor: 'light', speed: 9, sight: 46, radius: 6, weapons: ['boatGun'], turnRate: 0.7, turretRate: 2.5, airSight: 50 },
 
+  // Gefechtsmodus (MP-T4a): Gegenstücke zu den ukrainischen Spezialisten
+  e_sniper: { name: 'Scharfschütze (SV-98)', icon: '🎯', cls: 'inf', model: 'soldier', weaponModel: 'sniper', hp: 50, armor: 'soft', speed: 3.9, sight: 46, radius: 0.8, weapons: ['sniperRU'], conceal: 0.68, desc: 'Gut getarnt, große Sichtweite.' },
+  e_atgm: { name: 'Kornet-Team', icon: '🚀', cls: 'inf', model: 'soldier', weaponModel: 'javelin', hp: 60, armor: 'soft', speed: 3.6, sight: 36, radius: 0.8, weapons: ['kornet', 'rifleRU'], conceal: 0.38, desc: 'Lenkflugkörper-Panzerabwehr mit großer Reichweite (Direktangriff).' },
+  e_recon: { name: 'Orlan-/Lancet-Operator', icon: '🎮', cls: 'inf', model: 'soldier', weaponModel: 'tablet', hp: 55, armor: 'soft', speed: 3.9, sight: 32, radius: 0.8, weapons: ['rifleRU'], conceal: 0.5, desc: 'Startet Lancet-Kamikazedrohnen (Fähigkeit). Schützen!' },
+  e_igla: { name: 'Igla-Team', icon: '🎯', cls: 'inf', model: 'soldier', weaponModel: 'javelin', hp: 60, armor: 'soft', speed: 3.8, sight: 33, radius: 0.8, weapons: ['igla', 'rifleRU'], conceal: 0.38, airSight: 54, desc: 'Schultergestützte Flugabwehr gegen Drohnen.' },
+  e_spetsnaz: { name: 'Speznas', icon: '🗡️', cls: 'inf', model: 'soldier', hp: 115, armor: 'soft', speed: 4.9, sight: 40, radius: 0.8, weapons: ['spetsnaz', 'charge'], conceal: 0.72, desc: 'Elite-Infanterie mit Sprengladungen.' },
+  ua_truck: { name: 'KrAZ-Lkw', icon: '🚚', cls: 'veh', model: 'truck', hp: 190, armor: 'light', speed: 10, sight: 24, radius: 2.8, weapons: [], turnRate: 1.8, desc: 'Nachschub-Lkw (Logistik).' },
+
   // ======== Gebäude / Ziele ========
   hq: { name: 'Gefechtsstand', icon: '⛺', cls: 'struct', model: 'hq', hp: 1400, armor: 'struct', sight: 30, radius: 5, weapons: [] },
   depot: { name: 'Munitionsdepot', icon: '📦', cls: 'struct', model: 'depot', hp: 1100, armor: 'struct', sight: 10, radius: 6, weapons: [], secondary: true },
@@ -89,6 +102,14 @@ export const UNIT_TYPES = {
   railcar: { name: 'Munitionswaggon', icon: '🚃', cls: 'struct', model: 'rail', hp: 700, armor: 'struct', sight: 10, radius: 6, weapons: [], secondary: true },
   bridge_road: { name: 'Straßenbrücke (Segment)', icon: '🌉', cls: 'struct', model: 'bridge_road', hp: 5200, armor: 'struct', sight: 10, radius: 14, weapons: [], spanLen: 28, bridge: true },
   bridge_rail: { name: 'Eisenbahnbrücke (Segment)', icon: '🌉', cls: 'struct', model: 'bridge_rail', hp: 4200, armor: 'struct', sight: 10, radius: 14, weapons: [], spanLen: 28, bridge: true },
+  // Eroberungspunkte (Gefechtsmodus): neutral, unzerstörbar, kein Ziel; cpKind = Art aus maps.js
+  cp_zeppelin: { name: 'Zeppelin', icon: '🎈', cls: 'struct', model: 'cp_zeppelin', hp: 1e9, armor: 'struct', sight: 0, radius: 2.2, weapons: [], neutral: true, cp: true },
+  cp_aerostat: { name: 'Fesselballon', icon: '🎈', cls: 'struct', model: 'cp_aerostat', hp: 1e9, armor: 'struct', sight: 0, radius: 1.6, weapons: [], neutral: true, cp: true },
+  cp_airfield: { name: 'Flugfeld', icon: '✈️', cls: 'struct', model: 'cp_airfield', hp: 1e9, armor: 'struct', sight: 0, radius: 1, weapons: [], neutral: true, cp: true },
+  cp_depot: { name: 'Depot', icon: '📦', cls: 'struct', model: 'cp_depot', hp: 1e9, armor: 'struct', sight: 0, radius: 1, weapons: [], neutral: true, cp: true },
+  cp_radio: { name: 'Funkturm', icon: '📡', cls: 'struct', model: 'cp_radio', hp: 1e9, armor: 'struct', sight: 0, radius: 1, weapons: [], neutral: true, cp: true },
+  cp_railway: { name: 'Bahnhof', icon: '🚉', cls: 'struct', model: 'cp_railway', hp: 1e9, armor: 'struct', sight: 0, radius: 1, weapons: [], neutral: true, cp: true },
+  cp_village: { name: 'Dorf', icon: '🏠', cls: 'struct', model: 'cp_village', hp: 1e9, armor: 'struct', sight: 0, radius: 1, weapons: [], neutral: true, cp: true },
   house: { name: 'Gebäude', icon: '🏠', cls: 'struct', model: 'house', hp: 900, armor: 'struct', sight: 0, radius: 4, weapons: [], neutral: true },
 };
 for (const [k, t] of Object.entries(UNIT_TYPES)) {

@@ -43,7 +43,9 @@ export class HUD {
     game.on('alert', (t, d) => this.showAlert(t, d));
     game.on('localPlayer', () => { this.refreshSelection(); this.refreshAbilities(); });
     game.on('players', () => { this.refreshSelection(); this.refreshAbilities(); });
-    game.on('loaded', () => { this.refreshObjectives(); this.refreshSelection(); this.refreshAbilities(); this.sayQueue = []; this.subEl.classList.add('hidden'); this.alertEl.classList.add('hidden'); });
+    game.on('loaded', () => { this.refreshObjectives(); this.refreshSelection(); this.refreshAbilities(); this.sayQueue = []; this.subEl.classList.add('hidden'); this.alertEl.classList.add('hidden'); this.setupSkirmish(); });
+    game.on('cpCaptured', () => { this.skDirty = true; });
+    game.on('playerDefeated', () => { this.skDirty = true; });
     game.on('underAttack', (u) => {
       const now = performance.now();
       if (now - (this.lastAttackPing || 0) > 12000 && !this._onScreen(u)) { this.lastAttackPing = now; this.attackPing = { x: u.pos.x, z: u.pos.z, t: 3 }; }
@@ -64,6 +66,7 @@ export class HUD {
     this.mm.addEventListener('pointerdown', (e) => this._minimapClick(e));
     this.mm.addEventListener('pointermove', (e) => { if (e.buttons & 1) this._minimapClick(e, true); });
     this.mm.addEventListener('contextmenu', (e) => e.preventDefault());
+    $('sk-teams-btn')?.addEventListener('click', () => { $('sk-teams').classList.toggle('open'); this.skDirty = true; });
   }
   _resize() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -185,6 +188,22 @@ export class HUD {
       ctx.drawImage(this.mmFog, 0, 0, S, S);
     }
     const ls = g.localSide;
+    // Eroberungspunkte (Gefecht): Kreis in Besitzerfarbe, Bogen = Eroberungsfortschritt
+    const sk = g.mission?.skirmish;
+    if (sk) {
+      for (const p of sk.points) {
+        const [x, y] = toM(p.x, p.z);
+        const r = Math.max(5, (p.radius / T.size) * S);
+        ctx.fillStyle = (p.owner ? SK_COL[p.owner] : SK_COL.N) + '66';
+        ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = p.owner ? SK_COL[p.owner] : '#c8ccd0';
+        ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.stroke();
+        if (p.capTeam && p.progress > 0) { ctx.strokeStyle = p.contested ? '#ffa030' : SK_COL[p.capTeam]; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, r + 2.5, -Math.PI / 2, -Math.PI / 2 + p.progress * 6.2832); ctx.stroke(); }
+        ctx.fillStyle = '#fff'; ctx.font = '700 9px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(SK_ICON[p.kind] || '•', x, y + 0.5);
+        ctx.textBaseline = 'alphabetic';
+      }
+    }
     for (const u of g.units) {
       if (!u.alive || u.side === 'N') continue;
       if (u.side !== ls && !u.root.visible) continue;
@@ -267,6 +286,25 @@ export class HUD {
         if (u.lifetime) { ctx.fillStyle = '#ffd500'; ctx.font = '10px system-ui'; ctx.textAlign = 'center'; ctx.fillText(`🔋${Math.ceil(u.lifetime)}s`, x, y + 15); }
       }
     }
+    // Eroberungspunkte: Name + Fortschritt über dem Punkt
+    const skp = g.mission?.skirmish;
+    if (skp) {
+      for (const p of skp.points) {
+        v.set(p.x, g.terrain.surface(p.x, p.z) + 11, p.z).project(cam);
+        if (v.z > 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) continue;
+        const x = (v.x * 0.5 + 0.5) * W, y = (-v.y * 0.5 + 0.5) * H;
+        const col = p.owner ? SK_COL[p.owner] : '#c8ccd0';
+        ctx.font = '700 12px system-ui'; ctx.textAlign = 'center';
+        const label = `${p.name}${p.contested ? ' ⚔' : ''}`;
+        ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillText(label, x + 1, y + 1);
+        ctx.fillStyle = col; ctx.fillText(label, x, y);
+        if (p.capTeam && p.progress > 0) {
+          const bw = 64;
+          ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - bw / 2 - 1, y + 4, bw + 2, 6);
+          ctx.fillStyle = p.contested ? '#ffa030' : SK_COL[p.capTeam]; ctx.fillRect(x - bw / 2, y + 5, bw * Math.min(1, p.progress), 4);
+        }
+      }
+    }
     // Missionsmarker (Zonen) als Text
     for (const m of g.mission?.markers || []) {
       if (m.hidden || !m.label) continue;
@@ -289,6 +327,7 @@ export class HUD {
     if (this.mmT <= 0) { this.mmT = 0.15; this.drawMinimap(); this._updateAbilityState(); this._refreshSelHp(); }
     this.drawOverlay();
     this.timerEl.textContent = g.countdown ? `${g.countdown.label} ${fmtTime(g.countdown.t)}` : '';
+    if (g.mission?.skirmish) this.updateSkirmish(dt);
     if (this.settings.showFps) {
       const gr = g.gr;
       this.fpsEl.textContent = `${Math.round(gr.fps)} FPS · ${gr.intW}×${gr.intH} → ${gr.outW}×${gr.outH} (${Math.round(gr.renderScale * 100)} %)`;
@@ -304,4 +343,70 @@ export class HUD {
     }
   }
   togglePause() { this.onTogglePause && this.onTogglePause(); }
+
+  // ---------- Gefechtsmodus: Punkteleiste, Verstärkungs-Countdown, Punktestand, Team-/Spielerliste ----------
+  setupSkirmish() {
+    const sk = this.game.mission?.skirmish;
+    const bar = $('skbar'), teams = $('sk-teams');
+    this.el.classList.toggle('skirmish', !!sk);
+    if (!bar) return;
+    bar.classList.toggle('hidden', !sk); teams.classList.toggle('hidden', !sk);
+    this.lastBeep = null;
+    if (!sk) return;
+    if (window.innerWidth > 900 && window.innerHeight > 560) teams.classList.add('open'); else teams.classList.remove('open');
+    $('sk-cps').innerHTML = sk.points.map((p) => `<div class="cp" data-id="${p.id}" title="${p.name}"><i class="ring"></i><b>${SK_ICON[p.kind]}</b></div>`).join('');
+    this.skCpEls = [...$('sk-cps').children];
+    this.skCpEls.forEach((el, i) => { el.onclick = () => { const p = sk.points[i]; this.game.camera.focus(p.x, p.z); }; });
+    this.skDirty = true; this.skT = 0;
+  }
+  updateSkirmish(dt) {
+    const g = this.game, sk = g.mission.skirmish;
+    // Countdown jedes Frame (Ton bei 30 s und in den letzten 10 s)
+    const T = Math.max(0, sk.reinfT);
+    const sec = Math.ceil(T);
+    const rEl = $('sk-reinf');
+    rEl.textContent = `Verstärkung in ${fmtTime(T)}`;
+    rEl.classList.toggle('urgent', T <= 30);
+    if (this.lastBeep !== sec && !g.paused) {
+      if (this.lastBeep !== null && (sec === 30 || (sec <= 10 && sec >= 1))) this._beep(sec <= 3 ? 1320 : sec === 30 ? 660 : 990);
+      this.lastBeep = sec;
+    }
+    this.skT -= dt;
+    if (this.skT > 0 && !this.skDirty) return;
+    this.skT = 0.2; this.skDirty = false;
+    sk.points.forEach((p, i) => {
+      const el = this.skCpEls[i]; if (!el) return;
+      const col = p.owner ? SK_COL[p.owner] : SK_COL.N;
+      el.style.background = col;
+      el.style.borderColor = p.owner === 'UA' ? '#ffd500' : p.owner === 'RU' ? '#ffb0b0' : '#c8ccd0';
+      el.classList.toggle('contested', p.contested);
+      el.classList.toggle('big', p.kind === 'zeppelin');
+      const ring = el.firstChild;
+      if (p.capTeam && p.progress > 0) ring.style.background = `conic-gradient(${p.contested ? '#ffa030' : SK_COL[p.capTeam]} ${Math.round(p.progress * 360)}deg, transparent 0)`;
+      else ring.style.background = 'none';
+      el.title = `${p.name} – ${p.owner ? (p.owner === 'UA' ? 'Ukraine' : 'Russland') : 'neutral'}${p.contested ? ' (umkämpft)' : ''}`;
+    });
+    const ls = g.localSide, os = ls === 'UA' ? 'RU' : 'UA';
+    let extra = '';
+    if (sk.pointsLimit) extra = `<span class="lim">Ziel ${sk.pointsLimit}</span>`;
+    else if (sk.timeLimit) extra = `<span class="lim">⏱ ${fmtTime(Math.max(0, sk.timeLimit - g.time))}</span>`;
+    $('sk-score').innerHTML = `<span style="color:${SK_COL[ls]}">${ls} ${sk.scores[ls]}</span> : <span style="color:${SK_COL[os]}">${sk.scores[os]} ${os}</span>${extra}`;
+    const tl = $('sk-teams');
+    if (!tl.classList.contains('open')) return;
+    const rows = [];
+    for (const team of [ls, os]) {
+      const held = sk.points.filter((p) => p.owner === team).length;
+      rows.push(`<div class="tl-head" style="color:${SK_COL[team]}">${team === 'UA' ? 'Ukraine' : 'Russland'} · ${held} Punkt(e) · ${sk.scores[team]}</div>`);
+      for (const p of g.playersOfTeam(team)) {
+        let n = 0; for (const u of g.units) if (u.alive && u.owner === p.id && !u.type.structure && !u.type.kamikaze) n++;
+        const st = p.defeated ? ' defeated' : p.waiting ? ' waiting' : '';
+        rows.push(`<div class="tl-row${p.id === g.localPlayerId ? ' me' : ''}${st}"><i style="background:${p.color}"></i><span class="nm">${SK_ROLE[p.role] || ''} ${p.name}</span><span class="n">${n}</span><span class="kl">${p.stats.kills}/${p.stats.lost}</span></div>`);
+      }
+    }
+    $('sk-teamlist').innerHTML = rows.join('');
+  }
+  _beep(f) { const a = this.game.audio; if (!a.ctx) return; a._tone({ freq: f, dur: 0.12, type: 'square', gain: 0.06 }); }
 }
+const SK_COL = { UA: '#2f7de1', RU: '#e5484d', N: '#8c9096' };
+const SK_ICON = { zeppelin: 'Z', aerostat: 'B', airfield: 'F', depot: 'D', radio: 'T', railway: 'H', village: 'O' };
+const SK_ROLE = { armor: '🛡️', infantry: '🪖', support: '💥', logistics: '🚚' };

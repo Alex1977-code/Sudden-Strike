@@ -365,7 +365,7 @@ export class Game {
       }
       case 'attack': {
         const t = this.unitById(cmd.target);
-        if (!units.length || !t || !t.alive || t.side === p.team) return false;
+        if (!units.length || !t || !t.alive || t.side === p.team || t.invulnerable) return false;
         // Ziel muss für das Team aufgeklärt sein (Strukturen: erkundet)
         if (t.side !== 'N' && !(t.type.structure ? this.fowFor(p.team).isExplored(t.pos.x, t.pos.z) : t.visibleTo(p.team))) return false;
         ok = this.issueOrder(units, t.pos.x, t.pos.z, t, { playerId: p.id });
@@ -691,14 +691,31 @@ export class Game {
     if (teamDown(ls)) this.lose('Euer Team wurde besiegt.');
     else if (teamDown(otherTeam(ls))) this.win('Alle gegnerischen Spieler wurden besiegt.');
   }
+  // Abstoßung zwischen Bodeneinheiten; einfaches räumliches Raster (Zellen 10 m) statt O(n²) über alle Einheiten
   separate() {
-    const us = this.units;
-    for (let i = 0; i < us.length; i++) {
-      const a = us[i];
-      if (!a.alive || a.type.structure || a.type.air) continue;
-      for (let j = i + 1; j < us.length; j++) {
-        const b = us[j];
-        if (!b.alive || b.type.structure || b.type.air) continue;
+    const CS = 10;
+    const grid = this._sepGrid || (this._sepGrid = new Map());
+    for (const arr of grid.values()) arr.length = 0;
+    const list = this._sepList || (this._sepList = []);
+    list.length = 0;
+    for (const u of this.units) {
+      if (!u.alive || u.type.structure || u.type.air) continue;
+      const cx = Math.floor(u.pos.x / CS), cz = Math.floor(u.pos.z / CS);
+      u._sepI = list.length; u._sepCx = cx; u._sepCz = cz;
+      list.push(u);
+      const key = (cx + 4096) * 8192 + (cz + 4096);
+      let arr = grid.get(key);
+      if (!arr) grid.set(key, (arr = []));
+      arr.push(u);
+    }
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      for (let ox = -1; ox <= 1; ox++) for (let oz = -1; oz <= 1; oz++) {
+      const cell = grid.get((a._sepCx + ox + 4096) * 8192 + (a._sepCz + oz + 4096));
+      if (!cell) continue;
+      for (let j = 0; j < cell.length; j++) {
+        const b = cell[j];
+        if (b._sepI <= i || !a.alive) continue;
         const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z;
         const r = (a.radius + b.radius) * 0.8;
         if (Math.abs(dx) > r || Math.abs(dz) > r) continue;
@@ -711,6 +728,7 @@ export class Game {
         const pb = this._canStand(b, b.pos.x + nx * push * (1 - wa) * 2, b.pos.z + nz * push * (1 - wa) * 2);
         if (pa) { a.pos.x -= nx * push * wa * 2 * 0.5; a.pos.z -= nz * push * wa * 2 * 0.5; }
         if (pb) { b.pos.x += nx * push * (1 - wa) * 2 * 0.5; b.pos.z += nz * push * (1 - wa) * 2 * 0.5; }
+      }
       }
     }
   }
@@ -767,7 +785,7 @@ export class Game {
       // Gebäude (Häuser) per Raycast
       const ray = new THREE.Raycaster();
       ray.setFromCamera(new THREE.Vector2((sx / w) * 2 - 1, -(sy / h) * 2 + 1), cam);
-      const houses = this.units.filter((u) => u.side === 'N' && u.alive).map((u) => u.root);
+      const houses = this.units.filter((u) => u.side === 'N' && u.alive && !u.type.cp).map((u) => u.root);
       const hit = ray.intersectObjects(houses, true)[0];
       if (hit) { let o = hit.object; while (o && !o.userData.unit) o = o.parent; if (o) best = o.userData.unit; }
     }

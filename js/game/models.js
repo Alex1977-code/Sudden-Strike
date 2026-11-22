@@ -1299,6 +1299,207 @@ export function bridgeDecor(x0, x1, z, deckY, seaLevel, gapCenters = [], gapLen 
   return g;
 }
 
+// ---------------- Eroberungspunkte (Gefechtsmodus) ----------------
+// Besitzerfarben: neutral grau, UA blau/gelb, RU rot. Jedes Modell bekommt eigene Farbmaterialien
+// (setOwner(team)), die Teile sind von der Zusammenführung ausgenommen (noWreck).
+const CP_COL = { N: [0x8c9096, 0x8c9096], UA: [0x2f7de1, 0xffd500], RU: [0xd42a2a, 0xd42a2a] };
+const _bv = new THREE.Vector3(), _bq = new THREE.Quaternion(), _by = new THREE.Vector3(0, 1, 0);
+// Zylinder zwischen zwei Punkten (Streben, Seile)
+function beam(p, a, b, r, mat, s = 5) {
+  _bv.set(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+  const len = _bv.length();
+  const m = add(p, cylG(r, r, 1, s), mat, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
+  m.scale.set(1, len, 1);
+  m.quaternion.copy(_bq.setFromUnitVectors(_by, _bv.normalize()));
+  return m;
+}
+function ownerMats() {
+  const a = new THREE.MeshStandardMaterial({ color: CP_COL.N[0], roughness: 0.7, side: THREE.DoubleSide });
+  const b = new THREE.MeshStandardMaterial({ color: CP_COL.N[1], roughness: 0.7, side: THREE.DoubleSide });
+  return { a, b, set(team) { const c = CP_COL[team] || CP_COL.N; a.color.setHex(c[0]); b.color.setHex(c[1]); const em = team === 'N' ? 0 : 0.18; a.emissive.setHex(c[0]).multiplyScalar(em); b.emissive.setHex(c[1]).multiplyScalar(em); } };
+}
+const ownerPart = (m) => { m.userData.noWreck = true; m.castShadow = true; return m; };
+// Fahnenmast mit zweigeteilter Fahne (oben a, unten b) und Farbband
+function flagMast(g, om, x, z, h = 9, y0 = 0) {
+  cyl(g, 0.09, 0.12, h, M.darkMetal, x, y0 + h / 2, z, 0, 0, 0, 6);
+  add(g, sphG(0.16, 8, 6), M.rim, x, y0 + h + 0.1, z);
+  box(g, 0.6, 0.25, 0.6, M.concreteDark, x, y0 + 0.12, z);
+  const flag = new THREE.Group(); flag.position.set(x, y0 + h - 1.0, z); g.add(flag);
+  ownerPart(add(flag, boxG(2.8, 0.9, 0.04), om.a, 1.45, 0.45, 0, 0, 0, 0));
+  ownerPart(add(flag, boxG(2.8, 0.9, 0.04), om.b, 1.45, -0.45, 0, 0, 0, 0));
+  ownerPart(add(g, cylG(0.2, 0.2, 1.4, 10), om.b, x, y0 + 2.2, z));
+  return flag;
+}
+function latticeMast(g, H, w0, w1, mat, legs = 4, step = 2.8) {
+  const corner = (k, y) => { const w = w0 + (w1 - w0) * (y / H); const a = (k / legs) * Math.PI * 2 + Math.PI / legs; return [Math.cos(a) * w, y, Math.sin(a) * w]; };
+  for (let k = 0; k < legs; k++) beam(g, corner(k, 0), corner(k, H), 0.14, mat);
+  for (let y = 0; y < H - 0.1; y += step) {
+    const y1 = Math.min(H, y + step);
+    for (let k = 0; k < legs; k++) {
+      const n = (k + 1) % legs;
+      beam(g, corner(k, y1), corner(n, y1), 0.06, mat, 4);
+      beam(g, corner(k, y), corner(n, y1), 0.05, mat, 4);
+    }
+  }
+}
+function capturePoint(kind) {
+  const g = new THREE.Group();
+  const om = ownerMats();
+  const r = { root: g, height: 6, setOwner: (t) => om.set(t), owner: om, rotors: [] };
+  if (!M.envelope) {
+    M.envelope = new THREE.MeshStandardMaterial({ color: 0x9da29b, roughness: 0.6, metalness: 0.3 });
+    M.envelopeRib = new THREE.MeshStandardMaterial({ color: 0x7d827c, roughness: 0.6, metalness: 0.4 });
+    M.balloon = new THREE.MeshStandardMaterial({ color: 0xc4c7c0, roughness: 0.7, metalness: 0.05 });
+    M.sock = new THREE.MeshStandardMaterial({ color: 0xff7a1a, roughness: 0.8, side: THREE.DoubleSide });
+    M.rope = new THREE.MeshStandardMaterial({ color: 0x3a3630, roughness: 0.9 });
+  }
+  if (kind === 'zeppelin') {
+    // Ankermast (Gittermast) mit Plattform
+    const H = 22;
+    latticeMast(g, H, 2.2, 0.7, M.darkMetal);
+    cyl(g, 1.3, 1.3, 0.3, M.darkMetal, 0, H + 0.15, 0, 0, 0, 0, 12);
+    cyl(g, 0.35, 0.55, 1.4, M.grey, 0, H + 1.0, 0, 0, 0, 0, 8);
+    add(g, sphG(0.22, 8, 6), M.redLight, 0, H + 1.9, 0, 0, 0, 0, false);
+    // Seile vom Mastkopf zu Bodenankern + Anker
+    for (let k = 0; k < 4; k++) {
+      const a = k * Math.PI / 2 + Math.PI / 4;
+      const ax = Math.cos(a) * 11, az = Math.sin(a) * 11;
+      beam(g, [0, H - 0.5, 0], [ax, 0.3, az], 0.05, M.rope, 4);
+      box(g, 1.0, 0.6, 1.0, M.concreteDark, ax, 0.3, az);
+    }
+    sandbags(g, 0, 3.4, 5, 0, 2); sandbags(g, 0, -3.4, 5, 0, 2);
+    for (let i = 0; i < 3; i++) box(g, 1.3, 0.8, 0.9, M.crate, 4.5 + i * 1.4, 0.4, -3.0);
+    // Farbband (Banner) am Mast
+    ownerPart(add(g, boxG(1.4, 3.0, 0.05), om.a, 0, 9.5, 1.95));
+    ownerPart(add(g, boxG(1.4, 3.0, 0.05), om.b, 0, 6.5, 1.75));
+    // Fahne auf dem Mastkopf
+    const flag = new THREE.Group(); flag.position.set(0, H + 4.2, 0); g.add(flag);
+    cyl(g, 0.07, 0.07, 4.2, M.darkMetal, 0, H + 2.4, 0, 0, 0, 0, 5);
+    ownerPart(add(flag, boxG(3.2, 1.0, 0.05), om.a, 1.65, 0.5, 0));
+    ownerPart(add(flag, boxG(3.2, 1.0, 0.05), om.b, 1.65, -0.5, 0));
+    r.flag = flag;
+    // Luftschiff: Drehpunkt am Mastkopf, Rumpf liegt in −z
+    const sway = new THREE.Group(); sway.position.set(0, H + 1.0, 0); g.add(sway);
+    const L = 17, R = 4.6, cz = -L - 0.3;
+    const hull = add(sway, sphG(1, 28, 16), M.envelope, 0, -0.3, cz);
+    hull.scale.set(R, R, L);
+    const prof = (z) => R * Math.sqrt(Math.max(0, 1 - ((z - cz) / L) ** 2));
+    for (const z of [-5, -10, -15, -20, -25, -30]) {
+      const rr = prof(z) + 0.04;
+      const t = add(sway, new THREE.TorusGeometry(rr, 0.07, 5, 32), M.envelopeRib, 0, -0.3, z);
+      t.castShadow = false;
+    }
+    // Besitzer-Farbband um den Rumpf
+    const bz = -27.2, br = prof(bz) + 0.06;
+    const band = ownerPart(add(sway, new THREE.CylinderGeometry(br, prof(bz - 1.4) + 0.06, 1.4, 28, 1, true), om.b, 0, -0.3, bz - 0.7, Math.PI / 2, 0, 0));
+    band.castShadow = false;
+    // Leitwerk (Kreuzleitwerk) – oben in Besitzerfarbe
+    const tz = cz - L + 4.6;
+    ownerPart(add(sway, boxG(0.25, 4.0, 5.2), om.a, 0, prof(tz) + 1.6, tz));
+    box(sway, 0.25, 4.0, 5.2, M.envelopeRib, 0, -prof(tz) - 2.2, tz);
+    box(sway, 4.2, 0.25, 5.2, M.envelopeRib, prof(tz) + 1.7, -0.3, tz);
+    box(sway, 4.2, 0.25, 5.2, M.envelopeRib, -prof(tz) - 1.7, -0.3, tz);
+    // Gondel mit Fenstern und Streben
+    const gz = -13;
+    box(sway, 2.2, 1.7, 7.5, M.grey, 0, -R - 1.4, gz);
+    box(sway, 2.25, 0.5, 6.2, M.glass, 0, -R - 1.1, gz);
+    add(sway, sphG(1.1, 10, 6), M.grey, 0, -R - 1.4, gz + 3.7).scale.set(1, 0.78, 0.8);
+    for (const dz of [-2.8, 2.8]) for (const s of [-1, 1]) beam(sway, [s * 0.9, -R - 0.6, gz + dz], [s * 1.6, -R + 0.6, gz + dz * 1.2], 0.06, M.darkMetal, 4);
+    // Motorgondeln mit Propellern
+    for (const s of [-1, 1]) {
+      const ex = s * (R + 0.6), ez = -21;
+      cyl(sway, 0.55, 0.4, 2.6, M.grey, ex, -2.6, ez, Math.PI / 2, 0, 0, 10);
+      beam(sway, [ex, -2.4, ez], [s * (R - 0.8), -1.8, ez], 0.08, M.darkMetal, 4);
+      const pr = add(sway, cylG(1.3, 1.3, 0.03, 18), M.rotor, ex, -2.6, ez - 1.5, Math.PI / 2, 0, 0, false);
+      pr.userData.noWreck = true;
+      r.rotors.push(pr);
+    }
+    // Halteleinen vom Rumpf nach unten (schwingen mit)
+    for (const [x, z] of [[2.5, -9], [-2.5, -9], [2.8, -24], [-2.8, -24]]) beam(sway, [x, -R * 0.7, z], [x * 2.2, -H - 0.8, z * 0.98], 0.035, M.rope, 3);
+    r.sway = sway;
+    r.height = 28;
+  } else if (kind === 'aerostat') {
+    // Seilwinde (Lkw-Aufbau) + Fesselballon
+    box(g, 2.6, 1.4, 4.2, M.camoUA, 0, 0.9, 0);
+    cyl(g, 0.7, 0.7, 2.2, M.darkMetal, 0, 1.9, 0.6, 0, 0, Math.PI / 2, 12);
+    for (const s of [-1, 1]) for (const z of [-1.4, 1.4]) wheel(g, 0.45, 0.35, s * 1.3, 0.45, z);
+    sandbags(g, 0, -3.5, 5, 0, 2);
+    const sway = new THREE.Group(); sway.position.set(0, 2.4, 0.6); g.add(sway);
+    const H = 30;
+    beam(sway, [0, 0, 0], [0, H - 2.4, 1.5], 0.05, M.rope, 4);
+    const bal = new THREE.Group(); bal.position.set(0, H, 1.5); sway.add(bal);
+    const b = add(bal, sphG(1, 24, 14), M.balloon, 0, 0, 0); b.scale.set(2.5, 2.5, 6);
+    const band = ownerPart(add(bal, new THREE.CylinderGeometry(2.48, 2.48, 1.2, 24, 1, true), om.b, 0, 0, 1.0, Math.PI / 2, 0, 0)); band.castShadow = false;
+    for (let k = 0; k < 3; k++) {
+      const a = k * (Math.PI * 2 / 3);
+      const fin = new THREE.Group(); fin.rotation.z = a; fin.position.z = -4.6; bal.add(fin);
+      const f = add(fin, sphG(1, 10, 6), k === 0 ? om.a : M.balloon, 0, 2.6, 0); f.scale.set(0.35, 1.6, 1.6);
+      if (k === 0) ownerPart(f);
+    }
+    add(bal, sphG(0.45, 10, 6), M.darkMetal, 0, -2.6, 1.2); // Sensorkugel
+    for (const s of [-1, 1]) beam(bal, [0, -2.2, 1.2], [s * 1.2, -0.8, 1.2], 0.03, M.rope, 3);
+    r.sway = sway; r.balloon = bal;
+    r.flag = flagMast(g, om, 4.5, 2.5, 8);
+    r.height = 34;
+  } else if (kind === 'airfield') {
+    // lokale x-Achse = Piste, +z = Hangarseite (vom Generator gesetzt)
+    box(g, 3.2, 7, 3.2, M.concrete, 14, 3.5, -14);
+    box(g, 4.4, 2.4, 4.4, M.glass, 14, 8.2, -14);
+    box(g, 4.8, 0.3, 4.8, M.concreteDark, 14, 9.55, -14);
+    cyl(g, 0.05, 0.05, 3, M.darkMetal, 15, 11.2, -14.5, 0, 0, 0, 4);
+    radarDish(g, 13, 10.2, -13.2);
+    // Windsack
+    cyl(g, 0.06, 0.06, 6, M.darkMetal, -18, 3, -10, 0, 0, 0, 5);
+    add(g, cylG(0.55, 0.25, 2.4, 10, 1, true), M.sock, -18 + 1.2, 5.6, -10, 0, 0, Math.PI / 2 + 0.25);
+    // Pistenbefeuerung
+    for (let i = -3; i <= 3; i++) for (const s of [-1, 1]) box(g, 0.3, 0.25, 0.3, M.headlight, i * 10, 0.12, s * 5.6);
+    for (let i = 0; i < 4; i++) cyl(g, 0.4, 0.4, 0.95, i % 2 ? M.era : M.sand, 6 + i * 1.0, 0.48, -11, 0, 0, 0, 10);
+    r.flag = flagMast(g, om, -3, -9, 10);
+    r.height = 11;
+  } else if (kind === 'depot') {
+    for (const [ox, oz] of [[8, -8], [-8, 8]]) {
+      for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+        box(g, 2.2, 1.2, 1.3, M.crate, ox - 1.2 + i * 2.4, 0.6, oz - 0.8 + j * 1.6);
+        if ((i + j) % 2 === 0) box(g, 2.2, 1.2, 1.3, M.crate, ox - 1.2 + i * 2.4, 1.8, oz - 0.8 + j * 1.6);
+      }
+      for (let i = 0; i < 3; i++) cyl(g, 0.38, 0.38, 0.95, i % 2 ? M.era : M.sand, ox + 3.6, 0.48, oz - 1 + i * 0.9, 0, 0, 0, 10);
+      box(g, 6.5, 0.12, 4.6, M.tent, ox, 3.0, oz, 0.05, 0, 0);
+      for (const dx of [-3, 3]) for (const dz of [-2.1, 2.1]) cyl(g, 0.07, 0.07, 3, M.wood, ox + dx, 1.5, oz + dz, 0, 0, 0, 4);
+    }
+    r.flag = flagMast(g, om, 0, 0, 9);
+    r.height = 9;
+  } else if (kind === 'radio') {
+    const t = new THREE.Group(); t.position.set(-5, 0, 5); g.add(t);
+    latticeMast(t, 28, 1.3, 0.45, M.steelBridge, 3, 3.1);
+    add(t, sphG(0.25, 8, 6), M.redLight, 0, 28.3, 0, 0, 0, 0, false);
+    add(t, sphG(0.2, 8, 6), M.redLight, 0, 15, 0, 0, 0, 0, false);
+    for (const [y, a] of [[20, 0.3], [12, 2.4]]) { const d = add(t, cylG(1.0, 0.3, 0.6, 14), M.white, Math.cos(a) * 0.9, y, Math.sin(a) * 0.9, 0, -a, Math.PI / 2); d.castShadow = true; }
+    for (let k = 0; k < 3; k++) { const a = k * Math.PI * 2 / 3 + 0.5; beam(t, [0, 20, 0], [Math.cos(a) * 13, 0.2, Math.sin(a) * 13], 0.03, M.rope, 3); box(t, 0.8, 0.5, 0.8, M.concreteDark, Math.cos(a) * 13, 0.25, Math.sin(a) * 13); }
+    box(g, 2.4, 1.6, 1.6, M.grey, -1.5, 0.8, 9); // Technikschrank
+    r.flag = flagMast(g, om, 2, 5, 9);
+    r.height = 29;
+  } else if (kind === 'railway') {
+    box(g, 30, 0.6, 3.2, M.concrete, 0, 0.3, 4.2);
+    for (let i = -2; i <= 2; i++) { cyl(g, 0.06, 0.06, 4, M.darkMetal, i * 6, 2.6, 5.3, 0, 0, 0, 5); box(g, 0.7, 0.2, 0.3, M.headlight, i * 6, 4.6, 5.1); }
+    box(g, 3.2, 0.9, 0.12, M.white, 4, 3.2, 5.6);
+    for (const x of [24, 37.5]) structureRail(g, x);
+    r.flag = flagMast(g, om, -9, 4.4, 8, 0.6);
+    r.height = 9;
+  } else { // village
+    sandbags(g, 0, 2.6, 3.5, 0, 2);
+    r.flag = flagMast(g, om, 0, 0, 9);
+    r.height = 9;
+  }
+  return r;
+}
+function radarDish(g, x, y, z) { const d = add(g, cylG(0.8, 0.2, 0.4, 12), M.white, x, y, z, 0, 0, Math.PI / 2.4); return d; }
+function structureRail(g, x) {
+  box(g, 12, 2.6, 2.8, M.camoRU, x, 2.1, 0, 0, Math.PI / 2 * 0, 0);
+  box(g, 12.2, 0.2, 2.9, M.darkMetal, x, 0.9, 0);
+  for (const dx of [-4.5, 4.5]) for (const s of [-1, 1]) cyl(g, 0.45, 0.45, 0.2, M.darkMetal, x + dx, 0.5, s * 1.1, Math.PI / 2, 0, 0, 10);
+  box(g, 12, 0.12, 2.6, M.era, x, 3.45, 0);
+}
+
 // ---------------- Fabrik ----------------
 const NO_BLOB = new Set(['quad', 'reconquad', 'shahed', 'lancet', 'orlan', 'recon_wing', 'heli', 'seadrone', 'boat', 'bridge_road', 'bridge_rail']);
 const TURRET_SKIP = new Set(['leopard', 't72', 't90', 'bradley', 'bmp', 'gepard', 'spg']);
@@ -1332,17 +1533,18 @@ export function buildModel(type, side, season, quality) {
     case 'boat': r = patrolBoat(); break;
     case 'bridge_road': r = bridgeSpan(type.spanLen || 28, 'road'); break;
     case 'bridge_rail': r = bridgeSpan(type.spanLen || 28, 'rail'); break;
+    case 'cp_zeppelin': case 'cp_aerostat': case 'cp_airfield': case 'cp_depot': case 'cp_radio': case 'cp_railway': case 'cp_village': r = capturePoint(type.model.slice(3)); break;
     default: r = structure(type.model, side);
   }
   // Winter-Tarnung
   if (season === 'winter' && side === 'UA') r.root.traverse((o) => { if (o.material === M.camoUA) o.material = M.camoWinter; });
   // Statische Teile je Transform-Knoten zusammenführen (Geometrie je Typ/Seite/Saison gecacht)
-  const keep = [r.turret, r.barrel, r.muzzle, r.body, r.arm, r.radar, r.radar2, r.hull, r.deck, ...(r.legs || []), ...(r.rotors || [])];
+  const keep = [r.turret, r.barrel, r.muzzle, r.body, r.arm, r.radar, r.radar2, r.hull, r.deck, r.sway, r.balloon, r.flag, ...(r.legs || []), ...(r.rotors || [])];
   optimize(r.root, keep, `${type.model}|${side}|${season === 'winter' && side === 'UA' ? 'w' : ''}|${type.weaponModel || ''}|${type.modelSize || ''}|${type.spanLen || ''}`);
   // Infanterie wirft auf low/medium keinen Echtzeit-Schatten (Kontaktschatten reicht)
   if (type.model === 'soldier' && (quality === 'low' || quality === 'medium')) r.root.traverse((o) => { if (o.isMesh) o.castShadow = false; });
   // Kontaktschatten für Boden-Einheiten und Strukturen
-  if (!NO_BLOB.has(type.model)) {
+  if (!NO_BLOB.has(type.model) && !type.cp) {
     const bb = footprint(r.root, TURRET_SKIP.has(type.model) ? r.turret : null);
     const s = r.root.scale.x || 1;
     const sx = Math.min(80, bb.max.x - bb.min.x) / 1, sz = Math.min(80, bb.max.z - bb.min.z);

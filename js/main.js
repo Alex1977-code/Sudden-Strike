@@ -7,10 +7,13 @@ import { RTSCamera, Input } from './game/input.js';
 import { HUD } from './game/hud.js';
 import { CAMPAIGN, DEMO } from './missions/index.js';
 import { isMobile, isTouchDevice, fmtTime } from './engine/util.js';
+import { startSkirmish, normalizeSetup, ROLES, DIFFICULTIES, VICTORY, TEAM_NAME, TEAM_COLOR, MAP_PRESETS, MAP_SIZES } from './skirmish/skirmish.js';
+import { generateSkirmishMap } from './skirmish/maps.js';
 
 const $ = (id) => document.getElementById(id);
 const SETTINGS_KEY = 'steppensturm.settings.v2'; // v2: neue Grafik-Voreinstellungen
 const PROGRESS_KEY = 'steppensturm.progress.v1';
+const SKIRMISH_KEY = 'steppensturm.skirmish.v1';
 
 // ---------- Einstellungen ----------
 const mobile = isMobile();
@@ -39,7 +42,7 @@ const input = new Input(game, canvas, hud);
 hud.input = input;
 
 // ---------- Bildschirme ----------
-const screens = ['title', 'campaign', 'briefing', 'settings', 'help', 'pause', 'end'];
+const screens = ['title', 'campaign', 'skirmish', 'briefing', 'settings', 'help', 'pause', 'end'];
 let current = 'title', returnTo = 'title';
 function show(name) {
   for (const s of screens) $('screen-' + s).classList.toggle('hidden', s !== name);
@@ -139,6 +142,7 @@ $('btn-start-mission').onclick = () => startMission(currentMission);
 
 async function startMission(m) {
   currentMission = m;
+  currentSkirmish = null;
   hideScreens();
   await loadWithSpinner(`Lade „${m.title}" …`, () => {
     game.camera.orbit = false;
@@ -147,6 +151,113 @@ async function startMission(m) {
   inMission = true;
   hud.show(true);
   game.stats.start = game.time;
+  updatePauseInfo();
+}
+
+// ================= Gefecht (Skirmish) =================
+let currentSkirmish = null;
+let skSetup = { mode: 2, preset: 'random', size: 'auto', season: 'summer', night: false, team: 'UA', role: 'armor', difficulty: 'normal', reinforce: 180, victory: 'points', seed: Math.floor(Math.random() * 99999) + 1 };
+try { Object.assign(skSetup, JSON.parse(localStorage.getItem(SKIRMISH_KEY) || '{}')); } catch (e) { /* ignorieren */ }
+const saveSk = () => { try { localStorage.setItem(SKIRMISH_KEY, JSON.stringify(skSetup)); } catch (e) { /* ignorieren */ } };
+const opt = (v, t) => `<option value="${v}">${t}</option>`;
+$('sk-mode').innerHTML = [1, 2, 3, 4, 5, 6].map((n) => `<button data-v="${n}">${n}v${n}</button>`).join('');
+$('sk-role').innerHTML = Object.entries(ROLES).map(([k, r]) => opt(k, `${r.icon} ${r.name}`)).join('');
+$('sk-preset').innerHTML = opt('random', '🎲 Zufall') + MAP_PRESETS.map((p) => opt(p.id, p.name)).join('');
+$('sk-size').innerHTML = opt('auto', 'Auto (empfohlen)') + Object.entries(MAP_SIZES).map(([k, z]) => opt(k, `${z.label} (${z.size} m, bis ${z.maxPerTeam}v${z.maxPerTeam})`)).join('');
+$('sk-diff').innerHTML = Object.entries(DIFFICULTIES).map(([k, t]) => opt(k, t)).join('');
+$('sk-victory').innerHTML = Object.entries(VICTORY).map(([k, t]) => opt(k, t)).join('');
+function renderSkSetup() {
+  for (const [id, key] of [['sk-mode', 'mode'], ['sk-team', 'team']]) $(id).querySelectorAll('button').forEach((b) => b.classList.toggle('active', String(skSetup[key]) === b.dataset.v));
+  $('sk-role').value = skSetup.role; $('sk-preset').value = skSetup.preset; $('sk-size').value = skSetup.size; $('sk-season').value = skSetup.season;
+  $('sk-night').checked = !!skSetup.night; $('sk-diff').value = skSetup.difficulty; $('sk-reinforce').value = String(skSetup.reinforce);
+  $('sk-victory').value = skSetup.victory; $('sk-seed').value = skSetup.seed;
+  schedulePreview();
+}
+const skChanged = () => { saveSk(); renderSkSetup(); };
+for (const id of ['sk-mode', 'sk-team']) $(id).addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; skSetup[id === 'sk-mode' ? 'mode' : 'team'] = id === 'sk-mode' ? +b.dataset.v : b.dataset.v; skChanged(); });
+for (const [id, key, conv] of [['sk-role', 'role'], ['sk-preset', 'preset'], ['sk-size', 'size'], ['sk-season', 'season'], ['sk-diff', 'difficulty'], ['sk-reinforce', 'reinforce', Number], ['sk-victory', 'victory'], ['sk-seed', 'seed', (v) => Math.max(1, Math.floor(+v) || 1)]]) {
+  $(id).addEventListener('change', () => { skSetup[key] = conv ? conv($(id).value) : $(id).value; skChanged(); });
+}
+$('sk-night').addEventListener('change', () => { skSetup.night = $('sk-night').checked; skChanged(); });
+$('sk-reroll').onclick = () => { skSetup.seed = Math.floor(Math.random() * 99999) + 1; skChanged(); };
+let previewTimer = null;
+const previewCache = new Map();
+function schedulePreview() { clearTimeout(previewTimer); previewTimer = setTimeout(drawPreview, 180); }
+function drawPreview() {
+  const S = normalizeSetup(skSetup);
+  const gen = generateSkirmishMap({ size: S.sizeResolved, seed: S.seed, playersPerTeam: S.mode, season: S.season, night: S.night, preset: S.presetResolved });
+  const c = $('sk-map'), ctx = c.getContext('2d');
+  const key = `${S.seed}|${S.presetResolved}|${S.sizeResolved}|${S.season}|${S.mode}`;
+  let img = previewCache.get(key);
+  if (!img) { try { img = new Terrain(gen.map, 'low').minimapImage(240); previewCache.set(key, img); } catch (e) { console.error(e); } }
+  ctx.fillStyle = '#111'; ctx.fillRect(0, 0, c.width, c.height);
+  if (img) ctx.drawImage(img, 0, 0, c.width, c.height);
+  const N = gen.map.size, toC = (x, z) => [((x + N / 2) / N) * c.width, ((z + N / 2) / N) * c.height];
+  for (const cp of gen.capturePoints) {
+    const [x, y] = toC(cp.x, cp.z);
+    ctx.fillStyle = 'rgba(140,144,150,.55)'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, y, Math.max(5, cp.radius / N * c.width), 0, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = '700 10px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(cp.kind === 'zeppelin' ? 'Z' : cp.kind === 'aerostat' ? 'B' : '•', x, y + 0.5);
+  }
+  for (const team of ['UA', 'RU']) gen.spawns[team].forEach((sp, i) => {
+    const [x, y] = toC(sp.x, sp.z);
+    ctx.fillStyle = TEAM_COLOR[team]; ctx.fillRect(x - 4, y - 4, 8, 8);
+    if (team === S.team && i === 0) { ctx.strokeStyle = '#5dff8a'; ctx.lineWidth = 2; ctx.strokeRect(x - 6, y - 6, 12, 12); }
+  });
+  ctx.textBaseline = 'alphabetic';
+  const zep = gen.capturePoints.filter((p) => p.kind === 'zeppelin').length;
+  $('sk-info').innerHTML = `<b>${gen.title}</b> · ${S.mode}v${S.mode}<br>${MAP_PRESETS.find((p) => p.id === gen.preset)?.description || ''}<br>${gen.capturePoints.length} Eroberungspunkte (${zep} Zeppelin) · Seed <b>${S.seed}</b>` +
+    (S.sizeAdjusted ? `<br><span class="warn">Größe auf „${MAP_SIZES[S.sizeResolved].label}" angehoben (${S.mode} Spieler je Team).</span>` : '');
+}
+function openSkirmish() { returnTo = 'title'; renderSkSetup(); show('skirmish'); }
+$('btn-skirmish').onclick = openSkirmish;
+$('btn-sk-start').onclick = () => startSkirmishGame({ ...skSetup });
+
+async function startSkirmishGame(setup) {
+  currentSkirmish = setup;
+  hideScreens();
+  let m = null;
+  await loadWithSpinner('Lade Gefechtskarte …', () => {
+    game.camera.orbit = false;
+    m = startSkirmish(game, setup);
+  });
+  if (!m) { show('skirmish'); return null; }
+  currentMission = m;
+  inMission = true;
+  hud.show(true);
+  game.stats.start = game.time;
+  updatePauseInfo();
+  return m;
+}
+function updatePauseInfo() {
+  const el = $('pause-info');
+  const sk = game.mission?.skirmish;
+  el.classList.toggle('hidden', !sk);
+  $('btn-quit').textContent = sk ? 'Zum Gefechtsmenü' : 'Zur Kampagne';
+  $('btn-restart').textContent = sk ? 'Gefecht neu starten' : 'Mission neu starten';
+  if (sk) { const S = sk.setup; el.innerHTML = `${game.mission.title}<br>Seed <b>${S.seed}</b> · ${ROLES[S.role].name} · KI ${DIFFICULTIES[S.difficulty]} · Verstärkung alle ${Math.round(S.reinforce / 60 * 10) / 10} min · ${VICTORY[S.victory]}`; }
+}
+function showSkirmishEnd(won, text) {
+  const sk = game.mission.skirmish;
+  const draw = sk.result && sk.result.winner === null;
+  $('end-title').textContent = draw ? '⚖ Unentschieden' : won ? '✔ Sieg' : '✖ Niederlage';
+  $('end-title').style.color = draw ? '#e5b93e' : won ? '#46c46b' : '#e5484d';
+  $('end-text').innerHTML = `<p>${text}</p>`;
+  const rows = [];
+  for (const team of [game.localSide, game.localSide === 'UA' ? 'RU' : 'UA']) {
+    const ps = game.playersOfTeam(team);
+    const sum = (k) => ps.reduce((s, p) => s + (p.stats[k] || 0), 0);
+    rows.push(`<tr class="team"><td style="color:${TEAM_COLOR[team]}">${TEAM_NAME[team]} – ${sk.scores[team]} Punkte</td><td>${sum('kills')}</td><td>${sum('lost')}</td><td>${sum('captured')}</td><td>${sum('reinf')}</td></tr>`);
+    for (const p of ps) rows.push(`<tr class="${p.id === game.localPlayerId ? 'me' : ''}"><td><span class="dot" style="background:${p.color}"></span>${ROLES[p.role]?.icon || ''} ${p.name}${p.defeated ? ' ✝' : ''}</td><td>${p.stats.kills}</td><td>${p.stats.lost}</td><td>${p.stats.captured || 0}</td><td>${p.stats.reinf || 0}</td></tr>`);
+  }
+  $('end-stats').innerHTML = `<div>⏱ Gefechtsdauer: <b>${fmtTime(game.time)}</b> · Seed ${sk.setup.seed}</div><table class="sk-end-table"><tr><th>Spieler</th><th>Abschüsse</th><th>Verluste</th><th>Erobert</th><th>Verstärkung</th></tr>${rows.join('')}</table>`;
+  const next = $('btn-end-next');
+  next.textContent = 'Gefechtsmenü';
+  next.onclick = async () => { await loadDemo(); openSkirmish(); };
+  $('btn-end-retry').textContent = 'Revanche';
+  $('btn-end-retry').onclick = () => { game.paused = false; startSkirmishGame(currentSkirmish); };
+  show('end');
 }
 
 // Pause
@@ -158,13 +269,15 @@ hud.onTogglePause = () => {
 $('btn-menu').onclick = () => hud.togglePause();
 $('btn-resume').onclick = () => { game.paused = false; hideScreens(); };
 $('btn-pause-settings').onclick = () => { returnTo = 'pause'; openSettings(); };
-$('btn-restart').onclick = () => { game.paused = false; startMission(currentMission); };
-$('btn-quit').onclick = async () => { game.paused = false; await loadDemo(); renderCampaign(); show('campaign'); };
+$('btn-restart').onclick = () => { game.paused = false; if (currentSkirmish) startSkirmishGame(currentSkirmish); else startMission(currentMission); };
+$('btn-quit').onclick = async () => { game.paused = false; const sk = !!currentSkirmish; await loadDemo(); if (sk) openSkirmish(); else { renderCampaign(); show('campaign'); } };
 
 // Missionsende
 game.on('end', (won, text) => {
   if (!inMission) return;
   game.paused = true;
+  if (game.mission?.skirmish) { showSkirmishEnd(won, text); return; }
+  $('btn-end-retry').textContent = 'Erneut versuchen';
   const m = currentMission;
   const idx = CAMPAIGN.indexOf(m);
   $('end-title').textContent = won ? '✔ Mission erfüllt' : '✖ Mission gescheitert';
@@ -239,6 +352,8 @@ function frame(now) {
   // Debug-Zugriff
   window.__game = game;
   window.__start = (i) => startMission(CAMPAIGN[i]);
+  window.__startSkirmish = (setup = {}) => startSkirmishGame({ ...skSetup, ...setup });
+  window.__openSkirmish = openSkirmish;
 })();
 
 // Offline-Fähigkeit (PWA)
