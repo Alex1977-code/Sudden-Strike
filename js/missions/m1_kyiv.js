@@ -33,15 +33,15 @@ export default {
     ],
   },
   env: { season: 'winter', sunElev: 22, sunAzim: 200, fogDensity: 0.004 },
-  camera: { x: 0, z: 78, dist: 85 },
+  camera: { x: 0, z: 66, dist: 85 },
   abilities: ['scan', { id: 'artillery', charges: 2 }],
   markers: [{ x: 0, z: 112, r: 14, label: 'Durchbruchslinie', color: '#ff6b6b' }],
 
   setup(g) {
-    g.spawnGroup([['rifle', 3]], 'UA', -10, 92, { spacing: 3 });
-    g.spawnGroup([['rifle', 3]], 'UA', 14, 92, { spacing: 3 });
-    g.spawnGroup([['javelin', 3], ['mg', 1], ['sniper', 1]], 'UA', 2, 100, { spacing: 3.5, cols: 5 });
-    g.spawn('recon', 'UA', 0, 86, { heading: Math.PI });
+    g.spawnGroup([['rifle', 3]], 'UA', -10, 80, { spacing: 3 });
+    g.spawnGroup([['rifle', 3]], 'UA', 14, 80, { spacing: 3 });
+    g.spawnGroup([['javelin', 3], ['mg', 1], ['sniper', 1]], 'UA', 2, 86, { spacing: 3.5, cols: 5 });
+    g.spawn('recon', 'UA', 0, 74, { heading: Math.PI });
     // Spähtrupp im Nordosten
     g.spawnGroup([['e_rifle', 4], ['e_mg', 1]], 'RU', 78, -88, { spacing: 3, ai: { mode: 'guard', radius: 36 }, tags: ['scouts'] });
     this.convoy = [];
@@ -53,10 +53,10 @@ export default {
     g.later(1, () => g.say('Sova', 'Drohne startet. Wählt die Aufklärungsdrohne und schickt sie nach Norden die Straße entlang.', 6));
     g.later(8, () => g.say('Sova', 'Javelin-Teams in die Waldränder links und rechts der Straße. Im Wald seid ihr schwer zu entdecken.', 6));
     g.later(16, () => g.say('Sova', 'Tipp: Ziehen mit der Maus wählt mehrere Einheiten, Rechtsklick gibt Befehle. Am Handy: antippen und Ziel antippen.', 6));
-    g.later(40, () => this.spawnWave(g, ['btr', 'truck', 'truck', 'bmp', 'truck', 't72', 'truck']));
-    g.later(175, () => this.spawnWave(g, ['t72', 'bmp', 'truck', 'truck', 'btr', 'truck', 't72']));
-    g.later(160, () => { g.addAbilityCharges('artillery', 1); g.say('Koval', 'Die Artillerie hat nachgeladen – ein weiterer Feuerschlag steht bereit.', 4); });
-    g.later(120, () => {
+    g.later(75, () => this.spawnWave(g, ['btr', 'truck', 'truck', 'bmp', 'truck', 't72', 'truck']));
+    g.later(210, () => this.spawnWave(g, ['t72', 'bmp', 'truck', 'truck', 'btr', 'truck', 't72']));
+    g.later(195, () => { g.addAbilityCharges('artillery', 1); g.say('Koval', 'Die Artillerie hat nachgeladen – ein weiterer Feuerschlag steht bereit.', 4); });
+    g.later(150, () => {
       g.spawn('orlan', 'RU', 0, -125, { ai: { mode: 'loiter', center: [0, -10], radius: 45 } });
       g.say('Sova', 'Feindliche Orlan-Drohne über dem Wald! Sie meldet unsere Stellungen. MG und Schützen können sie herunterholen.', 6);
     });

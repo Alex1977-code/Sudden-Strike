@@ -101,5 +101,5 @@ for (const [k, t] of Object.entries(UNIT_TYPES)) {
   t.vehicle = t.cls === 'veh';
   // Spieltempo: Bodenfahrzeuge und Infanterie etwas gemächlicher (Taktik statt Rennen)
   if (t.vehicle) t.speed *= 0.72;
-  if (t.infantry) t.speed *= 0.85;
+  if (t.infantry) t.speed *= 0.95;
 }

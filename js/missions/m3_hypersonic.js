@@ -36,6 +36,8 @@ export default {
   markers: [],
 
   setup(g) {
+    this.markers = [];
+    this.drg = null;
     g.spawn('powerplant', 'UA', PLANT[0], PLANT[1], { tags: ['protect', 'plant'], name: 'Wärmekraftwerk', hpMul: 1.5 });
     g.spawn('substation', 'UA', SUB[0], SUB[1], { tags: ['protect', 'sub'] });
     g.spawn('patriot', 'UA', BATT[0] - 8, BATT[1] - 2, { heading: Math.PI, tags: ['patriot'] });
@@ -98,9 +100,21 @@ export default {
     g.later(22, () => shaheds(6, ['sub', 'plant']));
     g.later(70, () => { cruise(3, ['plant', 'sub']); shaheds(4, ['plant']); });
     g.later(120, () => { g.say('Bondar', 'MiG-31K gestartet! Kinschal-Abschuss erwartet – Ziel ist vermutlich unsere Batterie!', 5); kinzhal('patriot', 4); });
-    g.later(150, () => {
-      g.spawnGroup([['e_rifle', 5], ['e_rpg', 2], ['e_mg', 1]], 'RU', -110, -85, { spacing: 3, ai: { mode: 'attackMove', points: [[-80, -30], [-30, 15], [BATT[0], BATT[1] + 9]], aggressive: true, aggroRadius: 25 } });
-      g.say('Sova', 'Bewegung im Wald im Westen – Sabotagegruppe! Sie wollen zum Patriot-Radar. Schützen abfangen!', 6);
+    // Sabotagegruppe: früh angekündigt und zunächst im Wald versammelt, damit Zeit zum Abfangen bleibt
+    g.later(80, () => {
+      this.drg = g.spawnGroup([['e_rifle', 5], ['e_rpg', 2], ['e_mg', 1]], 'RU', -108, -88, { spacing: 3, tags: ['drg'], ai: { mode: 'guard', radius: 18 } });
+      this.markers.push({ x: -100, z: -80, r: 22, label: 'Sabotagegruppe (Westwald)', color: '#ff6b6b' });
+      g.addReveal(-104, -86, 18, 6);
+      g.say('Sova', 'Unsere Drohne meldet eine Sabotagegruppe, die sich im Westwald sammelt. Abmarsch in etwa eineinhalb Minuten – Schützen und MG jetzt losschicken!', 7);
+    });
+    g.later(150, () => g.say('Sova', 'Die Sabotagegruppe setzt sich in einer halben Minute in Bewegung!', 4));
+    g.later(180, () => {
+      for (const u of this.drg || []) {
+        if (!u.alive) continue;
+        u.ai = { mode: 'attackMove', points: [[-80, -30], [-30, 15], [BATT[0], BATT[1] + 9]], aggressive: true, aggroRadius: 25 };
+      }
+      if ((this.drg || []).some((u) => u.alive)) g.say('Sova', 'Sabotagegruppe bricht aus dem Wald aus – Richtung Patriot-Radar!', 5);
+      this.markers = this.markers.filter((m) => !m.label?.startsWith('Sabotage'));
     });
     g.later(185, () => { shaheds(8, ['plant', 'patriot', 'sub']); cruise(3, ['plant']); });
     g.later(215, () => { kinzhal('plant'); kinzhal('patriot', 3); });
