@@ -52,6 +52,7 @@ function netError(code, message, cause) {
   return e;
 }
 
+const secs = ms => String(Math.round(ms / 100) / 10).replace('.', ',') + ' s';
 const now = () => (globalThis.performance ? performance.now() : Date.now());
 
 // ---------------------------------------------------------------------------
@@ -322,7 +323,7 @@ export class LocalTransport extends BaseTransport {
     });
     try {
       await this._withTimeout(welcomed, this.opts.connectTimeout,
-        `Raum ${code} nicht gefunden – Zeitüberschreitung beim Verbinden (${Math.round(this.opts.connectTimeout / 1000)} s). ` +
+        `Raum ${code} nicht gefunden – Zeitüberschreitung beim Verbinden (${secs(this.opts.connectTimeout)}). ` +
         'Ist der Host im selben Browser geöffnet?');
     } catch (e) {
       clearInterval(timer);
@@ -417,7 +418,7 @@ export class PeerTransport extends BaseTransport {
   }
 
   _timeoutMsg(what) {
-    return `Zeitüberschreitung beim ${what} (${Math.round(this.opts.connectTimeout / 1000)} s). ` +
+    return `Zeitüberschreitung beim ${what} (${secs(this.opts.connectTimeout)}). ` +
       'Der Vermittlungsserver (PeerJS) ist nicht erreichbar – bitte Internetverbindung prüfen oder „Lokal“ wählen.';
   }
 
