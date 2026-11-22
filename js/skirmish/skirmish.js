@@ -35,12 +35,12 @@ const ARMIES = {
     RU: [['t90', 2], ['t72', 2], ['bmp', 2], ['btr', 1], ['e_rifle', 5], ['e_atgm', 1], ['e_igla', 1], ['e_engineer', 1]],
   },
   infantry: {
-    UA: [['rifle', 5], ['mg', 2], ['javelin', 2], ['sniper', 1], ['dronepilot', 1], ['sso', 1], ['recon', 1], ['ua_engineer', 1], ['ua_medic', 1]],
-    RU: [['e_rifle', 6], ['e_mg', 2], ['e_atgm', 2], ['e_sniper', 1], ['e_recon', 1], ['e_spetsnaz', 1], ['orlan', 1], ['e_engineer', 1], ['e_medic', 1]],
+    UA: [['rifle', 5], ['mg', 2], ['javelin', 2], ['sniper', 1], ['dronepilot', 1], ['sso', 1], ['recon', 1], ['ua_engineer', 1], ['ua_medic', 1], ['ua_observer', 2]],
+    RU: [['e_rifle', 6], ['e_mg', 2], ['e_atgm', 2], ['e_sniper', 1], ['e_recon', 1], ['e_spetsnaz', 1], ['orlan', 1], ['e_engineer', 1], ['e_medic', 1], ['e_observer', 2]],
   },
   support: {
-    UA: [['himars', 1], ['gepard', 1], ['pickup', 1], ['stinger', 1], ['rifle', 4], ['mg', 1], ['javelin', 1], ['recon', 1], ['ua_engineer', 1]],
-    RU: [['msta', 1], ['pantsir', 1], ['btr', 1], ['e_igla', 1], ['e_rifle', 5], ['e_mg', 1], ['e_atgm', 1], ['orlan', 1], ['e_engineer', 1]],
+    UA: [['himars', 1], ['gepard', 1], ['pickup', 1], ['stinger', 1], ['rifle', 4], ['mg', 1], ['javelin', 1], ['recon', 1], ['ua_engineer', 1], ['ua_observer', 1]],
+    RU: [['msta', 1], ['pantsir', 1], ['btr', 1], ['e_igla', 1], ['e_rifle', 5], ['e_mg', 1], ['e_atgm', 1], ['orlan', 1], ['e_engineer', 1], ['e_observer', 1]],
   },
   logistics: {
     UA: [['ua_supply', 2], ['ua_recovery', 1], ['leopard', 1], ['bradley', 1], ['pickup', 1], ['ua_engineer', 2], ['ua_medic', 1], ['rifle', 3], ['mg', 1], ['javelin', 1]],

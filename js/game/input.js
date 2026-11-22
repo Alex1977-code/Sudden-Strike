@@ -177,6 +177,17 @@ export class Input {
         return;
       }
     }
+    if (u && u.type.key === 'house' && !attackMove) {
+      // Haus: Infanterie besetzt (eigene/leere Häuser), alle anderen und Feindbesatzung → Angriff
+      const mine = !u.occupants?.length || u.garrisonSide === g.localSide;
+      const inf = own.filter((o) => o.type.infantry && !o.type.kamikaze);
+      if (mine && inf.length) {
+        g.issueCommand({ t: 'garrison', ids: inf.map((o) => o.id), target: u.id });
+        const rest = own.filter((o) => !inf.includes(o));
+        if (rest.length) g.issueCommand({ t: 'move', ids: rest.map((o) => o.id), x: u.pos.x, z: u.pos.z });
+        return;
+      }
+    }
     if (u && u.side !== g.localSide) { g.issueCommand({ t: 'attack', ids, target: u.id }); return; }
     const p = this.ground(x, y);
     if (p) g.issueCommand({ t: 'move', ids, x: p.x, z: p.z, attackMove });
@@ -195,7 +206,8 @@ export class Input {
       else g.select([u]);
       this.lastTap = { t: now, unit: u };
       g.audio.ui('click');
-    } else if (u) { g.select([u]); }
+    } else if (u && this._selectOccupants(u)) { /* Besatzung gewählt */ }
+    else if (u) { g.select([u]); }
     else if (!shift) g.select([]);
   }
   rightClick(x, y, ctrl) {
@@ -223,7 +235,17 @@ export class Input {
       return;
     }
     if (own.length) this.orderAt(own, x, y, u);
+    else if (u && this._selectOccupants(u)) { /* Besatzung gewählt */ }
     else if (u) g.select([u]);
+  }
+  // Klick auf ein eigenes besetztes Haus wählt die Besatzung
+  _selectOccupants(h) {
+    const g = this.game;
+    if (h.type.key !== 'house' || !h.occupants?.length || h.garrisonSide !== g.localSide) return false;
+    const mine = h.occupants.filter((o) => g.isOwn(o));
+    if (!mine.length) return false;
+    g.select(mine); g.audio.ui('click');
+    return true;
   }
   selectSameType(u) {
     const g = this.game;
@@ -302,12 +324,12 @@ export class Input {
   engineers() { return this.ownSelected().filter((u) => u.type.engineer); }
   startBuild(mode, kind = null) {
     const g = this.game;
-    if (!this.engineers().length) { g.audio.ui('fail'); return; }
+    if (mode !== 'binoculars' && mode !== 'garrison' && !this.engineers().length) { g.audio.ui('fail'); return; }
     if (this.pendingBuild && this.pendingBuild.mode === mode && this.pendingBuild.kind === kind) { this.cancelBuild(); return; }
     this.cancelAbility();
     this.pendingBuild = { mode, kind };
     const touch = this.touch;
-    const txt = mode === 'build' ? `${UNIT_TYPES[kind].name} platzieren` : mode === 'clearmines' ? 'Minenfeld zum Räumen wählen' : 'Brücke/Gebäude zum Sprengen wählen';
+    const txt = mode === 'binoculars' ? 'Blickrichtung des Fernglases wählen' : mode === 'garrison' ? 'Gebäude zum Besetzen wählen' : mode === 'build' ? `${UNIT_TYPES[kind].name} platzieren` : mode === 'clearmines' ? 'Minenfeld zum Räumen wählen' : 'Brücke/Gebäude zum Sprengen wählen';
     this.hud.showTargetHint(txt + (touch ? ' – Karte antippen' : ' – Klick platziert (R dreht)'), () => this.cancelBuild());
     if (mode === 'build') {
       const d = UNIT_TYPES[kind].build;
@@ -348,6 +370,23 @@ export class Input {
   }
   fireBuild(x, y, keep) {
     const g = this.game, pb = this.pendingBuild;
+    if (pb.mode === 'binoculars' || pb.mode === 'garrison') {
+      const own = this.ownSelected();
+      if (!own.length) { this.cancelBuild(); return; }
+      let okk;
+      if (pb.mode === 'binoculars') {
+        const p = this.ground(x, y); if (!p) return;
+        okk = g.issueCommand({ t: 'binoculars', ids: own.filter((u) => u.bino).map((u) => u.id), x: p.x, z: p.z });
+      } else {
+        const h = g.pickUnit(x, y, 36);
+        if (!h || h.type.key !== 'house') { g.audio.ui('fail'); return; }
+        okk = g.issueCommand({ t: 'garrison', ids: own.filter((u) => u.type.infantry).map((u) => u.id), target: h.id });
+      }
+      if (okk === false) { g.audio.ui('fail'); return; }
+      g.audio.ui('ack');
+      this.cancelBuild();
+      return;
+    }
     const eng = this.engineers();
     const ids = eng.map((u) => u.id);
     if (!eng.length) { this.cancelBuild(); return; }

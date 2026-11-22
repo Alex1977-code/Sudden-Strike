@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 
 export const FOW_RES = 128;
+const ANG_R = 64;
 
 export class FogOfWar {
   constructor(mapSize) {
@@ -46,6 +47,38 @@ export class FogOfWar {
       for (let i = x0; i <= x1; i++) {
         const dx = i + 0.5 - cx;
         if (dx * dx + dz * dz <= r2) { const k = j * res + i; this.visible[k] = 1; this.explored[k] = 1; }
+      }
+    }
+  }
+  // Sicht mit Verdeckung: radii[i] = Sichtweite im Sektor i (n Sektoren, linear interpoliert); r = Maximalradius.
+  // Winkel kommen aus einer Tabelle ganzzahliger Zellversätze (Winkel wie in Vision.sectors: atan2(dx, dz)).
+  revealSectors(x, z, r, radii, n) {
+    const res = this.res, h = this.size / 2, cell = this.cell;
+    const cx = (x + h) / cell, cz = (z + h) / cell, cr = r / cell;
+    const R = ANG_R;
+    if (cr > R) { this.reveal(x, z, r); return; }
+    if (!this._ang) {
+      const w = 2 * R + 1;
+      this._ang = new Float32Array(w * w);
+      for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) { let a = Math.atan2(di, dj); if (a < 0) a += Math.PI * 2; this._ang[(dj + R) * w + di + R] = a; }
+    }
+    const ang = this._ang, w = 2 * R + 1, k2 = n / (Math.PI * 2);
+    const ci = Math.floor(cx), cj = Math.floor(cz);
+    const x0 = Math.max(0, Math.floor(cx - cr)), x1 = Math.min(res - 1, Math.ceil(cx + cr));
+    const z0 = Math.max(0, Math.floor(cz - cr)), z1 = Math.min(res - 1, Math.ceil(cz + cr));
+    const cr2 = cr * cr, inv = 1 / cell;
+    for (let j = z0; j <= z1; j++) {
+      const dz = j + 0.5 - cz;
+      for (let i = x0; i <= x1; i++) {
+        const dx = i + 0.5 - cx;
+        const d2 = dx * dx + dz * dz;
+        if (d2 > cr2) continue;
+        const f = ang[(j - cj + R) * w + (i - ci + R)] * k2 - 0.5;
+        let s0 = Math.floor(f); const t = f - s0;
+        if (s0 < 0) s0 += n;
+        const s1 = s0 + 1 >= n ? 0 : s0 + 1;
+        const rr = (radii[s0] + (radii[s1] - radii[s0]) * t) * inv;
+        if (d2 <= rr * rr) { const k = j * res + i; this.visible[k] = 1; this.explored[k] = 1; }
       }
     }
   }

@@ -40,6 +40,9 @@ export class Unit {
     const known = !!type.structure && !type.build?.hidden;
     this.seenBy = { UA: side === 'UA' || side === 'N' || known, RU: side === 'RU' || side === 'N' || known };
     this.lastHit = -99;
+    this.garrison = null; this.garrisonGoal = null; this.occupants = null; this.garrisonSide = null; this.revealT = -99; // Gebäude-Besetzung (MP-T4c)
+    this.bino = type.observer ? { yaw: this.heading, t: 0, on: false } : null; // Fernglas (Beobachter)
+    this._losT = -99; this._losOk = true;
     this.kills = 0;
     this.moving = false;
     this.animT = Math.random() * 10;
@@ -110,6 +113,7 @@ export class Unit {
       return;
     }
     p.y = t.height(p.x, p.z);
+    if (this.garrison) p.y = this.garrison.roofY - 1.4; // Fensterhöhe
     this.root.position.copy(p);
     if (this.type.vehicle && !this.type.structure) {
       // Neigung an Gelände anpassen
@@ -177,7 +181,7 @@ export class Unit {
 
   // ---------------- Kampf ----------------
   canWeaponTarget(w, u) {
-    if (!u || !u.alive || u.side === this.side || (u.type.neutral || u.type.noAutoTarget) && !this.order?.target) return false;
+    if (!u || !u.alive || u.side === this.side || (u.type.neutral || u.type.noAutoTarget) && !this.order?.target && !this.isHotHouse(u)) return false;
     if (u.invulnerable) return false;
     if (u.type.air) { if (!w.canAir) return false; }
     else if (w.airOnly) return false;
@@ -190,23 +194,41 @@ export class Unit {
   inRange(w, u) {
     const d = u.type.air ? Math.hypot(this.distTo(u), (u.pos.y - this.pos.y) * 0.5) : this.edgeDist(u);
     if (w.minRange && d < w.minRange) return false;
-    return d <= w.range;
+    return d <= w.range * this.rangeMul();
   }
+  // Reichweitenbonus aus erhöhter Position (Gebäude: je Stockwerk +8 %, max. +40 %)
+  rangeMul() { const h = this.garrison; return h ? Math.min(1.4, 1 + 0.08 * (h.houseDef?.floors || 1)) : 1; }
+  // Freie Schusslinie (gecacht 0,5 s); Luft-, Flach- und Flugabwehrfeuer ignorieren Verdeckung
+  hasLos(u, w) {
+    if (w && (w.indirect || w.kind === 'sam' || w.kind === 'artillery')) return true;
+    if (u.type.air || this.type.air || !this.game.vision) return true;
+    const c = this._losC || (this._losC = new Map());
+    const e = c.get(u.id), now = this.game.time;
+    if (e && now - e.t < 0.5) return e.v;
+    const v = this.game.vision.unitLos(this, u);
+    c.set(u.id, { t: now, v });
+    if (c.size > 24) for (const [k, q] of c) if (now - q.t > 3) c.delete(k);
+    return v;
+  }
+  // Besetztes feindliches Haus, dessen Besatzung vor Kurzem gefeuert hat (Ersatzziel für die Insassen)
+  isHotHouse(u) { return u.occupants?.length > 0 && u.garrisonSide !== this.side && this.game.time - u.revealT < 5; }
   pickTarget(ws) {
     const w = ws.def;
     const game = this.game;
     // Explizites Ziel?
     const ot = this.order?.type === 'attack' ? this.order.target : null;
-    if (ot && this.canWeaponTarget(w, ot) && this.isSpotted(ot) && this.inRange(w, ot)) return ot;
+    if (ot && this.canWeaponTarget(w, ot) && this.isSpotted(ot) && this.inRange(w, ot) && this.hasLos(ot, w)) return ot;
     if (this.holdFire) return null;
     let best = null, bestScore = -Infinity;
     const list = game.units;
     const rangeLimit = w.range + 6;
     for (let i = 0; i < list.length; i++) {
       const u = list[i];
-      if (u.side === this.side || u.side === 'N' || !u.alive || u.type.noAutoTarget) continue;
+      if (u.side === this.side || !u.alive || u.type.noAutoTarget) continue;
+      if (u.side === 'N' && !this.isHotHouse(u)) continue;
+      if (u.garrison) continue; // Insassen sind nur über das Haus angreifbar
       if (Math.abs(u.pos.x - this.pos.x) > rangeLimit + 15 || Math.abs(u.pos.z - this.pos.z) > rangeLimit + 15) continue;
-      if (!this.canWeaponTarget(w, u) || !this.isSpotted(u) || !this.inRange(w, u)) continue;
+      if (!this.canWeaponTarget(w, u) || !this.isSpotted(u) || !this.inRange(w, u) || !this.hasLos(u, w)) continue;
       const eff = w.vs[u.armor] || 0;
       let score = eff * 10 - this.distTo(u) * 0.08;
       if (w.prefer && w.prefer.includes(u.armor)) score += 6;
@@ -245,14 +267,23 @@ export class Unit {
     }
     if (this.jammed) { this.jammed -= dt; if (this.jammed <= 0) { this.game.killUnit(this, null, true); return; } }
 
-    if (!type.structure) {
+    if (this.garrison) { this.moving = false; this.path = null; this.order = this.order?.type === 'attack' ? this.order : null; }
+    if (!type.structure && !this.garrison) {
       if (this.ai) this.updateAI(dt);
       if (this.job) this.game.logi.updateJob(this, dt);
       this.updateMovement(dt);
     }
     this.updateWeapons(dt);
+    if (this.bino) this.updateObserver(dt);
     this.animate(dt);
     if (!type.structure) this.place(dt);
+  }
+  // Fernglas: im Stand (nicht bewegt, nicht gefeuert) nach type.observer.delay s aktiv; bino.yaw = Blickrichtung
+  updateObserver(dt) {
+    const b = this.bino, o = this.type.observer;
+    if (this.moving || this.garrisonGoal || (this.lastFired && this.game.time - this.lastFired < 2)) { b.t = 0; b.on = false; if (this.moving) b.yaw = this.heading; return; }
+    b.t += dt;
+    b.on = b.t >= o.delay;
   }
 
   updateMovement(dt) {
@@ -282,7 +313,7 @@ export class Unit {
             if (!this.path || !this.path.length || this.repathT <= 0) { this.computePath(t.pos.x, t.pos.z); this.repathT = 1.5; }
             if (this.path && this.path.length === 1 && this.distTo(t) < 25) { tx = t.pos.x; tz = t.pos.z; }
           } else if (!usable) { this.order = null; }
-          else if (this.inRange(usable.def, t) && this.isSpotted(t)) { this.path = null; }
+          else if (this.inRange(usable.def, t) && this.isSpotted(t) && this.hasLos(t, usable.def)) { this.path = null; }
           else {
             this.repathT -= dt;
             if (!this.path || this.repathT <= 0) { this.computePath(t.pos.x, t.pos.z); this.repathT = 1.5; }
@@ -447,6 +478,7 @@ export class Unit {
       ws.cd = w.reload * rand(0.9, 1.1);
       if (w.ammo) { ws.ammo--; if (ws.ammo <= 0) ws.reloadT = w.reloadAmmo; }
       if (ws.stock !== Infinity) ws.stock--;
+      if (this.garrison) this.garrison.revealT = game.time;
       game.combat.fire(this, ws, target, threat);
     }
     // Turm drehen

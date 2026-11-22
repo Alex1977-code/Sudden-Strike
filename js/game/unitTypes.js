@@ -104,6 +104,10 @@ export const UNIT_TYPES = {
   ua_crew: { name: 'Besatzung', icon: '🧑‍✈️', cls: 'inf', model: 'soldier', hp: 45, armor: 'soft', speed: 4.3, sight: 28, radius: 0.8, weapons: ['pistol'], conceal: 0.4, desc: 'Ausgestiegene Fahrzeugbesatzung. Kann verlassene Fahrzeuge übernehmen.' },
   e_crew: { name: 'Besatzung', icon: '🧑‍✈️', cls: 'inf', model: 'soldier', hp: 45, armor: 'soft', speed: 4.1, sight: 26, radius: 0.8, weapons: ['pistol'], conceal: 0.35, desc: 'Ausgestiegene Fahrzeugbesatzung. Kann verlassene Fahrzeuge übernehmen.' },
 
+  // Gefechtsmodus (MP-T4c): Beobachter mit Fernglas (im Stand nach 2 s weite Sicht im 90°-Kegel)
+  ua_observer: { name: 'Artilleriebeobachter', icon: '🔭', cls: 'inf', model: 'soldier', weaponModel: 'tablet', hp: 55, armor: 'soft', speed: 4.1, sight: 24, radius: 0.8, weapons: ['pistol'], conceal: 0.5, observer: { range: 96, cone: Math.PI / 2, delay: 2 }, desc: 'Im Stand nach 2 s Fernglas: sehr weite Sicht im Kegel.' },
+  e_observer: { name: 'Vorgeschobener Beobachter', icon: '🔭', cls: 'inf', model: 'soldier', weaponModel: 'tablet', hp: 55, armor: 'soft', speed: 4, sight: 24, radius: 0.8, weapons: ['pistol'], conceal: 0.5, observer: { range: 96, cone: Math.PI / 2, delay: 2 }, desc: 'Im Stand nach 2 s Fernglas: sehr weite Sicht im Kegel.' },
+
   // ======== Gebäude / Ziele ========
   hq: { name: 'Gefechtsstand', icon: '⛺', cls: 'struct', model: 'hq', hp: 1400, armor: 'struct', sight: 30, radius: 5, weapons: [] },
   depot: { name: 'Munitionsdepot', icon: '📦', cls: 'struct', model: 'depot', hp: 1100, armor: 'struct', sight: 10, radius: 6, weapons: [], secondary: true },

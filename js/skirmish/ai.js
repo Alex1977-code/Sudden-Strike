@@ -15,6 +15,7 @@ export const AI_LEVELS = {
 };
 const other = (t) => (t === 'UA' ? 'RU' : 'UA');
 const weightOf = (u) => (u.type.armor === 'heavy' ? 4 : u.type.vehicle ? 2 : 1);
+const mainsFront = (groups) => groups.filter((q) => (q.kind === 'main' || q.kind === 'raid') && q.ids.size && q.cx !== undefined).sort((a, b) => b.ids.size - a.ids.size)[0];
 const d2 = (ax, az, bx, bz) => (ax - bx) * (ax - bx) + (az - bz) * (az - bz);
 
 // Team-Lagebild: aufgeklärte Feinde (gecacht) und Zielabsprache zwischen den KI-Spielern eines Teams
@@ -62,13 +63,14 @@ export class AICommander {
   think() {
     const g = this.g, p = this.p, team = p.team, sk = this.sk;
     this.stats.thinks++;
-    const ground = [], air = [], arty = [], trucks = [], engineers = [], crews = [];
+    const ground = [], air = [], arty = [], trucks = [], engineers = [], crews = [], observers = [];
     const alive = new Set();
     for (const u of g.units) {
       if (!u.alive || u.owner !== p.id || u.type.structure || u.type.kamikaze) continue;
       alive.add(u.id);
       if (u.type.air) air.push(u);
       else if (u.type.naval) continue;
+      else if (u.bino) observers.push(u);
       else if (u.type.engineer) engineers.push(u);
       else if (u.type.key === 'ua_crew' || u.type.key === 'e_crew') crews.push(u);
       else if (u.type.key === 'himars' || u.weapons.some((w) => w.def.indirect)) arty.push(u);
@@ -121,6 +123,7 @@ export class AICommander {
     sk.intel[team].setClaims(p.id, claims);
 
     // 4) Unterstützungseinheiten
+    this.runObservers(observers, mainsFront(this.groups), enemies);
     const lead = mains.filter((gr) => gr.ids.size).sort((a, b) => b.ids.size - a.ids.size)[0];
     this.supportUnits(arty, air, [], lead, enemies);
     if (g.logistics) this.logisticsUnits(trucks, engineers, crews, ground, lead, enemies);
@@ -255,6 +258,33 @@ export class AICommander {
     for (const u of take) { gr.ids.delete(u.id); gq.ids.add(u.id); this.assign.set(u.id, gq); }
     this.cmd({ t: 'move', ids: take.map((u) => u.id), x: cp.x + (Math.random() - 0.5) * 6, z: cp.z + (Math.random() - 0.5) * 6 });
   }
+  // Beobachter: vor der Hauptgruppe (zum Ziel hin) in Stellung gehen, still halten, Fernglas aufs Ziel richten
+  runObservers(obs, lead, enemies) {
+    if (!obs.length) return;
+    const g = this.g, team = this.p.team;
+    let k = 0;
+    for (const o of obs) {
+      k++;
+      let fx, fz, aim;
+      if (lead && lead.cx !== undefined && lead.dest) {
+        const dx = lead.dest[0] - lead.cx, dz = lead.dest[1] - lead.cz, l = Math.hypot(dx, dz) || 1;
+        const ahead = Math.min(l, 26);
+        fx = lead.cx + dx / l * ahead + (k % 2 ? -8 : 8); fz = lead.cz + dz / l * ahead;
+        aim = lead.dest;
+      } else { fx = this.home[0] + (k - 1) * 6; fz = this.home[1] + (team === 'UA' ? -22 : 22); const es = g.playersOfTeam(other(team))[0]; aim = [es.spawn.x, es.spawn.z]; }
+      // höhere Position in der Nähe bevorzugen (Hügel)
+      let bx = fx, bz = fz, bh = g.terrain.height(fx, fz);
+      for (let i = 0; i < 6; i++) { const a = i * 1.047, x = fx + Math.cos(a) * 10, z = fz + Math.sin(a) * 10; if (!g.terrain.inBounds(x, z, 4)) continue; const h = g.terrain.height(x, z); const kk = g.terrain.cellIndex(x, z); if (h > bh + 0.8 && kk >= 0 && !g.terrain.gBlocked[kk] && !g.terrain.gWater[kk]) { bh = h; bx = x; bz = z; } }
+      const dd = d2(o.pos.x, o.pos.z, bx, bz);
+      if (dd > 14 * 14 && (!o.order || o.order.type !== 'move' || d2(o.order.x, o.order.z, bx, bz) > 20 * 20)) { this.cmd({ t: 'move', ids: [o.id], x: bx, z: bz }); this.stats.obsMoves = (this.stats.obsMoves || 0) + 1; }
+      else if (!o.order && o.bino && !o.moving) {
+        // Blickrichtung: nächster aufgeklärter Feind, sonst Ziel
+        let tx = aim[0], tz = aim[1], bd = Infinity;
+        for (const e of enemies) { if (e.type.air) continue; const q = d2(e.pos.x, e.pos.z, o.pos.x, o.pos.z); if (q < bd) { bd = q; tx = e.pos.x; tz = e.pos.z; } }
+        if (Math.abs(Math.atan2(tx - o.pos.x, tz - o.pos.z) - o.bino.yaw) > 0.3) this.cmd({ t: 'binoculars', ids: [o.id], x: tx, z: tz });
+      }
+    }
+  }
   runGarrison(gr, units) {
     const cp = gr.target;
     if (!cp || cp.owner !== this.p.team) {
@@ -263,7 +293,19 @@ export class AICommander {
       for (const u of units) { gr.ids.delete(u.id); if (main) { main.ids.add(u.id); this.assign.set(u.id, main); } else this.assign.delete(u.id); }
       return;
     }
-    const strays = units.filter((u) => !u.order && d2(u.pos.x, u.pos.z, cp.x, cp.z) > (cp.radius * 0.6) ** 2);
+    // Häuser am Punkt besetzen (nächstes freies Haus im Radius)
+    const houses = this.g.terrain.objects.houses;
+    const free = units.filter((u) => !u.garrison && !u.garrisonGoal && !u.order);
+    if (free.length) {
+      let bestH = null, bd = (cp.radius * 1.4) ** 2;
+      for (const h of this.g.units) {
+        if (h.type.key !== 'house' || !h.alive || (h.occupants?.length && h.garrisonSide !== this.p.team)) continue;
+        const q = d2(h.pos.x, h.pos.z, cp.x, cp.z);
+        if (q < bd && (h.occupants?.length || 0) < 4) { bd = q; bestH = h; }
+      }
+      if (bestH && this.cmd({ t: 'garrison', ids: free.map((u) => u.id), target: bestH.id })) { this.stats.garrisons = (this.stats.garrisons || 0) + free.length; return; }
+    }
+    const strays = units.filter((u) => !u.order && !u.garrison && !u.garrisonGoal && d2(u.pos.x, u.pos.z, cp.x, cp.z) > (cp.radius * 0.6) ** 2);
     if (strays.length) this.cmd({ t: 'move', ids: strays.map((u) => u.id), x: cp.x, z: cp.z, attackMove: true });
   }
 

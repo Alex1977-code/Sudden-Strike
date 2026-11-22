@@ -32,6 +32,8 @@ import { Terrain, CELL } from '../engine/terrain.js';
 import { FogOfWar, fowUniforms } from '../engine/fow.js';
 import { GamePathfinder } from './gamepath.js';
 import { Logistics } from './logistics.js';
+import { Vision, VIS } from './vision.js';
+import { Garrison, GAR } from './garrison.js';
 import { Effects } from '../engine/effects.js';
 import { Unit } from './unit.js';
 import { Combat, Missile } from './combat.js';
@@ -152,6 +154,9 @@ export class Game {
     this.effects = new Effects(this.scene, this.terrain, q, this.audio);
     this.combat = new Combat(this);
     this.logi = new Logistics(this);
+    this.vision = new Vision(this);
+    this.gar = new Garrison(this);
+    this.visionStats = { n: 0, sum: 0, max: 0, last: 0 };
     this.time = 0;
     this.units = []; this.missiles = []; this.timers = []; this.animations = []; this.selected = [];
     this.unitMap = new Map();
@@ -171,6 +176,7 @@ export class Game {
       h.lit = !!mission.env?.night;
       const u = this.spawn('house', 'N', h.x, h.z, { house: h });
       u.maxHp = u.hp = Math.round(500 + h.w * h.d * 6 * h.floors);
+      this.vision.addHouse(u);
     }
     // Brücke
     if (map.bridge) {
@@ -196,6 +202,7 @@ export class Game {
       this.gr.clearScene([this.gr.hemi, this.gr.sun, this.gr.sun.target, this.gr.sky]);
       // Effekt-Lichter wurden entfernt; neue werden in Effects erzeugt
     }
+    for (const u of this.units) if (u._cone) { this.scene.remove(u._cone); u._cone.material.dispose(); }
     this.units = []; this.missiles = []; this.selected = [];
     this.unitMap = new Map();
     this.active = false;
@@ -247,6 +254,7 @@ export class Game {
     if (u.ring) { this.scene.remove(u.ring); u.ring = null; }
     if (u.detonated) this.scene.remove(u.root);
     if (u.type.build) this.logi?.onBuildingGone(u);
+    if (u.garrison || u.occupants) this.gar?.onRemove(u);
     if (this.mission?.onRemove) this.mission.onRemove(this, u);
   }
   killUnit(u, killer, silent = false) {
@@ -276,10 +284,12 @@ export class Game {
     }
     if (opts.topAttack && target.armor === 'heavy') mul *= 1.25;
     if (target.type.infantry && this.terrain.inForest(target.pos.x, target.pos.z)) mul *= 0.7;
-    if (target.type.infantry && this.nearHouse(target.pos.x, target.pos.z)) mul *= 0.6;
+    if (target.garrison) mul *= GAR.hitMul; // Insassen: starke Deckung
+    else if (target.type.infantry && this.nearHouse(target.pos.x, target.pos.z)) mul *= 0.6;
     if (target.type.infantry && this.logi) mul *= this.logi.coverMul(target); // Sandsäcke / Graben
     if (this.mission?.damageMul && target.side !== 'N' && !this.ownerPlayer(target)?.ai) mul *= this.mission.damageMul;
     const amount = dmg * mul * rand(0.85, 1.15);
+    if (target.occupants?.length) this.gar.onHouseHit(target, dmg, w, src);
     if (amount <= 0) return;
     target.hp -= amount;
     target.lastHit = this.time;
@@ -397,6 +407,16 @@ export class Game {
         if (!this.logistics || !units.length) return false;
         ok = this.logi.command(p, cmd, units);
         break;
+      case 'garrison': case 'ungarrison':
+        ok = this.gar.command(p, cmd, units);
+        break;
+      case 'binoculars': {
+        const ob = units.filter((u) => u.bino);
+        if (!ob.length || !fin(cmd.x) || !fin(cmd.z)) return false;
+        for (const u of ob) { u.bino.yaw = Math.atan2(cmd.x - u.pos.x, cmd.z - u.pos.z); if (!u.moving) u.heading = u.bino.yaw; }
+        ok = true;
+        break;
+      }
       case 'ability':
         if (!fin(cmd.x) || !fin(cmd.z)) return false;
         ok = this.useAbility(p.id, cmd.ability, cmd.x, cmd.z);
@@ -414,6 +434,7 @@ export class Game {
   issueOrder(units, x, z, target, { attackMove = false, playerId = this._localPlayerId } = {}) {
     units = units.filter((u) => u.alive && !u.type.structure && u.speed > 0);
     if (!units.length) return false;
+    for (const u of units) { if (u.garrison) this.gar.leave(u); u.garrisonGoal = null; }
     const fb = playerId === this._localPlayerId; // Rückmeldung nur für den lokalen Spieler
     if (fb) this.audio.ui('ack');
     if (target && target.side !== units[0].side) {
@@ -571,21 +592,47 @@ export class Game {
   lose(text) { if (this.ended) return; this.ended = true; this.later(2, () => this.emit('end', false, text)); }
 
   // ================== Sicht ==================
+  // Effektive Sichtweite eines Beobachters (Gebäude-Besatzung: höhere Position)
+  sightOf(o) {
+    let s = o.type.sight;
+    if (o.garrison) s *= Math.min(1.5, 1 + 0.1 * (o.garrison.houseDef?.floors || 1)) * (o.type.key.includes('sniper') ? 1.15 : 1);
+    return s;
+  }
+  // Sektor-Sichtradien (Nebeltextur) je Beobachter, gecacht
+  _observerSectors(o) {
+    const N = 24, now = this.time;
+    const sight = this.sightOf(o), bino = o.bino?.on ? o.type.observer.range : 0;
+    const key = (bino ? 1 : 0) + (o.garrison ? 2 : 0) + (bino ? Math.round(o.bino.yaw * 10) * 4 : 0);
+    let c = o._sec;
+    if (c && c.key === key && c.sight === sight && now - c.t < 1.5 + (o.id % 5) * 0.12 && Math.abs(c.x - o.pos.x) < 1.5 && Math.abs(c.z - o.pos.z) < 1.5) return c;
+    if (!c) c = o._sec = { r: new Float32Array(N), n: N };
+    c.key = key; c.sight = sight; c.t = now; c.x = o.pos.x; c.z = o.pos.z;
+    c.rMax = Math.max(sight, bino);
+    const cone = o.type.observer?.cone || 0, yaw = o.bino?.yaw || 0;
+    const fn = bino ? (a) => { let d = Math.abs(((a - yaw) % (Math.PI * 2) + Math.PI * 3) % (Math.PI * 2) - Math.PI); return d < cone / 2 ? bino : sight; } : null;
+    this.vision.sectors(o, c.rMax, c.r, N, fn ? fn : () => sight);
+    return c;
+  }
   updateVision(dt, force = false) {
     this.visionT -= dt;
     if (this.visionT > 0 && !force) return;
     this.visionT = 0.2;
-    const t = this.terrain;
+    const t0 = performance.now();
+    const t = this.terrain, V = this.vision;
     const fogOn = this.fow.enabled;
+    const ls = this.localSide;
     const byTeam = { UA: [], RU: [] };
     for (const u of this.units) if (u.alive && byTeam[u.side]) byTeam[u.side].push(u);
     const revealsOf = { UA: [], RU: [] };
     for (const r of this.reveals) (revealsOf[r.team] || revealsOf.UA).push(r);
-    // Nebelraster je Team (Sicht wird im Team geteilt)
+    // Nebelraster je Team (Sicht wird im Team geteilt); das lokale Team mit Verdeckung (Sektoren), andere als Kreise
     for (const team of TEAMS) {
       const f = this.fows[team];
       f.beginFrame();
-      for (const o of byTeam[team]) f.reveal(o.pos.x, o.pos.z, o.type.sight);
+      for (const o of byTeam[team]) {
+        if (fogOn && team === ls && !o.type.air && !o.type.structure) { const c = this._observerSectors(o); f.revealSectors(o.pos.x, o.pos.z, c.rMax, c.r, c.n); }
+        else f.reveal(o.pos.x, o.pos.z, this.sightOf(o));
+      }
       for (const r of revealsOf[team]) f.reveal(r.x, r.z, r.r);
       if (!fogOn) f.revealAll();
     }
@@ -597,34 +644,55 @@ export class Game {
       if (u.lastFired && this.time - u.lastFired < 2.5) k = Math.max(k, 0.85);
       return Math.max(0.2, k);
     };
-    const check = (u, observers, reveals) => {
+    const check = (u, observers, reveals, team) => {
       if (u.type.structure) return true; // Strukturen gelten als bekannt (Darstellung erst nach Erkundung)
+      if (u.garrison) return false;     // Insassen: nur über das Haus
       const k = concealOf(u);
-      for (const o of observers) {
-        const range = (u.type.air ? (o.type.airSight || o.type.sight * 1.1) : o.type.sight) * k;
+      const air = u.type.air;
+      const uy = air ? u.pos.y : t.surface(u.pos.x, u.pos.z);
+      const cached = u._visObs && u._visObs[team];
+      const test = (o) => {
         const dx = u.pos.x - o.pos.x, dz = u.pos.z - o.pos.z;
-        if (dx * dx + dz * dz < range * range) return true;
-      }
+        const d2 = dx * dx + dz * dz;
+        let range = air ? (o.type.airSight || o.type.sight * 1.1) : this.sightOf(o);
+        if (!air && !o.type.air) {
+          // erhöhte Position (Hügel, Gebäude) sieht weiter
+          const up = (o.garrison ? o.garrison.roofY : o.pos.y) - uy;
+          if (up > 2) range *= 1 + Math.min(0.3, (up - 2) * 0.02);
+        }
+        range *= k;
+        if (o.bino?.on && !air) {
+          let a = Math.abs(((Math.atan2(dx, dz) - o.bino.yaw) % (Math.PI * 2) + Math.PI * 3) % (Math.PI * 2) - Math.PI);
+          if (a < o.type.observer.cone / 2) range = Math.max(range, o.type.observer.range * k);
+        }
+        if (d2 >= range * range) return false;
+        if (air || o.type.air) return true; // Luftaufklärung sieht von oben über alles
+        return V.unitLos(o, u);
+      };
+      if (cached && cached.alive && test(cached)) return true;
+      for (const o of observers) { if (o !== cached && test(o)) { (u._visObs ||= {})[team] = o; return true; } }
       for (const r of reveals) if (Math.hypot(u.pos.x - r.x, u.pos.z - r.z) < r.r) return true;
       return false;
     };
     for (const team of TEAMS) {
       for (const u of byTeam[team]) u.seenBy[team] = true;
-      for (const u of byTeam[otherTeam(team)]) { if (u.type.build?.hidden) continue; u.seenBy[team] = !fogOn || check(u, byTeam[team], revealsOf[team]); }
+      for (const u of byTeam[otherTeam(team)]) { if (u.type.build?.hidden) continue; u.seenBy[team] = !fogOn || check(u, byTeam[team], revealsOf[team], team); }
     }
     this.logi.detectMines(byTeam); // verdeckte Minenfelder: Aufklärung durch Pioniere/Drohnen
     // Darstellung aus Sicht des lokalen Teams
-    const ls = this.localSide, lf = this.fows[ls];
+    const lf = this.fows[ls];
     for (const u of this.units) {
       if (!u.alive || u.side === 'N') continue;
-      const vis = u.side === ls || (u.type.build?.hidden ? u.seenBy[ls] : u.type.structure ? lf.isExplored(u.pos.x, u.pos.z) : u.seenBy[ls]);
+      const vis = !u.garrison && (u.side === ls || (u.type.build?.hidden ? u.seenBy[ls] : u.type.structure ? lf.isExplored(u.pos.x, u.pos.z) : u.seenBy[ls]));
       u.root.visible = vis;
-      if (u.ring) u.ring.visible = vis && this.selected.includes(u);
+      if (u.ring) u.ring.visible = (vis || (u.garrison && u.side === ls)) && this.selected.includes(u);
     }
     // Nicht mehr sichtbare Feinde aus Auswahl entfernen
     const before = this.selected.length;
     this.selected = this.selected.filter((u) => u.side === ls || u.side === 'N' || u.seenBy[ls] || u.type.structure);
     if (before !== this.selected.length) this.emit('selection');
+    const ms = performance.now() - t0, vs = this.visionStats;
+    vs.n++; vs.sum += ms; vs.last = ms; if (ms > vs.max) vs.max = ms;
   }
 
   // ================== Hauptschleife ==================
@@ -641,6 +709,7 @@ export class Game {
     this.effects.setScale(this.gr.intH || 800);
     if (!this.paused) this.effects.update(Math.min(dt, 0.05));
     this.updateRings();
+    this.updateCones();
   }
   stepSim(dt) {
     // Timer
@@ -666,6 +735,7 @@ export class Game {
     const list = [...this.units];
     for (const u of list) if (u.alive) u.update(dt);
     this.logi.update(dt);
+    this.gar.update(dt);
     this.separate();
     // Flugkörper
     for (const m of this.missiles) m.update(dt);
@@ -751,6 +821,36 @@ export class Game {
   _canStand(u, x, z) {
     const k = this.terrain.cellIndex(x, z);
     return k >= 0 && this.pathfinder.passable(k, u.type.naval ? 'water' : 'ground', !!u.type.vehicle);
+  }
+  // Fernglas-Kegel der eigenen Beobachter (dezent, Bodenfächer in Blickrichtung)
+  updateCones() {
+    const ls = this.localSide;
+    if (!this._coneGeo) {
+      const segs = 16, pos = [0, 0, 0];
+      for (let i = 0; i <= segs; i++) { const a = (i / segs - 0.5) * (Math.PI / 2); pos.push(Math.sin(a), 0, Math.cos(a)); }
+      const idx = []; for (let i = 1; i <= segs; i++) idx.push(0, i + 1, i);
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx);
+      geo.userData.shared = true;
+      this._coneGeo = geo;
+    }
+    for (const u of this.units) {
+      if (!u.bino) continue;
+      const show = u.alive && u.side === ls && !u.garrison;
+      let m = u._cone;
+      if (!show) { if (m) m.visible = false; continue; }
+      if (!m) {
+        m = u._cone = new THREE.Mesh(this._coneGeo, new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.06, depthWrite: false, depthTest: false, side: THREE.DoubleSide }));
+        m.renderOrder = 4; m.raycast = () => {}; m.frustumCulled = false;
+        this.scene.add(m);
+      }
+      m.visible = true;
+      const R = u.type.observer.range * (u.bino.on ? 1 : 0.35 + 0.65 * Math.min(1, u.bino.t / u.type.observer.delay) * 0.5);
+      m.scale.set(R, 1, R);
+      m.position.set(u.pos.x, u.pos.y + 0.7, u.pos.z);
+      m.rotation.y = u.bino.yaw;
+      m.material.opacity = u.bino.on ? 0.13 : 0.045;
+    }
   }
   updateRings() {
     for (const u of this.selected) {

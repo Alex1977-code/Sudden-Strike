@@ -74,6 +74,8 @@ export class HUD {
       const own = game.selected.filter((u) => u.alive && game.isOwn(u));
       const act = b.dataset.act;
       if (act === 'bailout') { const ids = own.filter((u) => game.logi.canBail(u)).map((u) => u.id); if (ids.length) game.issueCommand({ t: 'bailout', ids }); this.refreshBuildbar(true); }
+      else if (act === 'ungarrison') { const ids = own.filter((u) => u.garrison).map((u) => u.id); if (ids.length) game.issueCommand({ t: 'ungarrison', ids }); this.refreshBuildbar(true); }
+      else if (act === 'garrison' || act === 'binoculars') this.input.startBuild(act);
       else if (act === 'build') this.input.startBuild('build', b.dataset.kind);
       else if (act === 'clearmines' || act === 'demolish') this.input.startBuild(act);
       game.audio.ui('click');
@@ -407,11 +409,14 @@ export class HUD {
     const bail = g.logistics ? own.filter((u) => g.logi.canBail(u)) : [];
     const mat = eng.reduce((n, u) => n + u.material, 0);
     const pend = this.input?.pendingBuild;
-    if (pend && !eng.length) { this.input.cancelBuild(); return; }
-    const sig = `${eng.length}|${bail.length}|${Math.floor(mat + 1e-6)}|${pend ? pend.mode + (pend.kind || '') : ''}`;
+    if (pend && !eng.length && pend.mode !== 'binoculars' && pend.mode !== 'garrison') { this.input.cancelBuild(); return; }
+    const inf = g.logistics ? own.filter((u) => u.type.infantry && !u.type.kamikaze) : [];
+    const gar = own.filter((u) => u.garrison);
+    const obs = own.filter((u) => u.bino);
+    const sig = `${inf.length ? 1 : 0}|${gar.length}|${obs.length}|${eng.length}|${bail.length}|${Math.floor(mat + 1e-6)}|${pend ? pend.mode + (pend.kind || '') : ''}`;
     if (!force && sig === this.buildSig) return;
     this.buildSig = sig;
-    if (!eng.length && !bail.length) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+    if (!eng.length && !bail.length && !inf.length && !gar.length && !obs.length) { el.classList.add('hidden'); el.innerHTML = ''; return; }
     const btn = (act, kind, icon, label, dis, active) => `<button data-act="${act}"${kind ? ` data-kind="${kind}"` : ''}${dis ? ' disabled' : ''}${active ? ' class="active"' : ''} title="${label}">${icon}<span>${label}</span></button>`;
     let h = '';
     if (eng.length) {
@@ -423,6 +428,9 @@ export class HUD {
       h += btn('clearmines', '', '🧹', 'Räumen', false, pend?.mode === 'clearmines');
       h += btn('demolish', '', '💥', 'Sprengen 2', mat + 1e-6 < 2, pend?.mode === 'demolish');
     }
+    if (obs.length) h += btn('binoculars', '', '🔭', 'Fernglas', false, pend?.mode === 'binoculars');
+    if (inf.length) h += btn('garrison', '', '🏠', 'Besetzen', false, pend?.mode === 'garrison');
+    if (gar.length) h += btn('ungarrison', '', '🚪', 'Verlassen', false, false);
     if (bail.length) h += btn('bailout', '', '🚪', 'Aussteigen', false, false);
     el.innerHTML = h;
     el.classList.remove('hidden');
