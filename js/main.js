@@ -7,7 +7,8 @@ import { RTSCamera, Input } from './game/input.js';
 import { HUD } from './game/hud.js';
 import { CAMPAIGN, DEMO } from './missions/index.js';
 import { isMobile, isTouchDevice, fmtTime } from './engine/util.js';
-import { startSkirmish, normalizeSetup, ROLES, DIFFICULTIES, VICTORY, TEAM_NAME, TEAM_COLOR, MAP_PRESETS, MAP_SIZES } from './skirmish/skirmish.js';
+import { createOnline } from './net/onlineui.js';
+import { startSkirmish, createSkirmish, normalizeSetup, ROLES, DIFFICULTIES, VICTORY, TEAM_NAME, TEAM_COLOR, MAP_PRESETS, MAP_SIZES } from './skirmish/skirmish.js';
 import { generateSkirmishMap } from './skirmish/maps.js';
 
 const $ = (id) => document.getElementById(id);
@@ -42,7 +43,7 @@ const input = new Input(game, canvas, hud);
 hud.input = input;
 
 // ---------- Bildschirme ----------
-const screens = ['title', 'campaign', 'skirmish', 'briefing', 'settings', 'help', 'pause', 'end'];
+const screens = ['title', 'campaign', 'skirmish', 'online', 'lobby', 'briefing', 'settings', 'help', 'pause', 'end'];
 let current = 'title', returnTo = 'title';
 function show(name) {
   for (const s of screens) $('screen-' + s).classList.toggle('hidden', s !== name);
@@ -230,12 +231,40 @@ async function startSkirmishGame(setup) {
   updatePauseInfo();
   return m;
 }
+// ================= Online-Gefecht (MP-T5) =================
+const online = createOnline({
+  game, show, hideScreens,
+  startGame: (S) => startOnlineGame(S),
+  toMenu: async () => { inMission = false; game.paused = false; hud.show(false); await loadDemo(); show('title'); },
+  simTick: (dt) => simTick(dt),
+});
+async function startOnlineGame(S) {
+  currentSkirmish = null;
+  hideScreens();
+  let m = null;
+  await loadWithSpinner(`Lade Online-Gefecht (${S.mode}v${S.mode}) …`, () => {
+    game.camera.orbit = false;
+    m = createSkirmish(S);
+    game.setupPlayers(m.players);
+    game.load(m);
+  });
+  if (!m || !game.active) { online.hostLost('Die Karte konnte nicht geladen werden.'); return; }
+  currentMission = m;
+  inMission = true;
+  hud.show(true);
+  game.stats.start = game.time;
+  updatePauseInfo();
+}
 function updatePauseInfo() {
   const el = $('pause-info');
   const sk = game.mission?.skirmish;
   el.classList.toggle('hidden', !sk);
-  $('btn-quit').textContent = sk ? 'Zum Gefechtsmenü' : 'Zur Kampagne';
+  const on = online.inGame;
+  $('btn-restart').classList.toggle('hidden', on);
+  $('btn-quit').textContent = on ? 'Online-Spiel verlassen' : sk ? 'Zum Gefechtsmenü' : 'Zur Kampagne';
+  $('btn-resume').textContent = on ? 'Zurück zum Spiel' : 'Weiter';
   $('btn-restart').textContent = sk ? 'Gefecht neu starten' : 'Mission neu starten';
+  if (sk && on) { const S = sk.setup; el.innerHTML = `${game.mission.title}<br>Online · Seed <b>${S.seed}</b> · ${ROLES[game.localPlayer?.role]?.name || ''} · ${VICTORY[S.victory]}<br>Das Spiel läuft im Hintergrund weiter.`; return; }
   if (sk) { const S = sk.setup; el.innerHTML = `${game.mission.title}<br>Seed <b>${S.seed}</b> · ${ROLES[S.role].name} · KI ${DIFFICULTIES[S.difficulty]} · Verstärkung alle ${Math.round(S.reinforce / 60 * 10) / 10} min · ${VICTORY[S.victory]}`; }
 }
 function showSkirmishEnd(won, text) {
@@ -253,6 +282,13 @@ function showSkirmishEnd(won, text) {
   }
   $('end-stats').innerHTML = `<div>⏱ Gefechtsdauer: <b>${fmtTime(game.time)}</b> · Seed ${sk.setup.seed}</div><table class="sk-end-table"><tr><th>Spieler</th><th>Abschüsse</th><th>Verluste</th><th>Erobert</th><th>Verstärkung</th></tr>${rows.join('')}</table>`;
   const next = $('btn-end-next');
+  $('btn-end-retry').classList.toggle('hidden', online.inGame);
+  if (online.inGame) {
+    next.textContent = 'Zum Hauptmenü';
+    next.onclick = () => online.leaveGame();
+    show('end');
+    return;
+  }
   next.textContent = 'Gefechtsmenü';
   next.onclick = async () => { await loadDemo(); openSkirmish(); };
   $('btn-end-retry').textContent = 'Revanche';
@@ -263,20 +299,26 @@ function showSkirmishEnd(won, text) {
 // Pause
 hud.onTogglePause = () => {
   if (!inMission || game.ended) return;
+  if (online.inGame) { // Online: nur lokales Menü, die Simulation läuft weiter
+    if (current === 'pause') hideScreens(); else { updatePauseInfo(); show('pause'); }
+    return;
+  }
   if (game.paused && current === 'pause') { game.paused = false; hideScreens(); }
   else if (!game.paused) { game.paused = true; show('pause'); }
 };
 $('btn-menu').onclick = () => hud.togglePause();
-$('btn-resume').onclick = () => { game.paused = false; hideScreens(); };
+$('btn-resume').onclick = () => { if (!online.inGame) game.paused = false; hideScreens(); };
 $('btn-pause-settings').onclick = () => { returnTo = 'pause'; openSettings(); };
 $('btn-restart').onclick = () => { game.paused = false; if (currentSkirmish) startSkirmishGame(currentSkirmish); else startMission(currentMission); };
-$('btn-quit').onclick = async () => { game.paused = false; const sk = !!currentSkirmish; await loadDemo(); if (sk) openSkirmish(); else { renderCampaign(); show('campaign'); } };
+$('btn-quit').onclick = async () => { if (online.inGame) { online.leaveGame(); return; } game.paused = false; const sk = !!currentSkirmish; await loadDemo(); if (sk) openSkirmish(); else { renderCampaign(); show('campaign'); } };
 
 // Missionsende
 game.on('end', (won, text) => {
   if (!inMission) return;
   game.paused = true;
+  if (online.inGame) online.toggleChat(false);
   if (game.mission?.skirmish) { showSkirmishEnd(won, text); return; }
+  $('btn-end-retry').classList.remove('hidden');
   $('btn-end-retry').textContent = 'Erneut versuchen';
   const m = currentMission;
   const idx = CAMPAIGN.indexOf(m);
@@ -334,11 +376,24 @@ bindSetting('set-volume', 'volume', Number);
 
 // ---------- Spielschleife ----------
 let last = performance.now();
+// Simulationsschritt (auch vom Hintergrund-Takt des Online-Hosts genutzt): Client wendet vor, Host sendet nach dem Schritt
+function simTick(dt) {
+  const sess = online.session;
+  if (sess && !sess.isHost) online.update(dt);
+  const t0 = performance.now();
+  game.update(dt);
+  if (sess?.isHost) {
+    online.update(dt);
+    const ms = performance.now() - t0, st = sess.stats;
+    st.ticks++; st.tickMs += ms; if (ms > st.tickMax) st.tickMax = ms;
+  }
+}
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   input.update(dt);
-  game.update(dt);
+  simTick(dt);
+  online.frameDone();
   if (inMission) hud.update(dt);
   gr.render(dt);
   requestAnimationFrame(frame);
@@ -354,6 +409,7 @@ function frame(now) {
   window.__start = (i) => startMission(CAMPAIGN[i]);
   window.__startSkirmish = (setup = {}) => startSkirmishGame({ ...skSetup, ...setup });
   window.__openSkirmish = openSkirmish;
+  window.__online = online;
 })();
 
 // Offline-Fähigkeit (PWA)
@@ -361,4 +417,4 @@ if (!window.__ARTIFACT && 'serviceWorker' in navigator && (location.protocol ===
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 // App im Hintergrund → Pause
-document.addEventListener('visibilitychange', () => { if (document.hidden && inMission && !game.paused && !game.ended) hud.togglePause(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && inMission && !game.paused && !game.ended && !online.inGame) hud.togglePause(); });

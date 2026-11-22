@@ -168,8 +168,13 @@ class BaseTransport {
 
   _startHeartbeat() {
     clearInterval(this._hbTimer);
+    this._hbLast = now();
     this._hbTimer = setInterval(() => {
       const t = now();
+      // Eigener Takt war blockiert (z. B. Karte laden, Hintergrund-Tab): wartende Nachrichten sind noch nicht
+      // verarbeitet – den Peers eine Schonfrist geben statt sie fälschlich als getrennt zu werten (Erweiterung MP-T5).
+      if (t - this._hbLast > this.opts.heartbeatMs * 3) for (const peer of this._peers.values()) peer.lastSeen = Math.max(peer.lastSeen, t - this.opts.heartbeatMs);
+      this._hbLast = t;
       for (const [id, peer] of [...this._peers]) {
         if (t - peer.lastSeen > this.opts.peerTimeoutMs) {
           this._dropPeer(id, 'timeout');

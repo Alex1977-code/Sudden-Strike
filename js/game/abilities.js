@@ -1,6 +1,6 @@
 // Spezialfähigkeiten (vom Spieler auslösbar)
 // exec(game, x, z, player): player = auslösender Spieler aus game.players (Team, Besitzer neuer Einheiten).
-// Funk/Marker/Kamera nur für den lokalen Spieler bzw. dessen Team.
+// Funk/Marker über game.sayTo/markerTo an den Spieler bzw. sein Team (online auch an entfernte Spieler); Kamera nur lokal.
 import * as THREE from 'three';
 import { Missile } from './combat.js';
 import { rand } from '../engine/util.js';
@@ -11,7 +11,6 @@ const ARTY_W = { name: '155-mm', dmg: 200, splash: 6, vs: { soft: 1, light: 0.8,
 const STORM_W = { name: 'Storm Shadow', dmg: 2600, splash: 9, vs: { soft: 1, light: 1, heavy: 1, air: 0, struct: 1 } };
 const enemyOf = (team) => (team === 'UA' ? 'RU' : 'UA');
 const isLocal = (game, p) => p.id === game.localPlayerId;
-const teamLocal = (game, p) => p.team === game.localSide;
 
 export const ABILITIES = {
   scan: {
@@ -19,8 +18,8 @@ export const ABILITIES = {
     desc: 'Satellitenbild & Drohnenaufklärung: deckt ein Gebiet 15 s lang auf.',
     exec(game, x, z, p) {
       game.addReveal(x, z, 32, 15, p.team);
-      if (teamLocal(game, p)) game.effects.marker(x, z, 0x6ab0ff, 15, 32);
-      if (isLocal(game, p)) game.audio.ui('radio');
+      game.markerTo(p.team, x, z, 0x6ab0ff, 15, 32);
+      game.uiTo(p.id, 'radio');
     },
   },
   fpv: {
@@ -39,7 +38,7 @@ export const ABILITIES = {
           game.audio.drone(pl.pos.x, pl.pos.z);
         });
       }
-      if (teamLocal(game, p)) game.effects.marker(x, z, 0xffd500, 2, 14);
+      game.markerTo(p.team, x, z, 0xffd500, 2, 14);
     },
   },
   // Gefechtsmodus: russisches Gegenstück zum FPV-Schwarm (Orlan-/Lancet-Operator)
@@ -59,7 +58,7 @@ export const ABILITIES = {
           game.audio.drone(op.pos.x, op.pos.z);
         });
       }
-      if (teamLocal(game, p)) game.effects.marker(x, z, 0xff8030, 2, 14);
+      game.markerTo(p.team, x, z, 0xff8030, 2, 14);
     },
   },
   himars: {
@@ -71,7 +70,7 @@ export const ABILITIES = {
       const l = launchers[0];
       const visible = game.fowFor(p.team).isVisible(x, z);
       const spread = visible ? 6 : 16;
-      if (isLocal(game, p)) game.say('HIMARS', visible ? 'Ziel erfasst. Sechs Raketen unterwegs!' : 'Kein Sichtkontakt – feuern nach Koordinaten. Streuung erhöht!', 3);
+      game.sayTo(p.id, 'HIMARS', visible ? 'Ziel erfasst. Sechs Raketen unterwegs!' : 'Kein Sichtkontakt – feuern nach Koordinaten. Streuung erhöht!', 3);
       for (let i = 0; i < 6; i++) {
         game.later(i * 0.45, () => {
           const from = l.muzzleWorld().add(new THREE.Vector3(0, 1, 0));
@@ -93,9 +92,9 @@ export const ABILITIES = {
     exec(game, x, z, p) {
       const visible = game.fowFor(p.team).isVisible(x, z);
       const spread = visible ? 9 : 18;
-      if (isLocal(game, p)) game.say('Artillerie', 'Feuer frei, Lage folgt … Granaten im Anflug!', 3);
+      game.sayTo(p.id, 'Artillerie', 'Feuer frei, Lage folgt … Granaten im Anflug!', 3);
       for (let i = 0; i < 8; i++) game.combat.incomingShell(x + rand(-spread, spread), z + rand(-spread, spread), ARTY_W, p.team, 4.5 + i * 0.35, null, 1.3, p.id);
-      if (teamLocal(game, p)) game.effects.marker(x, z, 0xff8030, 6, 14);
+      game.markerTo(p.team, x, z, 0xff8030, 6, 14);
     },
   },
   stormshadow: {
@@ -105,14 +104,14 @@ export const ABILITIES = {
       // Startkante: mission.friendlyEdges[team] > mission.friendlyEdge (UA) > eigene Kartenhälfte
       const edge = game.mission.friendlyEdges?.[p.team] || (p.team === 'UA' && game.mission.friendlyEdge) || [0, (p.team === 'UA' ? 1 : -1) * (game.terrain.half + 40)];
       const from = new THREE.Vector3(edge[0] + rand(-20, 20), 30, edge[1]);
-      if (isLocal(game, p)) game.say('Luftwaffe', 'Su-24 hat abgeworfen. Storm Shadow im Anflug – Tiefflug.', 3);
+      game.sayTo(p.id, 'Luftwaffe', 'Su-24 hat abgeworfen. Storm Shadow im Anflug – Tiefflug.', 3);
       const m = new Missile(game, {
         from, to: new THREE.Vector3(x, game.terrain.surface(x, z) + 2, z), mode: 'cruise', cruiseAlt: 9, speed: 48, side: p.team, model: 'cruise', threat: 'cruise', scale: 1.1,
         onHit: (mm) => {
           game.effects.explosion(mm.pos.x, mm.pos.y, mm.pos.z, 3.2, { water: game.terrain.isWater(mm.pos.x, mm.pos.z) });
           game.splashDamage(mm.pos.x, mm.pos.z, STORM_W.splash, STORM_W.dmg, STORM_W, p.team, null, false, p.id);
         },
-        onIntercepted: () => { if (isLocal(game, p)) game.say('Luftwaffe', 'Storm Shadow wurde abgefangen! Flugabwehr ausschalten!', 4); },
+        onIntercepted: () => { game.sayTo(p.id, 'Luftwaffe', 'Storm Shadow wurde abgefangen! Flugabwehr ausschalten!', 4); },
       }).register();
       if (isLocal(game, p)) game.trackMissile(m);
     },
@@ -138,8 +137,8 @@ export const ABILITIES = {
       for (const u of game.units) {
         if (u.side === enemyOf(p.team) && u.alive && u.type.air && u.type.key !== 'ka52' && Math.hypot(u.pos.x - x, u.pos.z - z) < 38) { u.jammed = rand(0.5, 2.5); n++; }
       }
-      if (teamLocal(game, p)) game.effects.marker(x, z, 0xb070ff, 3, 38);
-      if (isLocal(game, p)) game.say('EloKa', n ? `Störsender aktiv – ${n} feindliche Drohne(n) verlieren die Verbindung.` : 'Störsender aktiv – keine feindlichen Drohnen im Gebiet.', 3);
+      game.markerTo(p.team, x, z, 0xb070ff, 3, 38);
+      game.sayTo(p.id, 'EloKa', n ? `Störsender aktiv – ${n} feindliche Drohne(n) verlieren die Verbindung.` : 'Störsender aktiv – keine feindlichen Drohnen im Gebiet.', 3);
       game.jamZones.push({ x, z, r: 38, t: 12, team: p.team });
     },
   },

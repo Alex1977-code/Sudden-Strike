@@ -492,6 +492,7 @@ export class HUD {
       rows.push(`<div class="tl-head" style="color:${SK_COL[team]}">${team === 'UA' ? 'Ukraine' : 'Russland'} · ${held} Punkt(e) · ${sk.scores[team]}</div>`);
       for (const p of g.playersOfTeam(team)) {
         let n = 0; for (const u of g.units) if (u.alive && u.owner === p.id && !u.type.structure && !u.type.kamikaze) n++;
+        if (p.netUnits !== undefined) n = p.netUnits; // Online-Client: Zahl vom Host (Feinde sind nicht alle bekannt)
         const st = p.defeated ? ' defeated' : p.waiting ? ' waiting' : '';
         rows.push(`<div class="tl-row${p.id === g.localPlayerId ? ' me' : ''}${st}"><i style="background:${p.color}"></i><span class="nm">${SK_ROLE[p.role] || ''} ${p.name}</span><span class="n">${n}</span><span class="kl">${p.stats.kills}/${p.stats.lost}</span></div>`);
       }

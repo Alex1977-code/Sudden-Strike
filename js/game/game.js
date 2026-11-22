@@ -26,6 +26,13 @@
  * Statistik: player.stats; game.stats.kills/lost/shots/intercepts spiegeln den lokalen Spieler (+ game.stats.start).
  * Niederlage: Kampagne – lokaler Spieler ohne Einheiten → lose(). teamMode – Spieler ohne Einheiten → defeated
  *   (emit 'playerDefeated'); ganzes lokales Team besiegt → lose(), ganzes Gegnerteam → win().
+ * Rückmeldungen (MP-T5): sayTo/alertTo/uiTo/markerTo(to, …) mit to = Spieler-id | Team 'UA'|'RU' | null (alle).
+ *   Lokal angezeigt, wenn der lokale Spieler gemeint ist; der Host leitet sie über game.net.feedback() an entfernte Spieler weiter.
+ * Online (MP-T5, js/net/session.js): game.net = { isHost, isClient, sendCommand, feedback, attacked }.
+ *   Host: volle Simulation, Snapshots/Events an Clients. Client (game.net.isClient): keine autoritative Simulation –
+ *   stepClient() bewegt nur Effekte/Flugkörper-Optik/Einheiten (u.remote → Interpolation aus Snapshots), Nebel aus
+ *   eigenen/verbündeten Einheiten (updateVisionClient). Einheiten-ids werden je load() ab 1 vergeben (Häuser/Punkte
+ *   damit auf Host und Clients gleich).
  */
 import * as THREE from 'three';
 import { Terrain, CELL } from '../engine/terrain.js';
@@ -35,7 +42,7 @@ import { Logistics } from './logistics.js';
 import { Vision, VIS } from './vision.js';
 import { Garrison, GAR } from './garrison.js';
 import { Effects } from '../engine/effects.js';
-import { Unit } from './unit.js';
+import { Unit, resetUnitIds } from './unit.js';
 import { Combat, Missile } from './combat.js';
 import { ABILITIES } from './abilities.js';
 import { UNIT_TYPES } from './unitTypes.js';
@@ -73,6 +80,7 @@ export class Game {
     this._applyPlayers(DEFAULT_PLAYERS);
   }
   on(ev, fn) { (this.listeners[ev] ||= []).push(fn); }
+  off(ev, fn) { const l = this.listeners[ev]; if (l) { const i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); } }
   emit(ev, ...a) { (this.listeners[ev] || []).forEach((f) => f(...a)); }
 
   // ================== Spieler & Teams ==================
@@ -171,6 +179,9 @@ export class Game {
     this.radarCache = {};
     this.trackedMissile = null;
     this.visionT = 0;
+    this.netRenderT = 0;
+    // Einheiten-ids je Mission ab 1: Häuser/Eroberungspunkte erhalten auf Host und Clients dieselben ids
+    resetUnitIds();
     // Häuser als zerstörbare Gebäude
     for (const h of this.terrain.objects.houses) {
       h.lit = !!mission.env?.night;
@@ -259,7 +270,8 @@ export class Game {
   }
   killUnit(u, killer, silent = false) {
     if (!u.alive) return;
-    u.die(killer, silent);
+    this._inDie = true; // Online-Host: Effekte des Todes spielen Clients selbst ab (Event 'die')
+    try { u.die(killer, silent); } finally { this._inDie = false; }
     this.removeUnit(u);
     // Statistik je Spieler (game.stats spiegelt den lokalen Spieler)
     if (u.side !== 'N' && !u.type.build) {
@@ -271,7 +283,7 @@ export class Game {
     }
     if (killer) killer.kills = (killer.kills || 0) + 1;
     if (this.mission?.onKill) this.mission.onKill(this, u, killer);
-    this.emit('kill', u, killer);
+    this.emit('kill', u, killer, silent);
   }
   applyDamage(target, dmg, w, src, opts = {}) {
     if (!target.alive || target.invulnerable) return;
@@ -294,7 +306,7 @@ export class Game {
     target.hp -= amount;
     target.lastHit = this.time;
     if (this.logistics && target.hp > 0 && target.type.vehicle && !target.type.structure) this.logi.onVehicleHit(target, amount, src);
-    if (this.isOwn(target) && amount > 5 && !target.type.structure) this.emit('underAttack', target);
+    if (amount > 5 && !target.type.structure) { if (this.isOwn(target)) this.emit('underAttack', target); else if (this.net?.isHost) this.net.attacked?.(target); }
     // KI reagiert auf Beschuss (teamneutral)
     if (target.ai && src && src.alive && src.side !== target.side && !target.order && target.ai.mode !== 'convoy' && !target.type.structure) {
       if (target.ai.mode === 'hold' && target.ai.reactive !== false) { /* bleibt stehen */ }
@@ -577,6 +589,28 @@ export class Game {
   every(t, fn, first = t) { const tm = { t: this.time + first, fn: () => { if (fn() !== false && !this.ended) { tm.t = this.time + t; this.timers.push(tm); } } }; this.timers.push(tm); }
   say(speaker, text, dur = 5) { this.emit('say', speaker, text, dur); this.audio.ui('radio'); }
   alert(text, dur = 4) { this.emit('alert', text, dur); }
+  // ---- Gezielte Rückmeldungen (Funk, Warnung, Ton, Marker) an Spieler/Team/alle ----
+  // to: Spieler-id bzw. Spieler-Objekt | Team 'UA'|'RU' | null (alle). Lokal anzeigen, wenn gemeint;
+  // der Online-Host leitet an entfernte Spieler weiter (game.net.feedback).
+  isLocalTarget(to) {
+    if (to === null || to === undefined) return true;
+    if (to === 'UA' || to === 'RU' || to === 'N') return to === this.localSide;
+    const id = typeof to === 'object' ? to.id : to;
+    return String(id) === String(this._localPlayerId);
+  }
+  notify(to, kind, ...a) {
+    if (this.isLocalTarget(to)) {
+      if (kind === 'say') this.say(...a);
+      else if (kind === 'alert') this.alert(...a);
+      else if (kind === 'ui') this.audio.ui(a[0]);
+      else if (kind === 'marker') this.effects?.marker(...a);
+    }
+    if (this.net?.isHost) this.net.feedback?.(to && typeof to === 'object' ? to.id : to, kind, a);
+  }
+  sayTo(to, speaker, text, dur = 5) { this.notify(to, 'say', speaker, text, dur); }
+  alertTo(to, text, dur = 4) { this.notify(to, 'alert', text, dur); }
+  uiTo(to, sound) { this.notify(to, 'ui', sound); }
+  markerTo(to, x, z, color, dur, r) { this.notify(to, 'marker', x, z, color, dur, r); }
   addObjective(id, text, { optional = false, hidden = false } = {}) { this.objectives.push({ id, text, state: 'open', optional, hidden }); this.emit('objectives'); }
   setObjective(id, state) {
     const o = this.objectives.find((o) => o.id === id);
@@ -614,6 +648,7 @@ export class Game {
     return c;
   }
   updateVision(dt, force = false) {
+    if (this.net?.isClient) return this.updateVisionClient(dt, force);
     this.visionT -= dt;
     if (this.visionT > 0 && !force) return;
     this.visionT = 0.2;
@@ -679,7 +714,30 @@ export class Game {
       for (const u of byTeam[otherTeam(team)]) { if (u.type.build?.hidden) continue; u.seenBy[team] = !fogOn || check(u, byTeam[team], revealsOf[team], team); }
     }
     this.logi.detectMines(byTeam); // verdeckte Minenfelder: Aufklärung durch Pioniere/Drohnen
-    // Darstellung aus Sicht des lokalen Teams
+    this._applyLocalVisibility();
+    const ms = performance.now() - t0, vs = this.visionStats;
+    vs.n++; vs.sum += ms; vs.last = ms; if (ms > vs.max) vs.max = ms;
+  }
+  // Online-Client: Nebel nur aus eigenen/verbündeten Einheiten; der Host schickt nur Feinde, die das Team sieht
+  updateVisionClient(dt, force = false) {
+    this.visionT -= dt;
+    if (this.visionT > 0 && !force) return;
+    this.visionT = 0.2;
+    const ls = this.localSide, f = this.fows[ls], fogOn = f.enabled;
+    f.beginFrame();
+    for (const o of this.units) {
+      if (!o.alive || o.side !== ls) continue;
+      if (fogOn && !o.type.air && !o.type.structure) { const c = this._observerSectors(o); f.revealSectors(o.pos.x, o.pos.z, c.rMax, c.r, c.n); }
+      else f.reveal(o.pos.x, o.pos.z, this.sightOf(o));
+    }
+    for (const r of this.reveals) if (r.team === ls) f.reveal(r.x, r.z, r.r);
+    if (!fogOn) f.revealAll();
+    for (const u of this.units) if (u.side !== ls && u.side !== 'N' && u.alive) u.seenBy[ls] = true;
+    this._applyLocalVisibility();
+  }
+  // Darstellung aus Sicht des lokalen Teams (root.visible, Ringe, Auswahl)
+  _applyLocalVisibility() {
+    const ls = this.localSide;
     const lf = this.fows[ls];
     for (const u of this.units) {
       if (!u.alive || u.side === 'N') continue;
@@ -691,8 +749,6 @@ export class Game {
     const before = this.selected.length;
     this.selected = this.selected.filter((u) => u.side === ls || u.side === 'N' || u.seenBy[ls] || u.type.structure);
     if (before !== this.selected.length) this.emit('selection');
-    const ms = performance.now() - t0, vs = this.visionStats;
-    vs.n++; vs.sum += ms; vs.last = ms; if (ms > vs.max) vs.max = ms;
   }
 
   // ================== Hauptschleife ==================
@@ -712,6 +768,7 @@ export class Game {
     this.updateCones();
   }
   stepSim(dt) {
+    if (this.net?.isClient) return this.stepClient(dt);
     // Timer
     for (let i = this.timers.length - 1; i >= 0; i--) {
       if (this.timers[i].t <= this.time) { const tm = this.timers.splice(i, 1)[0]; tm.fn(); }
@@ -757,6 +814,32 @@ export class Game {
       if (!this.demo && !this.ended && this.time > 3 && !this.mission.noDefaultDefeat) this.checkDefeat();
     }
     // Audio-Hörer
+    this.audio.listener.x = this.camera.target.x; this.audio.listener.z = this.camera.target.z; this.audio.listener.zoom = this.camera.dist;
+  }
+  // Online-Client: keine autoritative Simulation. Nur Optik (Timer für Todesanimationen, Animationen, Flugkörper ohne
+  // Wirkung), Einheiten-Interpolation (Unit.updateRemote), eigener Nebel, Abklingzeiten zwischen den Snapshots.
+  stepClient(dt) {
+    for (let i = this.timers.length - 1; i >= 0; i--) {
+      if (this.timers[i].t <= this.time) { const tm = this.timers.splice(i, 1)[0]; tm.fn(); }
+    }
+    for (let i = this.animations.length - 1; i >= 0; i--) {
+      const a = this.animations[i];
+      a.t += dt;
+      const k = Math.min(1, a.t / a.dur);
+      a.fn(k, dt);
+      if (k >= 1) this.animations.splice(i, 1);
+    }
+    for (const r of this.reveals) r.t -= dt;
+    this.reveals = this.reveals.filter((r) => r.t > 0);
+    for (const u of [...this.units]) if (u.alive) u.update(dt);
+    this.gar.update(dt);
+    for (const m of this.missiles) m.update(dt);
+    this.missiles = this.missiles.filter((m) => !m.dead);
+    if (this.trackedMissile?.dead) this.trackedMissile = null;
+    this.updateVision(dt);
+    this.fow.upload(dt);
+    for (const p of this.players) for (const a of p.abilities) if (a.cd > 0) a.cd = Math.max(0, a.cd - dt);
+    if (this.mission?.netUpdate) this.mission.netUpdate(this, dt);
     this.audio.listener.x = this.camera.target.x; this.audio.listener.z = this.camera.target.z; this.audio.listener.zoom = this.camera.dist;
   }
   hasCombatUnits(p) { return this.units.some((u) => u.owner === p.id && u.alive && !u.type.structure && !u.type.kamikaze); }

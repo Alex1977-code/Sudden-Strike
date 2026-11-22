@@ -5,7 +5,7 @@ import * as THREE from 'three';
 export const GAR = {
   hitMul: 0.25,        // Schadensfaktor für Insassen
   accMul: 0.5,         // Trefferchance gegen Insassen
-  enterDist: 2.5,      // Abstand zur Hauskante zum Betreten
+  enterDist: 4,        // Abstand zur Hauskante zum Betreten (MP-T5: 2,5 → 4, Trupps blieben an kleinen Häusern hängen)
   revealFor: 5,        // s, die ein feuerndes Haus als besetzt erkannt wird
   fleeHp: 0.5,         // Anteil Lebenspunkte der Flüchtenden
 };

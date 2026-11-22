@@ -10,6 +10,9 @@
 //          role 'armor'|'infantry'|'support'|'logistics', difficulty 'easy'|'normal'|'hard', reinforce Sekunden (120/180/300),
 //          victory 'annihilation'|'points'|'time30'|'time60'|'time90', seed, spectate (lokaler Spieler ebenfalls KI),
 //          timeLimit (Sek., überschreibt time*), pointsLimit }
+// Online (MP-T5): S.players = explizite Spielerliste [{id, team, role, slot, name, color, ai, local, remote, difficulty}]
+//   (slot = Position im Team → Aufmarschraum); S.netRole 'host' | 'client'. Der Client baut nur Karte und Punkte
+//   (keine Armeen, keine KI) und übernimmt den Zustand aus Snapshots (applyNetPoints, mission.netUpdate).
 import * as THREE from 'three';
 import { generateSkirmishMap, MAP_PRESETS, MAP_SIZES } from './maps.js';
 import { AICommander, TeamIntel } from './ai.js';
@@ -106,6 +109,9 @@ export function normalizeSetup(s = {}) {
 
 // Spielerliste (lokal + KI) mit Rollen: Gegnerteam spiegelt die Rollenverteilung
 function buildPlayers(S) {
+  if (Array.isArray(S.players) && S.players.length) {
+    return S.players.map((p) => ({ ...p, role: ROLES[p.role] ? p.role : 'armor', abilities: p.abilities || ABIL[ROLES[p.role] ? p.role : 'armor'][p.team] }));
+  }
   const n = S.mode;
   const roles = [S.role];
   for (const r of ROLE_ORDER) { if (roles.length >= n) break; if (!roles.includes(r) || roles.length >= 4) roles.push(r); }
@@ -135,16 +141,18 @@ export function createSkirmish(setup) {
   const totalValue = gen.capturePoints.reduce((s, c) => s + c.value, 0);
   const timeLimit = S.timeLimit || (S.victory.startsWith('time') ? +S.victory.slice(4) * 60 : null);
   const pointsLimit = S.victory === 'points' ? (S.pointsLimit || totalValue * 100) : null;
-  const localPl = players.find((p) => p.local);
-  const mySpawn = gen.spawns[S.team][localPl.slot] || gen.spawns[S.team][0];
-  const camBase = gen.camera[S.team];
+  const localPl = players.find((p) => p.local) || players[0];
+  const myTeam = localPl.team;
+  const mySpawn = gen.spawns[myTeam][localPl.slot] || gen.spawns[myTeam][0];
+  const camBase = gen.camera[myTeam];
+  const netClient = S.netRole === 'client';
 
   const mission = {
     id: 'skirmish', skirmishMission: true,
     title: `Gefecht ${S.mode}v${S.mode} – ${gen.title}`,
     place: gen.place, description: gen.description,
     map: gen.map, env: gen.env,
-    camera: { x: mySpawn.x, z: mySpawn.z + (S.team === 'UA' ? -16 : 16), dist: camBase.dist, yaw: camBase.yaw },
+    camera: { x: mySpawn.x, z: mySpawn.z + (myTeam === 'UA' ? -16 : 16), dist: camBase.dist, yaw: camBase.yaw },
     players: players.map((p) => ({ ...p })),
     noDefaultDefeat: true,
     logistics: true, // Munition, Treibstoff, Versorgung, Pioniere, Besatzungen (MP-T4b)
@@ -185,18 +193,22 @@ export function createSkirmish(setup) {
         sk.points.push(pt);
         setOwnerVisual(pt, null);
       }
+      g.addObjective('cp', 'Eroberungspunkte halten – beim Verstärkungs-Countdown erhält der Besitzer Nachschub');
+      g.addObjective('win', victoryText(S, pointsLimit, timeLimit));
+      if (netClient) return; // Online-Client: Einheiten, KI und Meldungen kommen vom Host
       // Startarmeen
       for (const p of g.players) spawnArmy(g, p, S, sk);
       // KI-Kommandeure (gestaffelt)
       let k = 0;
       for (const p of g.players) {
         if (!p.ai) continue;
-        sk.ais.push(new AICommander(g, sk, p, { difficulty: S.difficulty, phase: 0.5 + (k++ % 8) * 0.35 }));
+        const spec = players.find((q) => q.id === p.id);
+        sk.ais.push(new AICommander(g, sk, p, { difficulty: spec?.difficulty || S.difficulty, phase: 0.5 + (k++ % 8) * 0.35 }));
       }
-      g.addObjective('cp', 'Eroberungspunkte halten – beim Verstärkungs-Countdown erhält der Besitzer Nachschub');
-      g.addObjective('win', victoryText(S, pointsLimit, timeLimit));
-      g.later(1.5, () => g.say('Stab', `${gen.title}: ${S.mode}v${S.mode}, Team ${TEAM_NAME[S.team]}. Nehmt die Zeppeline und Punkte ein – wer sie beim Countdown hält, bekommt Verstärkung!`, 7));
+      g.later(1.5, () => { for (const t of ['UA', 'RU']) g.sayTo(t, 'Stab', `${gen.title}: ${S.mode}v${S.mode}, Team ${TEAM_NAME[t]}. Nehmt die Zeppeline und Punkte ein – wer sie beim Countdown hält, bekommt Verstärkung!`, 7); });
     },
+    // Online-Client: Animation der Punkte (Zustand aus Snapshots, siehe applyNetPoints)
+    netUpdate(g, dt) { animateSkirmish(g, dt); },
 
     update(g, dt) {
       const sk = this.skirmish;
@@ -393,9 +405,8 @@ function capture(g, sk, p, T) {
   for (const [pid, n] of Object.entries(p.byPlayer || {})) { const pl = g.playerById(+pid); if (pl && pl.team === T && n > bn) { bn = n; best = pl; } }
   if (best) best.stats.captured++;
   sk.log.push({ t: g.time, type: 'capture', cp: p.id, name: p.name, team: T, prev, player: best?.id ?? null });
-  const ls = g.localSide;
-  if (T === ls) { g.say('Stab', `${p.name} eingenommen${best ? ` (${best.name})` : ''}!`, 3); g.audio.ui('obj'); }
-  else if (prev === ls) { g.alert(`⚠ ${p.name} verloren!`, 3); g.audio.ui('fail'); }
+  g.sayTo(T, 'Stab', `${p.name} eingenommen${best ? ` (${best.name})` : ''}!`, 3); g.uiTo(T, 'obj');
+  if (prev && prev !== T) { g.alertTo(prev, `⚠ ${p.name} verloren!`, 3); g.uiTo(prev, 'fail'); }
   g.emit('cpCaptured', p, T, prev);
 }
 
@@ -431,7 +442,7 @@ function deliverReinforcements(g, sk) {
     p.stats.reinf += n + para;
     summary[team]++;
     sk.log.push({ t: g.time, type: 'reinforce', cp: cp.id, name: cp.name, kind: cp.kind, team, player: p.id, n: n + para, types });
-    if (said < 3) { said++; g.say(team === g.localSide ? 'Stab' : 'Aufklärung', `${cp.name}: Verstärkung für Team ${TEAM_NAME[team]} (${p.name})`, 3.5); }
+    if (said < 3) { said++; for (const t of ['UA', 'RU']) g.sayTo(t, team === t ? 'Stab' : 'Aufklärung', `${cp.name}: Verstärkung für Team ${TEAM_NAME[team]} (${p.name})`, 3.5); }
   }
   // Reserve für das unterlegene Team
   const held = { UA: 0, RU: 0 };
@@ -450,9 +461,10 @@ function deliverReinforcements(g, sk) {
     }
   }
   g.emit('abilities');
-  const ls = g.localSide;
-  g.alert(`Verstärkung! ${TEAM_NAME[ls]}: ${summary[ls]} Punkt(e) · ${TEAM_NAME[other(ls)]}: ${summary[other(ls)]} Punkt(e)`, 4);
-  g.audio.ui(summary[ls] >= summary[other(ls)] ? 'obj' : 'fail');
+  for (const ls of ['UA', 'RU']) {
+    g.alertTo(ls, `Verstärkung! ${TEAM_NAME[ls]}: ${summary[ls]} Punkt(e) · ${TEAM_NAME[other(ls)]}: ${summary[other(ls)]} Punkt(e)`, 4);
+    g.uiTo(ls, summary[ls] >= summary[other(ls)] ? 'obj' : 'fail');
+  }
   g.emit('reinforcements', summary);
 }
 // Kolonne rückt vom Kartenrand hinter dem Spawn ein
@@ -510,14 +522,14 @@ function checkVictory(g, sk) {
   for (const p of g.players) {
     if (p.defeated) continue;
     p.waiting = !ground.has(p.id);
-    if (p.waiting && !p._waitNote && p.id === g.localPlayerId && sk.setup.victory !== 'annihilation') { p._waitNote = true; g.alert('Keine Bodeneinheiten mehr – Verstärkung/Reserve beim nächsten Countdown.', 5); }
+    if (p.waiting && !p._waitNote && !p.ai && sk.setup.victory !== 'annihilation') { p._waitNote = true; g.alertTo(p.id, 'Keine Bodeneinheiten mehr – Verstärkung/Reserve beim nächsten Countdown.', 5); }
     if (!p.waiting) p._waitNote = false;
     // Ausscheiden nur im Modus „Vernichtung"; bei Punkte-/Zeitsieg warten Spieler ohne Einheiten auf Verstärkung/Reserve
     if (p.waiting && !holds[p.team] && sk.setup.victory === 'annihilation') {
       p.defeated = true;
       g.emit('playerDefeated', p);
-      if (p.id === g.localPlayerId) g.alert('Keine Einheiten mehr – dein Team kämpft weiter.', 5);
-      else g.say('Stab', `${p.name} (${TEAM_NAME[p.team]}) ist ausgeschaltet.`, 3);
+      g.alertTo(p.id, 'Keine Einheiten mehr – dein Team kämpft weiter.', 5);
+      for (const q of g.players) if (q.id !== p.id && !q.ai) g.sayTo(q.id, 'Stab', `${p.name} (${TEAM_NAME[p.team]}) ist ausgeschaltet.`, 3);
     }
   }
   const down = (t) => g.playersOfTeam(t).every((p) => p.defeated);
@@ -534,10 +546,35 @@ function checkVictory(g, sk) {
   } else return;
   sk.result = { winner, reason, time: g.time, scores: { ...sk.scores } };
   sk.log.push({ t: g.time, type: 'end', winner, reason });
-  const ls = g.localSide;
+  endFor(g, sk.result);
+}
+// Spielende aus Sicht des lokalen Teams (Host: checkVictory, Online-Client: Ergebnis aus dem Snapshot)
+export function endFor(g, result) {
+  const ls = g.localSide, { winner, reason } = result;
   if (winner === ls) g.win(`Sieg für Team ${TEAM_NAME[ls]}! ${reason}`);
   else if (winner) g.lose(`Team ${TEAM_NAME[winner]} gewinnt. ${reason}`);
   else g.lose(`Unentschieden. ${reason}`);
+}
+
+// ---------- Online: Punktzustand für Snapshots (Host) und dessen Übernahme (Client) ----------
+// Je Punkt: [owner 0|1|2, capTeam 0|1|2, progress 0..1000, contested 0|1]
+const TEAM_IDX = [null, 'UA', 'RU'];
+export function netPointState(sk) {
+  return sk.points.map((p) => [TEAM_IDX.indexOf(p.owner), TEAM_IDX.indexOf(p.capTeam), Math.round(p.progress * 1000), p.contested ? 1 : 0]);
+}
+export function applyNetPoints(g, sk, arr) {
+  if (!Array.isArray(arr)) return;
+  sk.points.forEach((p, i) => {
+    const e = arr[i]; if (!e) return;
+    const owner = TEAM_IDX[e[0]] || null, prev = p.owner;
+    p.capTeam = TEAM_IDX[e[1]] || null; p.progress = (e[2] || 0) / 1000; p.contested = !!e[3];
+    if (owner !== prev) { p.owner = owner; setOwnerVisual(p, owner); g.emit('cpCaptured', p, owner, prev); }
+    const r = p.ring;
+    if (p.capTeam && p.progress > 0) {
+      r.prog.material.color.set(p.contested ? '#ffa030' : TEAM_COLOR[p.capTeam]);
+      r.prog.geometry.setDrawRange(0, Math.round(r.segs * Math.min(1, p.progress)) * 6);
+    } else r.prog.geometry.setDrawRange(0, 0);
+  });
 }
 
 // ---------- Animation der Punkte (pro Frame, von main.js/HUD aufgerufen) ----------

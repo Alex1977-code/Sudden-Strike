@@ -168,7 +168,7 @@ export class Logistics {
     const frac = u.hp / u.maxHp, g = this.g;
     if (!u.immobilized && amount >= u.maxHp * 0.06 && Math.random() < LOGI.immobChance) {
       u.immobilized = true;
-      if (g.isOwn(u)) g.alert(`⚠ ${u.name}: Kette/Antrieb zerstört`, 3);
+      g.alertTo(u.owner, `⚠ ${u.name}: Kette/Antrieb zerstört`, 3);
     }
     if ((frac < 0.2 || (u.immobilized && frac < 0.5)) && amount >= u.maxHp * 0.02 && Math.random() < LOGI.bailChance) this.bailOut(u);
   }
@@ -199,7 +199,7 @@ export class Logistics {
     }
     this.stats.bailouts++;
     g.emit('bailout', u, side, owner);
-    if (side === g.localSide) g.say('Funk', `${u.name}: Besatzung hat das Fahrzeug verlassen!`, 3);
+    g.sayTo(side, 'Funk', `${u.name}: Besatzung hat das Fahrzeug verlassen!`, 3);
     return true;
   }
   maxCrew(u) { return u.type.armor === 'heavy' ? 3 : 2; }
@@ -213,8 +213,8 @@ export class Logistics {
     t.order = null; t.path = null;
     this.stats.captured++;
     g.emit('vehicleCaptured', t, inf);
-    if (t.side === g.localSide) { g.say('Funk', `${t.name} übernommen!`, 2.5); g.audio.ui('obj'); }
-    else if (prev === g.localSide) g.alert(`⚠ ${t.name} wurde vom Feind übernommen!`, 3);
+    g.sayTo(t.side, 'Funk', `${t.name} übernommen!`, 2.5); g.uiTo(t.side, 'obj');
+    if (prev && prev !== t.side) g.alertTo(prev, `⚠ ${t.name} wurde vom Feind übernommen!`, 3);
     this.board(inf);
     g.updateVision(0, true);
   }
@@ -406,7 +406,7 @@ export class Logistics {
           u.material -= LOGI.demolishCost;
           (g.charges ||= []).push({ x: t.pos.x, z: t.pos.z, target: t.id, t: LOGI.fuse, owner: u.owner, side: u.side });
           g.effects.marker(t.pos.x, t.pos.z, 0xff3030, LOGI.fuse, Math.max(3, t.radius * 0.5));
-          if (u.side === g.localSide) g.say('Pionier', `Sprengladung gelegt – Zünder ${LOGI.fuse} s. Abstand halten!`, 3);
+          g.sayTo(u.side, 'Pionier', `Sprengladung gelegt – Zünder ${LOGI.fuse} s. Abstand halten!`, 3);
           g.emit('chargePlanted', t, u);
           // Rückzug
           const a = Math.atan2(u.pos.x - t.pos.x, u.pos.z - t.pos.z);
@@ -444,13 +444,13 @@ export class Logistics {
         const veh = u.type.vehicle;
         g.effects.explosion(u.pos.x, u.pos.y + 0.3, u.pos.z, veh ? 0.9 : 0.5, { crater: false });
         g.applyDamage(u, veh ? LOGI.mineDmg.veh : LOGI.mineDmg.inf, MINE_W, { pos: m.pos, alive: false, side: m.side, owner: m.owner }, { topAttack: true });
-        if (veh && u.alive && Math.random() < 0.5 && g.logistics && !u.immobilized) { u.immobilized = true; if (g.isOwn(u)) g.alert(`⚠ ${u.name}: Mine – Kette zerstört`, 3); }
+        if (veh && u.alive && Math.random() < 0.5 && g.logistics && !u.immobilized) { u.immobilized = true; g.alertTo(u.owner, `⚠ ${u.name}: Mine – Kette zerstört`, 3); }
         m.mines -= 1;
         m.seenBy[u.side] = true; // Opfer-Team kennt das Minenfeld jetzt
         this.stats.mines++;
         g.emit('mineTriggered', m, u);
-        if (m.side === g.localSide) g.say('Pionier', 'Minenfeld hat ausgelöst!', 2);
-        else if (u.side === g.localSide) g.alert('⚠ Minenfeld!', 2.5);
+        g.sayTo(m.side, 'Pionier', 'Minenfeld hat ausgelöst!', 2);
+        g.alertTo(u.side, '⚠ Minenfeld!', 2.5);
         if (m.mines <= 0.0001) { this.removeBuilding(m); break; }
       }
     }

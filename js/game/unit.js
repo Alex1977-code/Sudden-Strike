@@ -5,6 +5,8 @@ import { buildModel, house as houseModel, rubble, wreckify } from './models.js';
 import { angleDiff, clamp, rand } from '../engine/util.js';
 
 let NEXT_ID = 1;
+// Je Mission ab 1 zählen (game.load): Häuser/Punkte bekommen auf Host und Online-Clients dieselben ids
+export function resetUnitIds(n = 1) { NEXT_ID = n; }
 const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _m = new THREE.Matrix4(), _up = new THREE.Vector3(0, 1, 0), _n = new THREE.Vector3();
 
 export class Unit {
@@ -259,6 +261,7 @@ export class Unit {
   // ---------------- Update ----------------
   update(dt) {
     if (!this.alive) return;
+    if (this.remote) { this.updateRemote(dt); return; }
     this.animT += dt;
     const type = this.type;
     if (this.lifetime) {
@@ -277,6 +280,32 @@ export class Unit {
     if (this.bino) this.updateObserver(dt);
     this.animate(dt);
     if (!type.structure) this.place(dt);
+  }
+  // Online-Client (u.remote): keine KI/Waffen/Bewegungslogik – Position, Ausrichtung, Turm und Flughöhe werden
+  // zwischen den Host-Snapshots interpoliert (game.netRenderT ≈ Hostzeit − Puffer). u.net.buf = [{t,x,z,h,ty,alt}]
+  updateRemote(dt) {
+    this.animT += dt;
+    const n = this.net;
+    if (n && n.buf.length) {
+      const T = this.game.netRenderT, b = n.buf;
+      while (b.length > 2 && b[1].t <= T) b.shift();
+      const a = b[0], c = b[1];
+      let x = a.x, z = a.z, h = a.h, ty = a.ty, alt = a.alt;
+      if (c && T > a.t) {
+        const k = Math.min(1, (T - a.t) / Math.max(1e-3, c.t - a.t));
+        if (Math.abs(c.x - a.x) + Math.abs(c.z - a.z) < 40) { x = a.x + (c.x - a.x) * k; z = a.z + (c.z - a.z) * k; } else if (k > 0.5) { x = c.x; z = c.z; }
+        h = a.h + angleDiff(a.h, c.h) * k; ty = a.ty + angleDiff(a.ty, c.ty) * k; alt = a.alt + (c.alt - a.alt) * k;
+        if (k >= 1 && b.length === 2 && T - c.t > 0.5) b.shift();
+      }
+      this.pos.x = x; this.pos.z = z; this.heading = h;
+      if (this.type.air) this.curAlt = alt;
+      if (this.bino) this.bino.yaw = ty; else this.turretYaw = ty;
+    }
+    if (this.model.turret) this.model.turret.rotation.y = this.turretYaw;
+    this.animate(dt);
+    if (this.type.naval && this.moving && Math.random() < 0.5) { const bk = _v.set(Math.sin(this.heading), 0, Math.cos(this.heading)); this.game.effects.trail(this.pos.x - bk.x * 3, this.pos.y, this.pos.z - bk.z * 3, 'wake'); }
+    if (this.type.kamikaze && this.type.air && Math.random() < dt * 2) this.game.audio.drone(this.pos.x, this.pos.z);
+    if (!this.type.structure) this.place(dt);
   }
   // Fernglas: im Stand (nicht bewegt, nicht gefeuert) nach type.observer.delay s aktiv; bino.yaw = Blickrichtung
   updateObserver(dt) {

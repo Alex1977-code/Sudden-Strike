@@ -27,6 +27,7 @@
   <div id="hud" class="hidden">
     <div id="topbar">
       <button id="btn-menu" class="icon-btn" title="Menü (Esc)">☰</button>
+      <button id="btn-chat" class="icon-btn hidden" title="Chat (Enter)">💬</button>
       <div id="objectives"></div>
       <div id="topright">
         <div id="timer"></div>
@@ -50,6 +51,11 @@
       <div id="abilities"></div>
     </div>
     <div id="target-hint" class="hidden"></div>
+    <div id="net-wait" class="hidden"></div>
+    <div id="net-chat" class="hidden">
+      <div id="net-chat-log"></div>
+      <form id="net-chat-form" class="hidden"><input id="net-chat-input" maxlength="300" autocomplete="off" placeholder="Nachricht an alle – mit /t nur ans Team"><button type="submit">➤</button></form>
+    </div>
   </div>
   <div id="selbox" class="hidden"></div>
 
@@ -63,6 +69,8 @@
       <div class="menu">
         <button id="btn-campaign" class="big">Kampagne</button>
         <button id="btn-skirmish" class="big">Gefecht</button>
+        <button id="btn-online" class="big">Online-Gefecht</button>
+        <p id="online-artifact-note" class="art-note hidden">Online-Spiel nur in der Web-Version (z. B. GitHub Pages) – hier nur der lokale Test.</p>
         <button id="btn-settings">Grafik &amp; Einstellungen</button>
         <button id="btn-help">Steuerung</button>
         <button id="btn-fullscreen">Vollbild</button>
@@ -102,6 +110,65 @@
         </div>
       </div>
       <div class="row"><button class="back">Zurück</button><button id="btn-sk-start" class="big">Gefecht starten ▶</button></div>
+    </div>
+  </div>
+
+  <div id="screen-online" class="screen hidden">
+    <div class="panel net-panel">
+      <h2>Online-Gefecht <span class="sub">bis 6 gegen 6, mit KI-Plätzen</span></h2>
+      <label>Dein Name <input id="net-name" maxlength="20" autocomplete="nickname" spellcheck="false"></label>
+      <div class="sk-field"><span>Verbindung</span><div class="seg" id="net-conn"><button data-v="peer">🌐 Internet (PeerJS)</button><button data-v="local">🧪 Lokal (gleicher Browser, Test)</button></div></div>
+      <p id="net-conn-note" class="note"></p>
+      <div class="net-actions">
+        <button id="btn-net-host" class="big">Raum erstellen</button>
+        <div class="net-or">oder</div>
+        <div class="net-join"><input id="net-code" placeholder="Raumcode, z. B. stst-K7PXM" autocomplete="off" autocapitalize="characters" spellcheck="false"><button id="btn-net-join" class="big">Raum beitreten</button></div>
+      </div>
+      <p id="net-status" class="net-status"></p>
+      <div class="row"><button class="back">Zurück</button></div>
+    </div>
+  </div>
+
+  <div id="screen-lobby" class="screen hidden">
+    <div class="panel wide net-lobby">
+      <div class="lobby-head">
+        <div class="lobby-codebox"><span class="muted">Raumcode</span><span id="lobby-code" class="room-code"></span></div>
+        <button id="btn-lobby-copy" title="Raumcode kopieren">📋 Kopieren</button>
+        <span id="lobby-me" class="muted"></span>
+      </div>
+      <div class="lobby-grid">
+        <div class="lobby-left">
+          <div id="lobby-team-UA" class="lobby-team"></div>
+          <div id="lobby-team-RU" class="lobby-team"></div>
+          <div class="lobby-tools"><button id="btn-lobby-team">⇄ Team wechseln</button></div>
+          <div class="lobby-chat">
+            <div id="lobby-chat-log"></div>
+            <form id="lobby-chat-form"><input id="lobby-chat-input" maxlength="300" autocomplete="off" placeholder="Nachricht an alle …"><button type="submit">Senden</button></form>
+          </div>
+        </div>
+        <div class="lobby-settings sk-form">
+          <div class="sk-field"><span>Modus</span><div class="seg" id="ls-mode"></div></div>
+          <label>Kartenthema <select id="ls-preset"></select></label>
+          <label>Größe <select id="ls-size"></select></label>
+          <label>Jahreszeit <select id="ls-season"><option value="summer">Sommer</option><option value="autumn">Herbst</option><option value="winter">Winter</option></select></label>
+          <label class="check"><input id="ls-night" type="checkbox"> Nachtgefecht</label>
+          <label>Verstärkung alle <select id="ls-reinforce"><option value="120">2 min</option><option value="180">3 min</option><option value="300">5 min</option></select></label>
+          <label>Siegbedingung <select id="ls-victory"></select></label>
+          <label>KI-Stärke <select id="ls-diff"></select></label>
+          <label>Seed <span class="seedrow"><input id="ls-seed" type="number" min="1" inputmode="numeric"><button id="ls-reroll" title="Neuer Zufallsseed">🎲</button></span></label>
+          <div class="ls-preview"><canvas id="ls-map" width="200" height="200"></canvas><div id="ls-info"></div></div>
+        </div>
+      </div>
+      <p id="lobby-status" class="net-status"></p>
+      <div class="row"><button id="btn-lobby-leave">Verlassen</button><span class="grow"></span><button id="btn-lobby-ready" class="big">Bereit</button><button id="btn-lobby-start" class="big">Spiel starten ▶</button></div>
+    </div>
+  </div>
+
+  <div id="net-msg" class="screen hidden">
+    <div class="panel">
+      <h2 id="net-msg-title">Verbindung</h2>
+      <p id="net-msg-text"></p>
+      <div class="row"><span></span><button id="net-msg-ok" class="big">Zum Hauptmenü</button></div>
     </div>
   </div>
 

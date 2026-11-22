@@ -14,6 +14,11 @@
 //   await lobby.joinLobby('stst-K7PXM');                             // Client
 //
 // Spieler-IDs = Slot-Index (0..11). Slots 0..n-1 = Team UA, n..2n-1 = Team RU (n = playersPerTeam).
+//
+// Erweiterung MP-T5: optionale Rolle je Slot (slot.role, z. B. 'armor'|'infantry'|'support'|'logistics'):
+//   setRole(role) – eigener Slot (Client → Host 'setRole'); setSlot(idx, 'ai', { role }) / setSlotRole(idx, role) – Host.
+//   Ohne slot.role bestimmt die Integration die Rolle aus der Position im Team. Zusätzliche Einstellungen
+//   (preset, night, reinforce, victory, difficulty …) reicht updateSettings unverändert durch.
 
 export const PROTOCOL_VERSION = 1;
 export const TEAMS = ['UA', 'RU'];
@@ -42,6 +47,7 @@ function cleanName(name, fallback) {
 }
 
 const clone = o => JSON.parse(JSON.stringify(o));
+const cleanRole = r => String(r ?? '').replace(/[^a-z]/g, '').slice(0, 16);
 const randomSeed = () => (Math.random() * 0x7fffffff) >>> 0 || 1;
 
 function makeSlot(slot, team, posInTeam) {
@@ -134,8 +140,9 @@ export class Lobby {
       for (let i = 0; i < n; i++) {
         const s = makeSlot(ti * n + i, team, i);
         const prev = keep[team][i];
-        if (prev) Object.assign(s, { kind: prev.kind, peerId: prev.peerId, name: prev.name, ready: prev.ready, difficulty: prev.difficulty });
+        if (prev) Object.assign(s, { kind: prev.kind, peerId: prev.peerId, name: prev.name, ready: prev.ready, difficulty: prev.difficulty, role: prev.role });
         if (s.difficulty === undefined) delete s.difficulty;
+        if (s.role === undefined) delete s.role;
         slots.push(s);
       }
     });
@@ -157,6 +164,17 @@ export class Lobby {
     if (s.kind === 'human') { this._emit('error', lobbyError(`Slot ${slotIdx + 1} ist von ${s.name} belegt.`, 'occupied')); return false; }
     Object.assign(s, { kind, peerId: null, name: kind === 'ai' ? (opts.name || 'KI') : '', ready: kind === 'ai' });
     if (kind === 'ai') s.difficulty = opts.difficulty || s.difficulty || 'normal'; else delete s.difficulty;
+    if (opts.role) s.role = cleanRole(opts.role);
+    this._changed();
+    return true;
+  }
+
+  /** Host: Rolle eines Slots (KI oder eigener) festlegen. */
+  setSlotRole(slotIdx, role) {
+    if (!this._requireHost('Rollen ändern')) return false;
+    const s = this.state.slots[slotIdx];
+    if (!s || (s.kind === 'human' && s.peerId !== this.transport.selfId)) return false;
+    s.role = cleanRole(role);
     this._changed();
     return true;
   }
@@ -308,6 +326,11 @@ export class Lobby {
         if (st.phase !== 'lobby') return;
         this._moveToTeam(s, msg.team, from);
         break;
+      case 'setRole':
+        if (st.phase !== 'lobby') return;
+        s.role = cleanRole(msg.role);
+        this._changed();
+        break;
       case 'cmd':
         if (st.phase !== 'game' || !msg.cmd || typeof msg.cmd !== 'object') return;
         this._emit('cmd', s.slot, msg.cmd);
@@ -328,6 +351,8 @@ export class Lobby {
       return;
     }
     Object.assign(target, { kind: 'human', peerId: s.peerId, name: s.name, ready: peerId === this.transport.selfId ? true : false });
+    if (s.role) target.role = s.role; else delete target.role;
+    delete s.role;
     Object.assign(s, { kind: 'open', peerId: null, name: '', ready: false });
     this._changed();
   }
@@ -417,6 +442,8 @@ export class Lobby {
     if (this.state) this._request('setName', { name: this.name });
   }
   setTeam(team) { this._request('setTeam', { team }); }
+  /** Eigene Rolle wählen (Erweiterung MP-T5). */
+  setRole(role) { this._request('setRole', { role: cleanRole(role) }); }
   setReady(ready = true) {
     if (this.isHost) return; // Host gilt immer als bereit (Start-Knopf)
     this._request('setReady', { ready: !!ready });
