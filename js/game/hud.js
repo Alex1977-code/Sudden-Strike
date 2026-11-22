@@ -1,6 +1,8 @@
 // HUD: Ziele, Auswahl, Fähigkeiten, Minikarte, Lebensbalken, Funksprüche
 import * as THREE from 'three';
 import { fmtTime } from '../engine/util.js';
+import { UNIT_TYPES } from './unitTypes.js';
+import { BUILD_KINDS } from './logistics.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -12,6 +14,8 @@ export class HUD {
     this.objEl = $('objectives');
     this.selEl = $('selection');
     this.abEl = $('abilities');
+    this.buildEl = $('buildbar');
+    this.buildSig = '';
     this.alertEl = $('alert');
     this.subEl = $('subtitle');
     this.timerEl = $('timer');
@@ -37,7 +41,9 @@ export class HUD {
 
     game.minimapReady = (img) => { this.mmBg = img; };
     game.on('objectives', () => this.refreshObjectives());
-    game.on('selection', () => this.refreshSelection());
+    game.on('selection', () => { this.refreshSelection(); this.refreshBuildbar(); });
+    game.on('vehicleCaptured', () => this.refreshBuildbar());
+    game.on('bailout', () => this.refreshBuildbar());
     game.on('abilities', () => this.refreshAbilities());
     game.on('say', (s, t, d) => this.queueSay(s, t, d));
     game.on('alert', (t, d) => this.showAlert(t, d));
@@ -61,6 +67,15 @@ export class HUD {
       else if (o === 'hold') { if (ids.length) { game.issueCommand({ t: 'hold', ids, value: !own.every((u) => u.holdFire) }); this.refreshSelection(); } }
       else if (o === 'all') game.select(game.playerUnits().filter((u) => !u.type.kamikaze || true));
       else if (o === 'box') this.input.setBoxMode(!this.input.boxMode);
+      game.audio.ui('click');
+    });
+    this.buildEl.addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b || b.disabled) return;
+      const own = game.selected.filter((u) => u.alive && game.isOwn(u));
+      const act = b.dataset.act;
+      if (act === 'bailout') { const ids = own.filter((u) => game.logi.canBail(u)).map((u) => u.id); if (ids.length) game.issueCommand({ t: 'bailout', ids }); this.refreshBuildbar(true); }
+      else if (act === 'build') this.input.startBuild('build', b.dataset.kind);
+      else if (act === 'clearmines' || act === 'demolish') this.input.startBuild(act);
       game.audio.ui('click');
     });
     this.mm.addEventListener('pointerdown', (e) => this._minimapClick(e));
@@ -92,8 +107,8 @@ export class HUD {
     if (sel.length === 1) {
       const u = sel[0];
       const w = u.type.weaponDefs.map((w) => w.name).join(', ') || 'unbewaffnet';
-      const side = g.isOwn(u) ? '' : u.side === g.localSide ? `<span style="color:#5db8ff">Verbündet${g.playerById(u.owner) ? ' (' + g.playerById(u.owner).name + ')' : ''}</span> · ` : u.side === 'N' ? '<span class="muted">Neutral</span> · ' : '<span style="color:#ff6b6b">Feind</span> · ';
-      this.selEl.innerHTML = `${this._unitBox(u, 1)}<div class="sel-detail"><b>${u.name}</b><br>${side}<span class="muted">${w}</span><br><span class="muted">${u.type.desc || ''}</span>${u.holdFire ? '<br><span style="color:#ffd500">Feuer halten</span>' : ''}<span class="hpnum"></span></div>`;
+      const side = g.isOwn(u) ? '' : u.side === g.localSide ? `<span style="color:#5db8ff">Verbündet${g.playerById(u.owner) ? ' (' + g.playerById(u.owner).name + ')' : ''}</span> · ` : u.abandoned ? '<span style="color:#ffd500">Verlassen</span> · ' : u.side === 'N' ? '<span class="muted">Neutral</span> · ' : '<span style="color:#ff6b6b">Feind</span> · ';
+      this.selEl.innerHTML = `${this._unitBox(u, 1)}<div class="sel-detail"><b>${u.name}</b><br>${side}<span class="muted">${w}</span><br><span class="muted">${u.abandoned ? 'Verlassen – Infanterie kann das Fahrzeug übernehmen, Bergepanzer reparieren.' : (u.type.desc || '')}</span>${u.holdFire ? '<br><span style="color:#ffd500">Feuer halten</span>' : ''}<div class="logi"></div><span class="hpnum"></span></div>`;
       this.selEl.firstChild.onclick = () => g.camera.focus(u.pos.x, u.pos.z);
       return;
     }
@@ -208,12 +223,18 @@ export class HUD {
       if (!u.alive || u.side === 'N') continue;
       if (u.side !== ls && !u.root.visible) continue;
       const [x, y] = toM(u.pos.x, u.pos.z);
-      const s = u.type.structure ? 5 : u.type.vehicle || u.type.naval ? 3.5 : 2.5;
+      const s = u.type.build ? 2 : u.type.structure ? 5 : u.type.vehicle || u.type.naval ? 3.5 : 2.5;
       // Eigene grün, Verbündete blau, Feinde rot
       ctx.fillStyle = g.isOwn(u) ? (g.selected.includes(u) ? '#ffffff' : '#5dff8a') : u.side === ls ? (g.selected.includes(u) ? '#d8ecff' : '#5db8ff') : '#ff4d4d';
       if (u.type.air) { ctx.beginPath(); ctx.moveTo(x, y - s); ctx.lineTo(x + s, y + s); ctx.lineTo(x - s, y + s); ctx.fill(); }
       else ctx.fillRect(x - s / 2, y - s / 2, s, s);
       if (u.tags.has('target') && u.side !== ls) { ctx.strokeStyle = '#ffd500'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 5, y - 5, 10, 10); }
+    }
+    // Verlassene Fahrzeuge (neutral)
+    for (const u of g.units) {
+      if (!u.alive || !u.abandoned) continue;
+      const [x, y] = toM(u.pos.x, u.pos.z);
+      ctx.strokeStyle = '#ffd500'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 3, y - 3, 6, 6);
     }
     // Missionsmarker
     for (const m of g.mission?.markers || []) {
@@ -256,11 +277,13 @@ export class HUD {
     const zoomK = Math.max(0.6, Math.min(1.4, 70 / g.camera.dist));
     const ls = g.localSide;
     for (const u of g.units) {
-      if (!u.alive || u.side === 'N' && u.hp >= u.maxHp) continue;
+      if (!u.alive || u.side === 'N' && u.hp >= u.maxHp && !u.abandoned) continue;
       if (u.side !== ls && u.side !== 'N' && !u.root.visible) continue;
       const sel = g.selected.includes(u);
       const target = u.tags.has('target') || u.tags.has('protect');
-      if (!sel && u.hp >= u.maxHp && !target) continue;
+      const building = u.build && u.build.progress < 1;
+      if (!sel && u.hp >= u.maxHp && !target && !u.abandoned && !building) continue;
+      if (u.type.build && !sel && !building) continue;
       v.set(u.pos.x, u.pos.y + (u.model.height || 2) + 1.2, u.pos.z);
       v.project(cam);
       if (v.z > 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1) continue;
@@ -276,14 +299,30 @@ export class HUD {
         ctx.textAlign = 'center';
         ctx.fillText(u.tags.has('protect') ? '◆ SCHÜTZEN' : '◆ ZIEL', x, y - 4);
       }
+      if (u.abandoned) { ctx.fillStyle = '#ffd500'; ctx.font = '700 10px system-ui'; ctx.textAlign = 'center'; ctx.fillText('⚑ verlassen', x, y - 4); }
+      if (building) { ctx.fillStyle = '#5dff8a'; ctx.font = '700 10px system-ui'; ctx.textAlign = 'center'; ctx.fillText(`🔨 ${Math.round(u.build.progress * 100)} %`, x, y - 4); }
+      // Logistik: Munitions-/Treibstoffbalken, Vorrat (Lkw), Baumaterial
+      let yy = y + bh + 3;
+      if (sel && g.logistics && u.side === ls) {
+        const bar = (frac, col) => { ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - bw / 2 - 1, yy - 1, bw + 2, 5); ctx.fillStyle = col; ctx.fillRect(x - bw / 2, yy, bw * Math.max(0, Math.min(1, frac)), 3); yy += 6; };
+        const am = u.ammoInfo();
+        if (am) bar(am.cur / am.max, am.cur < 1 ? '#ff5a5a' : '#6fb7ff');
+        if (u.maxFuel) bar(u.fuel / u.maxFuel, u.fuel <= 0 ? '#ff5a5a' : '#ffb347');
+        if (u.supply) { bar(u.supply.ammo / u.type.supply.ammo, '#6fb7ff'); bar(u.supply.fuel / u.type.supply.fuel, '#ffb347'); }
+        ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+        if (u.maxMaterial || u.supply) { ctx.fillStyle = '#ffd500'; ctx.fillText(`⛏ ${Math.floor((u.maxMaterial ? u.material : u.supply.material) + 1e-6)}`, x, yy + 8); yy += 11; }
+        if (u.immobilized) { ctx.fillStyle = '#ff8a8a'; ctx.fillText('Kette zerstört', x, yy + 8); yy += 11; }
+        else if (u.maxFuel && u.fuel <= 0) { ctx.fillStyle = '#ff8a8a'; ctx.fillText('Tank leer', x, yy + 8); yy += 11; }
+        else if (am && am.cur < 1) { ctx.fillStyle = '#ff8a8a'; ctx.fillText('Munition leer', x, yy + 8); yy += 11; }
+      }
       // Munition (Flugabwehr)
       if (sel && u.side === ls) {
         const w = u.weapons.find((w) => w.def.ammo);
         if (w) {
           ctx.fillStyle = '#9ec5ff'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
-          ctx.fillText(w.ammo > 0 ? `${w.ammo}/${w.def.ammo}` : `Nachladen ${Math.ceil(w.reloadT)}s`, x, y + 15);
+          ctx.fillText(w.ammo > 0 ? `${w.ammo}/${w.def.ammo}` : `Nachladen ${Math.ceil(w.reloadT)}s`, x, yy + 9);
         }
-        if (u.lifetime) { ctx.fillStyle = '#ffd500'; ctx.font = '10px system-ui'; ctx.textAlign = 'center'; ctx.fillText(`🔋${Math.ceil(u.lifetime)}s`, x, y + 15); }
+        if (u.lifetime) { ctx.fillStyle = '#ffd500'; ctx.font = '10px system-ui'; ctx.textAlign = 'center'; ctx.fillText(`🔋${Math.ceil(u.lifetime)}s`, x, yy + 9); }
       }
     }
     // Eroberungspunkte: Name + Fortschritt über dem Punkt
@@ -340,7 +379,53 @@ export class HUD {
       const u = sel[0];
       const bar = this.selEl.querySelector('.hp i');
       if (bar) { const hp = Math.max(0, u.hp / u.maxHp); bar.style.width = hp * 100 + '%'; }
+      const lg = this.selEl.querySelector('.logi');
+      if (lg) lg.innerHTML = this.logiText(u);
     }
+    this.refreshBuildbar();
+  }
+  // Logistik-Zustand einer Einheit als Text (Auswahl-Detail)
+  logiText(u) {
+    if (!this.game.logistics) return '';
+    const parts = [];
+    const am = u.ammoInfo();
+    if (am) parts.push(`Munition ${Math.floor(am.cur)}/${am.max}`);
+    if (u.maxFuel) parts.push(`Treibstoff ${Math.round(u.fuel / u.maxFuel * 100)} %`);
+    if (u.maxMaterial) parts.push(`Material ${Math.floor(u.material + 1e-6)}/${u.maxMaterial}`);
+    if (u.supply) parts.push(`Vorrat: Mun ${Math.round(u.supply.ammo / u.type.supply.ammo * 100)} % · Sprit ${Math.round(u.supply.fuel / u.type.supply.fuel * 100)} % · Mat ${Math.floor(u.supply.material)}`);
+    if (u.immobilized) parts.push('<span style="color:#ff8a8a">Kette zerstört</span>');
+    else if (u.maxFuel && u.fuel <= 0) parts.push('<span style="color:#ff8a8a">Tank leer</span>');
+    if (u.build && u.build.progress < 1) parts.push(`Bau ${Math.round(u.build.progress * 100)} %`);
+    return parts.join(' · ');
+  }
+  // Befehlsleiste für Pioniere (Bauen, Minen räumen, Sprengen) und Fahrzeuge (Aussteigen)
+  refreshBuildbar(force = false) {
+    const g = this.game, el = this.buildEl;
+    if (!el) return;
+    const own = g.selected.filter((u) => u.alive && g.isOwn(u));
+    const eng = g.logistics ? own.filter((u) => u.type.engineer) : [];
+    const bail = g.logistics ? own.filter((u) => g.logi.canBail(u)) : [];
+    const mat = eng.reduce((n, u) => n + u.material, 0);
+    const pend = this.input?.pendingBuild;
+    if (pend && !eng.length) { this.input.cancelBuild(); return; }
+    const sig = `${eng.length}|${bail.length}|${Math.floor(mat + 1e-6)}|${pend ? pend.mode + (pend.kind || '') : ''}`;
+    if (!force && sig === this.buildSig) return;
+    this.buildSig = sig;
+    if (!eng.length && !bail.length) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+    const btn = (act, kind, icon, label, dis, active) => `<button data-act="${act}"${kind ? ` data-kind="${kind}"` : ''}${dis ? ' disabled' : ''}${active ? ' class="active"' : ''} title="${label}">${icon}<span>${label}</span></button>`;
+    let h = '';
+    if (eng.length) {
+      h += `<div class="mat" title="Baumaterial-Ladungen der gewählten Pioniere (Nachschub am Versorgungs-Lkw)">⛏ ${Math.floor(mat + 1e-6)}/${eng.reduce((n, u) => n + u.maxMaterial, 0)}</div>`;
+      for (const k of BUILD_KINDS) {
+        const d = UNIT_TYPES[k];
+        h += btn('build', k, d.icon, `${d.name.replace('Schützengraben', 'Graben').replace('Sandsackwall', 'Sandsäcke').replace('Panzersperre', 'Sperre')} ${d.build.cost}`, mat + 1e-6 < d.build.cost, pend?.mode === 'build' && pend.kind === k);
+      }
+      h += btn('clearmines', '', '🧹', 'Räumen', false, pend?.mode === 'clearmines');
+      h += btn('demolish', '', '💥', 'Sprengen 2', mat + 1e-6 < 2, pend?.mode === 'demolish');
+    }
+    if (bail.length) h += btn('bailout', '', '🚪', 'Aussteigen', false, false);
+    el.innerHTML = h;
+    el.classList.remove('hidden');
   }
   togglePause() { this.onTogglePause && this.onTogglePause(); }
 

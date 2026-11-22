@@ -99,6 +99,7 @@ export class Combat {
     acc *= 1 - 0.35 * Math.min(1, d / w.range);
     if (target.moving) acc *= target.type.infantry ? 0.8 : 0.85;
     if (target.type.infantry && this.game.terrain.inForest(target.pos.x, target.pos.z)) acc *= 0.65;
+    if (target.type.infantry && this.game.logi?.coverOf(target)) acc *= 0.8; // Deckung (Sandsäcke/Graben)
     if (shooter.moving) acc *= 0.7;
     if (shooter.hp < shooter.maxHp * 0.3) acc *= 0.85;
     return Math.min(0.97, acc);

@@ -45,7 +45,9 @@ export class AICommander {
     this.stealers = new Map(); // unitId → { cp, cycle }
     this.stealCycle = -1;
     this.home = [player.spawn.x, player.spawn.z];
-    this.stats = { thinks: 0, commands: 0, abilities: 0, steals: 0, retreats: 0 };
+    this.stats = { thinks: 0, commands: 0, abilities: 0, steals: 0, retreats: 0, builds: 0, clears: 0, crews: 0, bailouts: 0, resupplies: 0, truckMoves: 0, repairMoves: 0, supplied: 0 };
+    this.resup = new Map(); // unitId → { t0 } Einheiten auf dem Weg zum Nachschub
+    this.orderT = new Map(); // unitId → Zeit des letzten Logistik-Befehls (Drosselung)
     this.gid = 0;
   }
   cmd(c) { const ok = this.g.command(this.p.id, c); if (ok) this.stats.commands++; return ok; }
@@ -60,15 +62,17 @@ export class AICommander {
   think() {
     const g = this.g, p = this.p, team = p.team, sk = this.sk;
     this.stats.thinks++;
-    const ground = [], air = [], arty = [], trucks = [];
+    const ground = [], air = [], arty = [], trucks = [], engineers = [], crews = [];
     const alive = new Set();
     for (const u of g.units) {
       if (!u.alive || u.owner !== p.id || u.type.structure || u.type.kamikaze) continue;
       alive.add(u.id);
       if (u.type.air) air.push(u);
       else if (u.type.naval) continue;
+      else if (u.type.engineer) engineers.push(u);
+      else if (u.type.key === 'ua_crew' || u.type.key === 'e_crew') crews.push(u);
       else if (u.type.key === 'himars' || u.weapons.some((w) => w.def.indirect)) arty.push(u);
-      else if (!u.weapons.length) trucks.push(u);
+      else if (u.supply || u.type.repair || !u.weapons.length) trucks.push(u);
       else ground.push(u);
     }
     // Aufräumen
@@ -77,6 +81,7 @@ export class AICommander {
     for (const id of [...this.assign.keys()]) if (!alive.has(id)) this.assign.delete(id);
     for (const id of [...this.retreat]) if (!alive.has(id)) this.retreat.delete(id);
     for (const [id, s] of [...this.stealers]) if (!alive.has(id) || s.cycle !== sk.reinfCycle) this.stealers.delete(id);
+    for (const id of [...this.resup.keys()]) if (!alive.has(id)) this.resup.delete(id);
     const enemies = sk.intel[team].visibleEnemies();
 
     // 1) Rückzug stark beschädigter Einheiten
@@ -92,7 +97,8 @@ export class AICommander {
         }
       }
     }
-    const active = ground.filter((u) => !this.retreat.has(u.id) && !this.stealers.has(u.id));
+    if (g.logistics) this.resupplyCheck(ground);
+    const active = ground.filter((u) => !this.retreat.has(u.id) && !this.stealers.has(u.id) && !this.resup.has(u.id) && !u.job);
 
     // 2) Gruppen
     this.organize(active);
@@ -116,7 +122,8 @@ export class AICommander {
 
     // 4) Unterstützungseinheiten
     const lead = mains.filter((gr) => gr.ids.size).sort((a, b) => b.ids.size - a.ids.size)[0];
-    this.supportUnits(arty, air, trucks, lead, enemies);
+    this.supportUnits(arty, air, [], lead, enemies);
+    if (g.logistics) this.logisticsUnits(trucks, engineers, crews, ground, lead, enemies);
 
     // 5) Countdown-Reaktion
     if (this.L.window && sk.reinfT < this.L.window) this.countdownReaction(ground, enemies);
@@ -333,6 +340,197 @@ export class AICommander {
       this.stealsSent++;
       sk.log.push({ t: g.time, type: 'stealAttempt', cp: c.id, name: c.name, team, player: this.p.id, unit: best.type.key, eta: Math.round(be) });
     }
+  }
+
+  // ================= Logistik (MP-T4b) – ausschließlich über game.command =================
+  detach(u) { const gr = this.assign.get(u.id); if (gr) gr.ids.delete(u.id); this.assign.delete(u.id); }
+  needsSupply(u, lim = 0.15) {
+    const am = u.ammoInfo();
+    return !!((am && am.cur / am.max < lim) || (u.maxFuel && u.fuel / u.maxFuel < lim));
+  }
+  throttled(u, sec) { const t = this.orderT.get(u.id); if (t !== undefined && this.g.time - t < sec) return true; this.orderT.set(u.id, this.g.time); return false; }
+  // Nachschubpunkte (eigene Spawn-Zone, gehaltene Depots) und Versorgungs-Lkw des Teams
+  supplyDirectPoints() {
+    const team = this.p.team, mission = this.g.mission;
+    return (mission.supplyPoints?.(this.g) || []).filter((pt) => pt.team === team && pt.direct);
+  }
+  nearestSupplyTruck(u) {
+    let best = null, bd = Infinity;
+    for (const t of this.g.units) {
+      if (!t.alive || !t.supply || t.side !== this.p.team || t === u) continue;
+      if (t.supply.ammo < 80 && t.supply.fuel < 80) continue;
+      const dd = d2(t.pos.x, t.pos.z, u.pos.x, u.pos.z);
+      if (dd < bd) { bd = dd; best = t; }
+    }
+    return best;
+  }
+  // Einheiten mit leerer Munition/Tank ziehen sich zum Versorgungs-Lkw oder zum Nachschubpunkt zurück und schließen sich danach wieder an
+  resupplyCheck(ground) {
+    const g = this.g;
+    for (const u of ground) {
+      const r = this.resup.get(u.id);
+      if (r) {
+        const done = !this.needsSupply(u, 0.5) || g.time - r.t0 > 90;
+        if (done) { this.resup.delete(u.id); this.stats.supplied++; continue; }
+        if (!u.order && !this.throttled(u, 6)) this.sendToSupply(u);
+      } else if (this.needsSupply(u, 0.12) && !this.retreat.has(u.id) && !this.stealers.has(u.id)) {
+        this.resup.set(u.id, { t0: g.time });
+        this.detach(u);
+        this.stats.resupplies++;
+        this.orderT.set(u.id, g.time);
+        this.sendToSupply(u);
+      }
+    }
+  }
+  sendToSupply(u) {
+    if (u.cantMove && !u.immobilized && u.maxFuel && u.fuel <= 0) return; // Tank leer: Lkw kommt zu ihm
+    const tr = this.nearestSupplyTruck(u);
+    let x, z;
+    if (tr && d2(tr.pos.x, tr.pos.z, u.pos.x, u.pos.z) < 260 * 260) { x = tr.pos.x + (Math.random() - 0.5) * 8; z = tr.pos.z + (Math.random() - 0.5) * 8; }
+    else {
+      const pts = this.supplyDirectPoints().sort((a, b) => d2(a.x, a.z, u.pos.x, u.pos.z) - d2(b.x, b.z, u.pos.x, u.pos.z));
+      if (pts.length) { x = pts[0].x + (Math.random() - 0.5) * 12; z = pts[0].z + (Math.random() - 0.5) * 12; } else { x = this.home[0]; z = this.home[1]; }
+    }
+    this.cmd({ t: 'move', ids: [u.id], x, z });
+  }
+  // Punkt hinter der Frontgruppe (Richtung eigener Aufmarschraum)
+  behindFront(gr, dist) {
+    const vx = this.home[0] - gr.cx, vz = this.home[1] - gr.cz, l = Math.hypot(vx, vz) || 1;
+    const k = Math.min(dist, l);
+    return [gr.cx + vx / l * k, gr.cz + vz / l * k];
+  }
+  logisticsUnits(trucks, engineers, crews, ground, lead, enemies) {
+    const g = this.g, team = this.p.team, sk = this.sk;
+    const mains = this.groups.filter((gr) => (gr.kind === 'main' || gr.kind === 'raid') && gr.ids.size && gr.cx !== undefined);
+    const own = g.units.filter((u) => u.alive && u.side === team && !u.type.structure && !u.type.air);
+    // Bedürftige eigene Einheiten (leer/ohne Sprit/Kette) für Lkw und Bergefahrzeuge
+    const needy = own.filter((u) => this.needsSupply(u, 0.2) && !u.supply);
+    const damaged = own.filter((u) => u.type.vehicle && !u.type.repair && (u.hp < u.maxHp * 0.65 || u.immobilized));
+    const abandoned = g.units.filter((u) => u.alive && u.abandoned);
+    let ti = 0;
+    for (const tr of trucks) {
+      if (this.throttled(tr, 5)) continue;
+      let tx = null, tz = null;
+      if (tr.supply) {
+        const lowPool = tr.supply.ammo < tr.type.supply.ammo * 0.2 || tr.supply.fuel < tr.type.supply.fuel * 0.2;
+        if (lowPool) {
+          const pts = this.supplyDirectPoints().sort((a, b) => d2(a.x, a.z, tr.pos.x, tr.pos.z) - d2(b.x, b.z, tr.pos.x, tr.pos.z));
+          if (pts.length) { tx = pts[0].x; tz = pts[0].z; }
+        } else {
+          // zum nächsten bedürftigen Verbündeten, sonst hinter die Frontgruppe
+          let bd = 220 * 220, bu = null;
+          for (const u of needy) { const dd = d2(u.pos.x, u.pos.z, tr.pos.x, tr.pos.z); if (dd < bd) { bd = dd; bu = u; } }
+          if (bu) { tx = bu.pos.x; tz = bu.pos.z; }
+        }
+        if (tx === null && mains.length) { const gr = mains[ti++ % mains.length]; [tx, tz] = this.behindFront(gr, 24); }
+        if (tx !== null && d2(tx, tz, tr.pos.x, tr.pos.z) > 14 * 14 && (!tr.order || d2(tr.order.x, tr.order.z, tx, tz) > 20 * 20)) { this.cmd({ t: 'move', ids: [tr.id], x: tx, z: tz }); this.stats.truckMoves++; }
+      } else if (tr.type.repair) {
+        let bd = Infinity, bu = null;
+        for (const u of [...damaged, ...abandoned.filter((a) => a.hp < a.maxHp * 0.95 || a.immobilized)]) { const dd = d2(u.pos.x, u.pos.z, tr.pos.x, tr.pos.z); if (dd < bd && dd < 200 * 200) { bd = dd; bu = u; } }
+        if (bu) { tx = bu.pos.x; tz = bu.pos.z; }
+        else if (mains.length) { const gr = mains[ti++ % mains.length]; [tx, tz] = this.behindFront(gr, 14); }
+        if (tx !== null && d2(tx, tz, tr.pos.x, tr.pos.z) > 8 * 8 && (!tr.order || d2(tr.order.x, tr.order.z, tx, tz) > 20 * 20)) { this.cmd({ t: 'move', ids: [tr.id], x: tx, z: tz }); this.stats.repairMoves++; }
+      } else {
+        const far = !tr.order && d2(tr.pos.x, tr.pos.z, this.home[0], this.home[1]) > 40 * 40;
+        if (far) this.cmd({ t: 'move', ids: [tr.id], x: this.home[0], z: this.home[1] + (team === 'UA' ? 6 : -6) });
+      }
+    }
+    this.engineerLogic(engineers, mains, enemies);
+    this.crewLogic(crews, ground, abandoned, enemies);
+    // Bailout: bewegungsunfähige, schwer beschädigte Fahrzeuge unter Beschuss verlassen
+    for (const u of own) {
+      if (!u.type.vehicle || !g.logi.canBail(u) || u.hp > u.maxHp * 0.45) continue;
+      if (this.throttled(u, 6)) continue;
+      const near = enemies.some((e) => !e.type.air && d2(e.pos.x, e.pos.z, u.pos.x, u.pos.z) < 55 * 55);
+      if (near && Math.random() < 0.5 && this.cmd({ t: 'bailout', ids: [u.id] })) this.stats.bailouts++;
+    }
+  }
+  engineerLogic(engineers, mains, enemies) {
+    const g = this.g, team = this.p.team, sk = this.sk;
+    const es = g.playersOfTeam(other(team)).find((q) => q.spawn);
+    const built = g.logi.countBuilds(this.p.id);
+    const order = ['tanktrap', 'sandbag', 'minefield', 'trench'];
+    const cost = { tanktrap: 1, sandbag: 1, minefield: 2, trench: 2 };
+    for (const e of engineers) {
+      if (e.job) continue;
+      if (this.throttled(e, 7)) continue;
+      // Nachschub an Baumaterial
+      if (e.material < 1) {
+        const tr = this.nearestSupplyTruck(e);
+        const pts = this.supplyDirectPoints().sort((a, b) => d2(a.x, a.z, e.pos.x, e.pos.z) - d2(b.x, b.z, e.pos.x, e.pos.z));
+        let x = this.home[0], z = this.home[1];
+        if (tr && tr.supply.material >= 1) { x = tr.pos.x; z = tr.pos.z; } else if (pts.length) { x = pts[0].x; z = pts[0].z; }
+        if (d2(x, z, e.pos.x, e.pos.z) > 10 * 10) this.cmd({ t: 'move', ids: [e.id], x, z });
+        continue;
+      }
+      // Feindliche (aufgeklärte) Minenfelder räumen
+      let mine = null, bd = 90 * 90;
+      for (const u of g.units) {
+        if (!u.alive || !u.type.build?.mines || u.side === team || !u.seenBy[team]) continue;
+        const dd = d2(u.pos.x, u.pos.z, e.pos.x, e.pos.z);
+        if (dd < bd) { bd = dd; mine = u; }
+      }
+      if (mine && this.cmd({ t: 'clearmines', ids: [e.id], x: mine.pos.x, z: mine.pos.z })) { this.stats.clears++; continue; }
+      // Gehaltene Punkte befestigen
+      if (built < 10 && es) {
+        let best = null, bs = Infinity;
+        for (const cp of sk.points) {
+          if (cp.owner !== team) continue;
+          const nb = g.units.reduce((n, u) => n + (u.alive && u.type.build && u.side === team && d2(u.pos.x, u.pos.z, cp.x, cp.z) < (cp.radius * 2.2) ** 2 ? 1 : 0), 0);
+          if (nb >= 6) continue;
+          const dd = Math.sqrt(d2(e.pos.x, e.pos.z, cp.x, cp.z)) + nb * 25;
+          if (dd < bs) { bs = dd; best = { cp, nb }; }
+        }
+        if (best && bs < 260) {
+          const { cp, nb } = best;
+          let dx = es.spawn.x - cp.x, dz = es.spawn.z - cp.z; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
+          const kind = order[nb % order.length];
+          if (e.material + 1e-6 >= cost[kind]) {
+            const off = { tanktrap: cp.radius * 0.95, sandbag: cp.radius * 0.5, minefield: cp.radius * 1.5 + 6, trench: cp.radius * 0.25 }[kind];
+            for (let tryN = 0; tryN < 5; tryN++) {
+              const lat = (Math.random() - 0.5) * (8 + tryN * 4);
+              const x = cp.x + dx * off - dz * lat + (Math.random() - 0.5) * 2, z = cp.z + dz * off + dx * lat + (Math.random() - 0.5) * 2;
+              const helpers = engineers.filter((o) => o !== e && !o.job && d2(o.pos.x, o.pos.z, e.pos.x, e.pos.z) < 20 * 20).slice(0, 1).map((o) => o.id);
+              if (this.cmd({ t: 'build', ids: [e.id, ...helpers], kind, x, z, rot: Math.atan2(dx, dz) })) { this.stats.builds++; break; }
+            }
+            continue;
+          }
+        }
+      }
+      // sonst: der Hauptgruppe hinterher
+      if (mains.length && !e.order) {
+        const gr = mains[(e.id | 0) % mains.length];
+        const [tx, tz] = this.behindFront(gr, 12);
+        if (d2(tx, tz, e.pos.x, e.pos.z) > 20 * 20) this.cmd({ t: 'move', ids: [e.id], x: tx, z: tz });
+      }
+    }
+  }
+  // Infanterie/Besatzungen übernehmen nahe verlassene Fahrzeuge
+  crewLogic(crews, ground, abandoned, enemies) {
+    const g = this.g;
+    if (!abandoned.length) { for (const c of crews) if (!c.job && !this.assign.has(c.id)) this.joinMain(c); return; }
+    const taken = new Set();
+    for (const u of g.units) if (u.alive && u.job?.type === 'crew') taken.add(u.job.target);
+    const infs = [...crews, ...ground.filter((u) => u.type.infantry && !u.job && !this.retreat.has(u.id) && !this.stealers.has(u.id))];
+    for (const v of abandoned) {
+      if (taken.has(v.id) || v.hp < v.maxHp * 0.25) continue;
+      if (!v.weapons.length && !v.supply && !v.type.repair) continue;
+      if (enemies.some((e) => !e.type.air && d2(e.pos.x, e.pos.z, v.pos.x, v.pos.z) < 22 * 22)) continue;
+      const cand = infs.filter((u) => !u.job && d2(u.pos.x, u.pos.z, v.pos.x, v.pos.z) < 55 * 55).sort((a, b) => d2(a.pos.x, a.pos.z, v.pos.x, v.pos.z) - d2(b.pos.x, b.pos.z, v.pos.x, v.pos.z)).slice(0, 2);
+      if (!cand.length) continue;
+      if (this.cmd({ t: 'crew', ids: cand.map((u) => u.id), target: v.id })) {
+        this.stats.crews++;
+        for (const u of cand) this.detach(u);
+        taken.add(v.id);
+      }
+    }
+    for (const c of crews) if (!c.job && !this.assign.has(c.id)) this.joinMain(c);
+  }
+  joinMain(u) {
+    const ms = this.groups.filter((gr) => gr.kind === 'main');
+    const gr = ms.sort((a, b) => a.ids.size - b.ids.size)[0];
+    if (!gr) return;
+    gr.ids.add(u.id); this.assign.set(u.id, gr);
   }
 
   useAbilities(ground, enemies) {

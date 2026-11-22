@@ -30,7 +30,8 @@
 import * as THREE from 'three';
 import { Terrain, CELL } from '../engine/terrain.js';
 import { FogOfWar, fowUniforms } from '../engine/fow.js';
-import { Pathfinder } from '../engine/pathfinding.js';
+import { GamePathfinder } from './gamepath.js';
+import { Logistics } from './logistics.js';
 import { Effects } from '../engine/effects.js';
 import { Unit } from './unit.js';
 import { Combat, Missile } from './combat.js';
@@ -64,6 +65,7 @@ export class Game {
     this.ringMatAlly = new THREE.MeshBasicMaterial({ color: 0x5db8ff, transparent: true, opacity: 0.9, depthWrite: false });
     this.ringMatEnemy = new THREE.MeshBasicMaterial({ color: 0xff4d4d, transparent: true, opacity: 0.9, depthWrite: false });
     this.listeners = {};
+    this.logistics = false; this.logi = null; this.charges = [];
     this.net = null; // wird von der Netzwerkschicht gesetzt ({ isClient, isHost, sendCommand(cmd) })
     this.unitMap = new Map();
     this._applyPlayers(DEFAULT_PLAYERS);
@@ -127,6 +129,9 @@ export class Game {
     this.dispose();
     this.mission = mission;
     this.demo = demo;
+    // Logistik (Munition, Treibstoff, Bergung, Pioniere, Besatzungen) nur auf Wunsch der Mission (Gefecht); Kampagne unverändert
+    this.logistics = mission.logistics === true;
+    this.charges = [];
     const q = this.settings.quality;
     const map = mission.map;
     this.terrain = new Terrain(map, q);
@@ -139,13 +144,14 @@ export class Game {
     this._bindFow();
     fowUniforms.uFowSize.value = this.terrain.size;
     fowUniforms.uFowEnabled.value = this.fow.enabled ? 1 : 0;
-    this.pathfinder = new Pathfinder(this.terrain);
+    this.pathfinder = new GamePathfinder(this.terrain);
     this.world = new THREE.Group();
     this.world.add(this.terrain.buildMesh());
     this.scene.add(this.world);
     this.gr.setEnvironment(mission.env || {});
     this.effects = new Effects(this.scene, this.terrain, q, this.audio);
     this.combat = new Combat(this);
+    this.logi = new Logistics(this);
     this.time = 0;
     this.units = []; this.missiles = []; this.timers = []; this.animations = []; this.selected = [];
     this.unitMap = new Map();
@@ -240,6 +246,7 @@ export class Game {
     if (s >= 0) { this.selected.splice(s, 1); this.emit('selection'); }
     if (u.ring) { this.scene.remove(u.ring); u.ring = null; }
     if (u.detonated) this.scene.remove(u.root);
+    if (u.type.build) this.logi?.onBuildingGone(u);
     if (this.mission?.onRemove) this.mission.onRemove(this, u);
   }
   killUnit(u, killer, silent = false) {
@@ -247,7 +254,7 @@ export class Game {
     u.die(killer, silent);
     this.removeUnit(u);
     // Statistik je Spieler (game.stats spiegelt den lokalen Spieler)
-    if (u.side !== 'N') {
+    if (u.side !== 'N' && !u.type.build) {
       const victim = this.ownerPlayer(u);
       if (victim && !u.type.kamikaze) victim.stats.lost++;
       // Ohne Verursacher (Störsender, Lebensdauer …) zählt der Abschuss für den ersten Spieler des Gegnerteams
@@ -261,7 +268,7 @@ export class Game {
   applyDamage(target, dmg, w, src, opts = {}) {
     if (!target.alive || target.invulnerable) return;
     let mul = w.vs ? (w.vs[target.armor] ?? 0) : 1;
-    if (target.armor === 'heavy' && !opts.topAttack && src && src.pos) {
+    if (target.armor === 'heavy' && !opts.topAttack && !opts.noFront && src && src.pos) {
       // Frontpanzerung
       const ang = Math.atan2(src.pos.x - target.pos.x, src.pos.z - target.pos.z);
       let d = Math.abs(((ang - target.heading + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
@@ -270,11 +277,13 @@ export class Game {
     if (opts.topAttack && target.armor === 'heavy') mul *= 1.25;
     if (target.type.infantry && this.terrain.inForest(target.pos.x, target.pos.z)) mul *= 0.7;
     if (target.type.infantry && this.nearHouse(target.pos.x, target.pos.z)) mul *= 0.6;
+    if (target.type.infantry && this.logi) mul *= this.logi.coverMul(target); // Sandsäcke / Graben
     if (this.mission?.damageMul && target.side !== 'N' && !this.ownerPlayer(target)?.ai) mul *= this.mission.damageMul;
     const amount = dmg * mul * rand(0.85, 1.15);
     if (amount <= 0) return;
     target.hp -= amount;
     target.lastHit = this.time;
+    if (this.logistics && target.hp > 0 && target.type.vehicle && !target.type.structure) this.logi.onVehicleHit(target, amount, src);
     if (this.isOwn(target) && amount > 5 && !target.type.structure) this.emit('underAttack', target);
     // KI reagiert auf Beschuss (teamneutral)
     if (target.ai && src && src.alive && src.side !== target.side && !target.order && target.ai.mode !== 'convoy' && !target.type.structure) {
@@ -297,9 +306,10 @@ export class Game {
     }
   }
   // Neues Hindernis (Wrack): Einheiten, deren Weg hindurchführt, planen neu
-  onObstacleAdded(x, z, r) {
+  onObstacleAdded(x, z, r, vehOnly = false) {
     for (const u of this.units) {
       if (!u.alive || u.type.air || u.type.naval || u.type.structure || !u.path || !u.path.length) continue;
+      if (vehOnly && !u.type.vehicle) continue; // Panzersperren sperren nur Fahrzeuge
       let hit = false, px = u.pos.x, pz = u.pos.z;
       for (const [wx, wz] of u.path) {
         // Abstand Hindernis zur Wegstrecke
@@ -317,7 +327,7 @@ export class Game {
     const k = this.terrain.cellIndex(x, z);
     if (k < 0) return false;
     const gw = this.terrain.gw, b = this.terrain.gBlocked;
-    return b[k - 1] || b[k + 1] || b[k - gw] || b[k + gw];
+    return (b[k - 1] && b[k - 1] !== 4) || (b[k + 1] && b[k + 1] !== 4) || (b[k - gw] && b[k - gw] !== 4) || (b[k + gw] && b[k + gw] !== 4);
   }
   hasRadar(side, key) {
     const c = this.radarCache[key + side];
@@ -383,6 +393,10 @@ export class Game {
         ok = true;
         break;
       }
+      case 'build': case 'clearmines': case 'demolish': case 'bailout': case 'crew':
+        if (!this.logistics || !units.length) return false;
+        ok = this.logi.command(p, cmd, units);
+        break;
       case 'ability':
         if (!fin(cmd.x) || !fin(cmd.z)) return false;
         ok = this.useAbility(p.id, cmd.ability, cmd.x, cmd.z);
@@ -578,7 +592,7 @@ export class Game {
     const concealOf = (u) => {
       const c = u.type.conceal || 0;
       if (!c) return 1;
-      const cover = t.inForest(u.pos.x, u.pos.z) || this.nearHouse(u.pos.x, u.pos.z);
+      const cover = t.inForest(u.pos.x, u.pos.z) || this.nearHouse(u.pos.x, u.pos.z) || !!this.logi.coverOf(u);
       let k = 1 - c * (cover ? 1 : 0.45) * (u.moving ? 0.6 : 1);
       if (u.lastFired && this.time - u.lastFired < 2.5) k = Math.max(k, 0.85);
       return Math.max(0.2, k);
@@ -596,13 +610,14 @@ export class Game {
     };
     for (const team of TEAMS) {
       for (const u of byTeam[team]) u.seenBy[team] = true;
-      for (const u of byTeam[otherTeam(team)]) u.seenBy[team] = !fogOn || check(u, byTeam[team], revealsOf[team]);
+      for (const u of byTeam[otherTeam(team)]) { if (u.type.build?.hidden) continue; u.seenBy[team] = !fogOn || check(u, byTeam[team], revealsOf[team]); }
     }
+    this.logi.detectMines(byTeam); // verdeckte Minenfelder: Aufklärung durch Pioniere/Drohnen
     // Darstellung aus Sicht des lokalen Teams
     const ls = this.localSide, lf = this.fows[ls];
     for (const u of this.units) {
       if (!u.alive || u.side === 'N') continue;
-      const vis = u.side === ls || (u.type.structure ? lf.isExplored(u.pos.x, u.pos.z) : u.seenBy[ls]);
+      const vis = u.side === ls || (u.type.build?.hidden ? u.seenBy[ls] : u.type.structure ? lf.isExplored(u.pos.x, u.pos.z) : u.seenBy[ls]);
       u.root.visible = vis;
       if (u.ring) u.ring.visible = vis && this.selected.includes(u);
     }
@@ -650,6 +665,7 @@ export class Game {
     // Einheiten
     const list = [...this.units];
     for (const u of list) if (u.alive) u.update(dt);
+    this.logi.update(dt);
     this.separate();
     // Flugkörper
     for (const m of this.missiles) m.update(dt);
@@ -734,7 +750,7 @@ export class Game {
   }
   _canStand(u, x, z) {
     const k = this.terrain.cellIndex(x, z);
-    return k >= 0 && this.pathfinder.passable(k, u.type.naval ? 'water' : 'ground');
+    return k >= 0 && this.pathfinder.passable(k, u.type.naval ? 'water' : 'ground', !!u.type.vehicle);
   }
   updateRings() {
     for (const u of this.selected) {
@@ -772,7 +788,7 @@ export class Game {
     const v = new THREE.Vector3();
     let best = null, bd = Infinity;
     for (const u of this.units) {
-      if (!u.alive || u.side === 'N') continue;
+      if (!u.alive || (u.side === 'N' && !u.abandoned) || u.type.build) continue;
       if (u.side !== this.localSide && !u.root.visible) continue;
       u.aimPoint(v); v.project(cam);
       if (v.z > 1) continue;

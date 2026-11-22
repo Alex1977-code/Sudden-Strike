@@ -801,6 +801,33 @@ function cargoTruck(side) {
   return { root: g, muzzle, height: 3.4 };
 }
 
+// Bergepanzer / Werkstattfahrzeug: Wanne auf Ketten, Kran, Räumschild
+function recoveryVehicle(side) {
+  const g = new THREE.Group();
+  const cam = side === 'UA' ? M.camoUA : M.camoRU;
+  const L = 6.4, W = 3.3, tx = W / 2 - 0.35;
+  for (const s of [-1, 1]) {
+    trackSet(g, s, tx, L, { n: 5 });
+    box(g, 0.06, 0.45, L * 0.6, cam, s * (tx + 0.5), 1.15, -0.3);
+  }
+  add(g, hullGeo(W - 0.6, 0.9, L, 0.18, 0.1), cam, 0, 1.3, 0);
+  box(g, 2.2, 1.5, 2.0, cam, 0.0, 2.45, 1.1); // Kabine
+  box(g, 1.9, 0.5, 0.05, M.glass, 0, 2.7, 2.12);
+  box(g, 3.3, 0.9, 0.35, M.darkMetal, 0, 1.45, L / 2 + 0.3, -0.35, 0, 0); // Räumschild
+  box(g, 2.6, 0.15, 3.0, M.darkMetal, 0, 1.82, -1.6); // Ladefläche
+  box(g, 0.9, 0.9, 0.9, M.era, 0.9, 2.35, -2.4); box(g, 0.9, 0.7, 0.9, M.crate, -0.9, 2.25, -2.4); // Kisten
+  const crane = new THREE.Group(); crane.position.set(0, 2.0, -0.6); g.add(crane);
+  box(crane, 0.5, 0.5, 0.5, M.darkMetal, 0, 0.2, 0);
+  box(crane, 0.28, 0.28, 3.4, M.darkMetal, 0, 1.0, -1.4, 0.35, 0, 0); // Ausleger
+  box(crane, 0.08, 1.4, 0.08, M.gunMetal, 0, 0.5, -2.9); // Seil
+  box(crane, 0.35, 0.2, 0.35, M.darkMetal, 0, -0.25, -2.9); // Haken
+  box(g, 0.12, 0.12, 0.12, M.redLight, 0.9, 3.25, 1.1); // Rundumleuchte
+  antenna(g, -0.9, 3.2, 0.4, 2.0, 0.1);
+  iff(g, side, 1.78, 1.6, 1.4);
+  const muzzle = new THREE.Object3D(); g.add(muzzle);
+  return { root: g, muzzle, height: 3.4 };
+}
+
 // ---------------- Infanterie ----------------
 function soldier(side, weapon = 'rifle') {
   const g = new THREE.Group();
@@ -863,6 +890,16 @@ function soldier(side, weapon = 'rifle') {
     box(gun, 0.06, 0.1, 0.3, M.rubber, 0, -0.03, -0.25); // Schaft
     box(gun, 0.05, 0.2, 0.08, M.rubber, 0, -0.14, 0.12, 0.2, 0, 0); // Magazin
     box(gun, 0.05, 0.05, 0.14, M.optic, 0, 0.09, 0.2); // Visier
+  }
+  if (weapon === 'engineer') { // großer Werkzeug-/Baustoffrucksack, Spaten, gelbe Weste
+    box(body, 0.5, 0.45, 0.32, M.sand, 0, 1.28, -0.44);
+    box(body, 0.06, 0.7, 0.04, M.wood2, 0.18, 1.3, -0.64);
+    box(body, 0.22, 0.2, 0.03, M.darkMetal, 0.18, 0.9, -0.64);
+    box(body, 0.58, 0.14, 0.38, M.iffUA, 0, 1.52, 0.01);
+  } else if (weapon === 'medic') { // weißer Rucksack mit rotem Kreuz
+    box(body, 0.46, 0.5, 0.3, M.white, 0, 1.34, -0.42);
+    box(body, 0.34, 0.09, 0.02, M.redLight, 0, 1.4, -0.58); box(body, 0.09, 0.34, 0.02, M.redLight, 0, 1.4, -0.58);
+    box(body, 0.32, 0.12, 0.02, M.white, 0, 1.78, 0.0);
   }
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, 0.8); gun.add(muzzle);
   g.scale.setScalar(1.45);
@@ -1235,6 +1272,37 @@ function structure(kind, side) {
     }
     for (let i = 0; i < 2; i++) cyl(g, 0.2, 0.2, 5.4, M.darkMetal, -2.5 + i * 5, 3.0, -2.5, 0, 0, Math.PI / 2, 8); // Rohre
     height = 4;
+  } else if (kind === 'tanktrap') { // Panzersperre: Stahligel/Betonhöcker in Reihe
+    for (const x of [-2.1, 0, 2.1]) {
+      box(g, 0.24, 2.5, 0.24, M.steelBridge, x, 1.0, 0, 0, 0, 0.62);
+      box(g, 0.24, 2.5, 0.24, M.steelBridge, x, 1.0, 0, 0, 0, -0.62);
+      box(g, 0.24, 2.5, 0.24, M.steelBridge, x, 1.0, 0, 1.05, 0.0, 0.0);
+      box(g, 0.7, 0.35, 0.7, M.concreteDark, x, 0.18, 0);
+    }
+    box(g, 5.6, 0.12, 0.12, M.steelBridge, 0, 0.5, 0.55);
+    height = 2.2;
+  } else if (kind === 'sandbag') { // Sandsackwall
+    sandbags(g, 0, 0, 4.8, 0, 3);
+    box(g, 4.6, 0.3, 0.45, M.sandbag, 0, 1.12, 0);
+    height = 1.3;
+  } else if (kind === 'trench') { // Schützengraben: Aushub-Wall, dunkle Sohle, Bohlen, Sandsäcke
+    box(g, 5.8, 0.05, 1.3, M.charred, 0, 0.06, 0);
+    for (const s of [-1, 1]) {
+      box(g, 5.8, 0.55, 0.7, M.tent, 0, 0.27, s * 1.05); // Brustwehr (Aushub)
+      box(g, 5.6, 0.08, 0.12, M.wood, 0, 0.62, s * 0.74); // Bohle
+    }
+    for (const x of [-2.6, -0.9, 0.9, 2.6]) box(g, 0.14, 0.7, 0.14, M.wood, x, 0.35, -0.74);
+    sandbags(g, 0, -1.25, 5.4, 0, 1);
+    for (const x of [-2.9, 2.9]) box(g, 0.4, 0.15, 1.3, M.wood, x, 0.1, 0);
+    height = 0.9;
+  } else if (kind === 'minefield') { // Minenschild: Pfähle mit Warnschildern, einzelne Minen
+    for (const [x, z] of [[-4.2, -4.2], [4.2, -4.2], [-4.2, 4.2], [4.2, 4.2], [0, -4.4], [0, 4.4]]) {
+      box(g, 0.08, 1.2, 0.08, M.wood, x, 0.6, z);
+      box(g, 0.7, 0.5, 0.05, M.brick, x, 1.15, z + 0.06);
+      box(g, 0.5, 0.08, 0.06, M.frame, x, 1.15, z + 0.1);
+    }
+    for (let i = 0; i < 9; i++) { const a = i * 2.4; cyl(g, 0.22, 0.24, 0.08, M.charred, Math.cos(a) * (1.2 + (i % 4) * 0.8), 0.05, Math.sin(a) * (1.2 + (i % 4) * 0.8), 0, 0, 0, 8); }
+    height = 1.4;
   } else if (kind === 'rail') { // Munitionszug-Waggon
     box(g, 2.8, 2.6, 12, M.camoRU, 0, 2.1, 0);
     box(g, 2.9, 0.2, 12.2, M.darkMetal, 0, 0.9, 0);
@@ -1524,6 +1592,7 @@ export function buildModel(type, side, season, quality) {
     case 'spg': r = spg(side); break;
     case 'pickup': r = pickup(side); break;
     case 'truck': r = cargoTruck(side); break;
+    case 'recovery': r = recoveryVehicle(side); break;
     case 'soldier': r = soldier(side, type.weaponModel || 'rifle'); break;
     case 'quad': r = quad(side, type.modelSize || 1, false); break;
     case 'reconquad': r = quad(side, type.modelSize || 1.6, true); break;

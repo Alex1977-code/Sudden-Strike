@@ -36,14 +36,30 @@ export class Unit {
     this.holdFire = false;
     this.lifetime = type.lifetime || 0;
     // Sicht je Team (wird in game.updateVision gepflegt); Strukturen gelten als bekannt
-    this.seenBy = { UA: side === 'UA' || side === 'N' || !!type.structure, RU: side === 'RU' || side === 'N' || !!type.structure };
+    // (verdeckte Bauwerke wie Minenfelder sind nur für das eigene Team bekannt)
+    const known = !!type.structure && !type.build?.hidden;
+    this.seenBy = { UA: side === 'UA' || side === 'N' || known, RU: side === 'RU' || side === 'N' || known };
     this.lastHit = -99;
     this.kills = 0;
     this.moving = false;
     this.animT = Math.random() * 10;
     this.turretYaw = 0;
     this.barrelPitch = 0;
-    this.weapons = type.weaponDefs.map((w) => ({ def: w, cd: rand(0, w.reload || 1), ammo: w.ammo ?? Infinity, reloadT: 0, target: null, acqT: rand(0, 0.4) }));
+    // Logistik (MP-T4b, nur mit game.logistics): stock = Munitionsvorrat in Schuss (Infinity = unbegrenzt), fuel = Fahrzeit in s.
+    // Alles einfache Zahlen/Flags → direkt in Snapshots übertragbar.
+    const L = !!game.logistics;
+    this.weapons = type.weaponDefs.map((w) => ({ def: w, cd: rand(0, w.reload || 1), ammo: w.ammo ?? Infinity, reloadT: 0, target: null, acqT: rand(0, 0.4), stock: L && w.stock ? w.stock : Infinity, stockMax: L && w.stock ? w.stock : Infinity }));
+    this.maxFuel = L && type.vehicle ? (type.fuel || (type.armor === 'heavy' ? 480 : 600)) : 0;
+    this.fuel = this.maxFuel;
+    this.maxMaterial = type.engineer ? type.engineer.material : 0; // Baumaterial-Ladungen (Pionier)
+    this.material = this.maxMaterial;
+    this.supply = L && type.supply ? { ammo: type.supply.ammo, fuel: type.supply.fuel, material: type.supply.material } : null; // Versorgungsvorrat (Lkw)
+    this.immobilized = false; // Kette/Antrieb zerstört
+    this.abandoned = false;   // Besatzung ausgestiegen (side 'N')
+    this.crew = type.vehicle && !type.structure ? 1 : 0;
+    this.job = null;          // Pionier-/Übernahme-Auftrag { type: 'build'|'clear'|'demolish'|'crew', ... }
+    this.build = opts.build || null; // Bauwerk: { progress 0..1, time, kind }
+    this.mines = opts.mines || 0;
     this.invulnerable = !!opts.invulnerable;
     this.noCapture = !!opts.noCapture;
 
@@ -120,25 +136,39 @@ export class Unit {
   // ---------------- Befehle ----------------
   moveTo(x, z, { attackMove = false, queue = false } = {}) {
     if (this.type.structure || !this.speed) return;
+    this.job = null;
+    this._goto(x, z, attackMove);
+  }
+  // Bewegung ohne Auftrag zu löschen (für Pionier-/Übernahme-Aufträge)
+  _goto(x, z, attackMove = false) {
+    if (this.type.structure || !this.speed) return;
     this.order = { type: attackMove ? 'attackMove' : 'move', x, z };
     this.computePath(x, z);
   }
+  // Bewegungsunfähig: verlassen, Kette zerstört oder Tank leer
+  get cantMove() { return this.abandoned || this.immobilized || (this.maxFuel > 0 && this.fuel <= 0); }
+  // Haupt-Munitionszustand für HUD/KI: { cur, max } der ersten Waffe mit begrenztem Vorrat (oder null)
+  ammoInfo() {
+    for (const w of this.weapons) if (w.stockMax !== Infinity) return { cur: Math.max(0, w.stock), max: w.stockMax };
+    return null;
+  }
   attack(target) {
     if (!target || !target.alive) return;
+    this.job = null;
     this.order = { type: 'attack', target };
     this.path = null; this.repathT = 0;
-    this.weapons.forEach((w) => { if (this.canWeaponTarget(w.def, target)) w.target = target; });
+    this.weapons.forEach((w) => { if (w.stock >= 1 && this.canWeaponTarget(w.def, target)) w.target = target; });
   }
   bestWeaponFor(t) {
     let best = null, bv = 0.05;
     for (const w of this.weapons) {
-      if (!this.canWeaponTarget(w.def, t)) continue;
+      if (w.stock < 1 || !this.canWeaponTarget(w.def, t)) continue; // leere Waffen zählen nicht
       const v = w.def.vs[t.armor] || 0;
       if (v > bv) { bv = v; best = w; }
     }
     return best;
   }
-  stop() { this.order = null; this.path = null; this.moving = false; }
+  stop() { this.order = null; this.path = null; this.moving = false; this.job = null; }
   computePath(x, z) {
     if (this.type.air) { this.path = [[x, z]]; return; }
     const mode = this.type.naval ? 'water' : 'ground';
@@ -147,7 +177,7 @@ export class Unit {
 
   // ---------------- Kampf ----------------
   canWeaponTarget(w, u) {
-    if (!u || !u.alive || u.side === this.side || u.type.neutral && !this.order?.target) return false;
+    if (!u || !u.alive || u.side === this.side || (u.type.neutral || u.type.noAutoTarget) && !this.order?.target) return false;
     if (u.invulnerable) return false;
     if (u.type.air) { if (!w.canAir) return false; }
     else if (w.airOnly) return false;
@@ -174,7 +204,7 @@ export class Unit {
     const rangeLimit = w.range + 6;
     for (let i = 0; i < list.length; i++) {
       const u = list[i];
-      if (u.side === this.side || u.side === 'N' || !u.alive) continue;
+      if (u.side === this.side || u.side === 'N' || !u.alive || u.type.noAutoTarget) continue;
       if (Math.abs(u.pos.x - this.pos.x) > rangeLimit + 15 || Math.abs(u.pos.z - this.pos.z) > rangeLimit + 15) continue;
       if (!this.canWeaponTarget(w, u) || !this.isSpotted(u) || !this.inRange(w, u)) continue;
       const eff = w.vs[u.armor] || 0;
@@ -217,6 +247,7 @@ export class Unit {
 
     if (!type.structure) {
       if (this.ai) this.updateAI(dt);
+      if (this.job) this.game.logi.updateJob(this, dt);
       this.updateMovement(dt);
     }
     this.updateWeapons(dt);
@@ -228,6 +259,12 @@ export class Unit {
     const type = this.type;
     const game = this.game;
     this.moving = false;
+    // Verlassen / Kette zerstört / Tank leer: keine Bewegung (Angriffsauftrag bleibt für den Geschützturm bestehen)
+    if (this.cantMove) {
+      this.path = null;
+      if (this.order && this.order.type !== 'attack') this.order = null;
+      return;
+    }
     let tx = null, tz = null;
     const o = this.order;
     if (o) {
@@ -309,6 +346,7 @@ export class Unit {
       this.bank = clamp(-diff, -0.5, 0.5);
     }
     this.stepForward(dt, spd / this.speed);
+    if (this.maxFuel && this.moving) this.fuel = Math.max(0, this.fuel - dt * (type.vehicle && game.terrain.onRoad(this.pos.x, this.pos.z) ? 0.85 : 1));
     if (type.naval && Math.random() < 0.5) { const b = _v.set(Math.sin(this.heading), 0, Math.cos(this.heading)); game.effects.trail(this.pos.x - b.x * 3, this.pos.y, this.pos.z - b.z * 3, 'wake'); }
     if (type.kamikaze && type.air && Math.random() < dt * 2) game.audio.drone(this.pos.x, this.pos.z);
   }
@@ -321,15 +359,16 @@ export class Unit {
       if (k < 0) return;
       const pf = this.game.pathfinder;
       const mode = this.type.naval ? 'water' : 'ground';
-      const ok = pf.passable(k, mode);
+      const veh = !!this.type.vehicle;
+      const ok = pf.passable(k, mode, veh);
       // Steht die Einheit selbst in einer gesperrten Zelle (z. B. neben einem frischen Wrack), darf sie sich herausbewegen
       const curK = t.cellIndex(this.pos.x, this.pos.z);
-      const stuckInside = curK >= 0 && !pf.passable(curK, mode);
+      const stuckInside = curK >= 0 && !pf.passable(curK, mode, veh);
       if (!ok && !stuckInside) {
         // Gleiten an Hindernis
         const kx = t.cellIndex(nx, this.pos.z), kz = t.cellIndex(this.pos.x, nz);
-        if (kx >= 0 && pf.passable(kx, this.type.naval ? 'water' : 'ground')) this.pos.x = nx;
-        else if (kz >= 0 && pf.passable(kz, this.type.naval ? 'water' : 'ground')) this.pos.z = nz;
+        if (kx >= 0 && pf.passable(kx, mode, veh)) this.pos.x = nx;
+        else if (kz >= 0 && pf.passable(kz, mode, veh)) this.pos.z = nz;
         else if (this.path) { this.repathT = 0; if (this.order && this.order.type !== 'attack') this.computePath(this.order.x, this.order.z); }
         this.moving = true;
         return;
@@ -371,12 +410,14 @@ export class Unit {
 
   updateWeapons(dt) {
     if (this.type.kamikaze) return;
+    if (this.abandoned) { for (const ws of this.weapons) ws.target = null; this.aiming = null; return; }
     const game = this.game;
     let aimTarget = null, aimPoint = null;
     for (const ws of this.weapons) {
       const w = ws.def;
       ws.cd -= dt;
       if (ws.ammo <= 0) { ws.reloadT -= dt; if (ws.reloadT <= 0) ws.ammo = w.ammo; continue; }
+      if (ws.stock < 1) { ws.target = null; ws.threat = null; continue; } // Vorrat leer (Logistik): Waffe schweigt
       ws.acqT -= dt;
       if (ws.acqT <= 0) {
         ws.acqT = w.intercept ? 0.12 : 0.35 + Math.random() * 0.2;
@@ -405,6 +446,7 @@ export class Unit {
       if (w.indirect && this.moving) continue;
       ws.cd = w.reload * rand(0.9, 1.1);
       if (w.ammo) { ws.ammo--; if (ws.ammo <= 0) ws.reloadT = w.reloadAmmo; }
+      if (ws.stock !== Infinity) ws.stock--;
       game.combat.fire(this, ws, target, threat);
     }
     // Turm drehen
@@ -487,14 +529,14 @@ export class Unit {
     if (this.order?.type === 'attack' && this.order.target.alive) return;
     let best = null, bd = r;
     for (const u of this.game.units) {
-      if (u.side === this.side || u.side === 'N' || !u.alive || !this.isSpotted(u)) continue;
-      if (u.type.air && !this.weapons.some((w) => w.def.canAir)) continue;
-      if (!this.weapons.some((w) => this.canWeaponTarget(w.def, u))) continue;
+      if (u.side === this.side || u.side === 'N' || !u.alive || u.type.noAutoTarget || !this.isSpotted(u)) continue;
+      if (u.type.air && !this.weapons.some((w) => w.def.canAir && w.stock >= 1)) continue;
+      if (!this.weapons.some((w) => w.stock >= 1 && this.canWeaponTarget(w.def, u))) continue;
       const d = this.distTo(u);
       if (d < bd) { bd = d; best = u; }
     }
     if (best) {
-      const w = this.weapons.find((w) => this.canWeaponTarget(w.def, best));
+      const w = this.weapons.find((w) => w.stock >= 1 && this.canWeaponTarget(w.def, best));
       if (w && !this.inRange(w.def, best)) this.attack(best);
     }
   }
@@ -507,6 +549,11 @@ export class Unit {
     const p = this.pos;
     const type = this.type;
     if (this.ring) this.ring.visible = false;
+    if (type.build) { // Pionierbauwerk: kleine Staubwolke, Rasterfreigabe erledigt game.removeUnit
+      fx.explosion(p.x, p.y + 0.6, p.z, 0.7, { crater: false, sound: !silent });
+      game.scene.remove(this.root);
+      return;
+    }
     if (type.infantry) {
       const body = this.model.body;
       game.animations.push({ t: 0, dur: 0.5, fn: (k) => { body.rotation.x = -Math.PI / 2 * k; body.position.y = 0.3 * k; } });

@@ -21,7 +21,7 @@ export const ROLES = {
   armor: { name: 'Panzerkeil', icon: '🛡️', desc: 'Kampfpanzer und Schützenpanzer mit Begleitinfanterie.' },
   infantry: { name: 'Infanterie & Aufklärung', icon: '🪖', desc: 'Infanterie, Scharfschütze, Panzerabwehr, Drohnen.' },
   support: { name: 'Artillerie & Flugabwehr', icon: '💥', desc: 'Raketen-/Rohrartillerie, Flugabwehr, Aufklärung.' },
-  logistics: { name: 'Logistik & Reserve', icon: '🚚', desc: 'Gemischte Reserve und Lkw (Versorgung folgt).' },
+  logistics: { name: 'Logistik & Pioniere', icon: '🚚', desc: 'Versorgungs-Lkw (Munition/Treibstoff), Bergepanzer, Pioniere mit Sperren und Minen, Sanitäter.' },
 };
 export const DIFFICULTIES = { easy: 'Leicht', normal: 'Normal', hard: 'Schwer' };
 export const VICTORY = { annihilation: 'Vernichtung', points: 'Punkte-Limit', time30: 'Zeitlimit 30 min', time60: 'Zeitlimit 60 min', time90: 'Zeitlimit 90 min' };
@@ -31,20 +31,20 @@ export const CAPTURE_TIME = 6; // Sekunden bis zum Besitzerwechsel
 // ---------- Startarmeen je Rolle und Fraktion ----------
 const ARMIES = {
   armor: {
-    UA: [['leopard', 3], ['bradley', 2], ['rifle', 4], ['javelin', 1], ['mg', 1], ['stinger', 1]],
-    RU: [['t90', 2], ['t72', 2], ['bmp', 2], ['btr', 1], ['e_rifle', 5], ['e_atgm', 1], ['e_igla', 1]],
+    UA: [['leopard', 3], ['bradley', 2], ['rifle', 4], ['javelin', 1], ['mg', 1], ['stinger', 1], ['ua_engineer', 1]],
+    RU: [['t90', 2], ['t72', 2], ['bmp', 2], ['btr', 1], ['e_rifle', 5], ['e_atgm', 1], ['e_igla', 1], ['e_engineer', 1]],
   },
   infantry: {
-    UA: [['rifle', 5], ['mg', 2], ['javelin', 2], ['sniper', 1], ['dronepilot', 1], ['sso', 1], ['recon', 1]],
-    RU: [['e_rifle', 6], ['e_mg', 2], ['e_atgm', 2], ['e_sniper', 1], ['e_recon', 1], ['e_spetsnaz', 1], ['orlan', 1]],
+    UA: [['rifle', 5], ['mg', 2], ['javelin', 2], ['sniper', 1], ['dronepilot', 1], ['sso', 1], ['recon', 1], ['ua_engineer', 1], ['ua_medic', 1]],
+    RU: [['e_rifle', 6], ['e_mg', 2], ['e_atgm', 2], ['e_sniper', 1], ['e_recon', 1], ['e_spetsnaz', 1], ['orlan', 1], ['e_engineer', 1], ['e_medic', 1]],
   },
   support: {
-    UA: [['himars', 1], ['gepard', 1], ['pickup', 1], ['stinger', 1], ['rifle', 4], ['mg', 1], ['javelin', 1], ['recon', 1]],
-    RU: [['msta', 1], ['pantsir', 1], ['btr', 1], ['e_igla', 1], ['e_rifle', 5], ['e_mg', 1], ['e_atgm', 1], ['orlan', 1]],
+    UA: [['himars', 1], ['gepard', 1], ['pickup', 1], ['stinger', 1], ['rifle', 4], ['mg', 1], ['javelin', 1], ['recon', 1], ['ua_engineer', 1]],
+    RU: [['msta', 1], ['pantsir', 1], ['btr', 1], ['e_igla', 1], ['e_rifle', 5], ['e_mg', 1], ['e_atgm', 1], ['orlan', 1], ['e_engineer', 1]],
   },
   logistics: {
-    UA: [['ua_truck', 2], ['leopard', 1], ['bradley', 1], ['pickup', 2], ['rifle', 4], ['mg', 1], ['javelin', 1]],
-    RU: [['truck', 2], ['t72', 2], ['bmp', 1], ['btr', 2], ['e_rifle', 5], ['e_mg', 1], ['e_atgm', 1]],
+    UA: [['ua_supply', 2], ['ua_recovery', 1], ['leopard', 1], ['bradley', 1], ['pickup', 1], ['ua_engineer', 2], ['ua_medic', 1], ['rifle', 3], ['mg', 1], ['javelin', 1]],
+    RU: [['ru_supply', 2], ['ru_recovery', 1], ['t72', 2], ['bmp', 1], ['btr', 1], ['e_engineer', 2], ['e_medic', 1], ['e_rifle', 4], ['e_mg', 1], ['e_atgm', 1]],
   },
 };
 // Fähigkeiten je Rolle
@@ -59,7 +59,7 @@ const REINF = {
   armor: { UA: ['leopard', 'rifle', 'bradley', 'rifle', 'javelin', 'leopard', 'mg', 'bradley'], RU: ['t90', 'e_rifle', 'bmp', 'e_rifle', 'e_rpg', 't72', 'e_mg', 'btr'] },
   infantry: { UA: ['rifle', 'rifle', 'javelin', 'mg', 'sniper', 'rifle', 'sso', 'javelin'], RU: ['e_rifle', 'e_rifle', 'e_atgm', 'e_mg', 'e_sniper', 'e_rifle', 'e_spetsnaz', 'e_atgm'] },
   support: { UA: ['rifle', 'gepard', 'javelin', 'rifle', 'stinger', 'pickup'], RU: ['e_rifle', 'pantsir', 'e_atgm', 'e_rifle', 'e_igla', 'btr'] },
-  logistics: { UA: ['ua_truck', 'rifle', 'bradley', 'rifle', 'pickup', 'javelin'], RU: ['truck', 'e_rifle', 'bmp', 'e_rifle', 'btr', 'e_rpg'] },
+  logistics: { UA: ['ua_supply', 'rifle', 'bradley', 'ua_engineer', 'rifle', 'pickup', 'ua_recovery', 'javelin', 'ua_medic'], RU: ['ru_supply', 'e_rifle', 'bmp', 'e_engineer', 'e_rifle', 'btr', 'ru_recovery', 'e_rpg', 'e_medic'] },
 };
 const PARA = { UA: 'rifle', RU: 'e_rifle' };
 // Fraktionsausgleich nur im Gefecht (Kampagnenwerte bleiben unverändert): die ukrainischen Typen sind für die
@@ -147,6 +147,7 @@ export function createSkirmish(setup) {
     camera: { x: mySpawn.x, z: mySpawn.z + (S.team === 'UA' ? -16 : 16), dist: camBase.dist, yaw: camBase.yaw },
     players: players.map((p) => ({ ...p })),
     noDefaultDefeat: true,
+    logistics: true, // Munition, Treibstoff, Versorgung, Pioniere, Besatzungen (MP-T4b)
     friendlyEdges: { UA: [0, half + 40], RU: [0, -half - 40] },
     markers: [],
     setupData: S,
@@ -220,6 +221,16 @@ export function createSkirmish(setup) {
       // Siegbedingungen (1×/s)
       sk.checkT -= dt;
       if (sk.checkT <= 0) { sk.checkT = 1; checkVictory(g, sk); }
+    },
+    // Nachschubpunkte (game.logi): eigene Spawn-Zonen und gehaltene Eroberungspunkte. Lkw füllen dort ihren Vorrat auf;
+    // direct = jede Einheit des Teams wird versorgt (Spawn-Zone, Depot-Punkte).
+    supplyPoints(g) {
+      const sk = this.skirmish;
+      if (!sk) return [];
+      const out = [];
+      for (const p of g.players) if (p.spawn) out.push({ x: p.spawn.x, z: p.spawn.z, r: 32, team: p.team, direct: true });
+      for (const cp of sk.points) if (cp.owner) out.push({ x: cp.x, z: cp.z, r: Math.max(cp.radius, 14), team: cp.owner, direct: cp.kind === 'depot' });
+      return out;
     },
     // Visuelles (jedes Frame, auch pausiert unkritisch): Schaukeln, Fahnen
     onKill(g, u, killer) {

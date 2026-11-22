@@ -312,3 +312,28 @@ body.touch .key { display: none; }
 /* Warnungen unter der Gefechtsleiste */
 #hud.skirmish #alert, #hud.skirmish #target-hint { top: calc(118px + var(--safe-t)); }
 @media (max-width: 760px), (max-height: 500px) { #hud.skirmish #alert, #hud.skirmish #target-hint { top: calc(84px + var(--safe-t)); } }
+
+
+/* ---------- Pioniere / Logistik (MP-T4b) ---------- */
+/* eigene Zeile über Auswahl/Befehlen (flex-wrap des #bottombar) */
+#buildbar {
+  flex: 0 0 100%; order: -1;
+  display: flex; gap: 6px; align-items: flex-end; flex-wrap: wrap; pointer-events: none;
+}
+#buildbar.hidden { display: none; }
+#buildbar > * { pointer-events: auto; }
+#buildbar .mat { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 12px; color: var(--accent); align-self: stretch; display: flex; align-items: center; white-space: nowrap; }
+#buildbar button {
+  background: var(--panel); min-width: 58px; height: 52px; padding: 3px 6px; font-size: 19px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; position: relative;
+}
+#buildbar button span { font-size: 10px; color: var(--muted); margin-top: 1px; white-space: nowrap; }
+#buildbar button.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(255,213,0,.35) inset; }
+#buildbar button:disabled { opacity: .45; }
+.sel-detail .logi { font-size: 11px; color: #9ec5ff; }
+@media (max-width: 760px), (max-height: 500px) {
+  #buildbar { gap: 4px; }
+  #buildbar button { min-width: 44px; height: 40px; font-size: 16px; padding: 2px 4px; }
+  #buildbar button span { font-size: 9px; }
+  #buildbar .mat { font-size: 11px; padding: 4px 6px; }
+}

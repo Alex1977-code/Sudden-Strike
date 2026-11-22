@@ -1,6 +1,7 @@
 // RTS-Kamera und Eingabe (Maus, Tastatur, Touch)
 import * as THREE from 'three';
 import { clamp, lerp } from '../engine/util.js';
+import { UNIT_TYPES } from './unitTypes.js';
 
 export class RTSCamera {
   constructor(game, cam) {
@@ -59,6 +60,8 @@ export class Input {
     this.pointers = new Map();
     this.mouse = { x: -1, y: -1, inside: false };
     this.pendingAbility = null;
+    this.pendingBuild = null; // { mode: 'build'|'clearmines'|'demolish', kind } – Platzieren per Klick/Antippen
+    this.buildRot = null;
     this.boxMode = false;
     this.lastTap = { t: 0, unit: null };
     this.selbox = document.getElementById('selbox');
@@ -95,7 +98,7 @@ export class Input {
       clearTimeout(this.longPress);
       this.longPress = setTimeout(() => {
         const p = this.pointers.get(e.pointerId);
-        if (p && !p.moved && this.pointers.size === 1) { p.longPressed = true; g.select([]); this.cancelAbility(); if (navigator.vibrate) navigator.vibrate(20); }
+        if (p && !p.moved && this.pointers.size === 1) { p.longPressed = true; g.select([]); this.cancelAbility(); this.cancelBuild(); if (navigator.vibrate) navigator.vibrate(20); }
       }, 550);
     }
   }
@@ -113,6 +116,7 @@ export class Input {
     const p = this.pointers.get(e.pointerId);
     if (!g.active) return;
     if (this.pendingAbility && e.pointerType === 'mouse') this._updatePreview(e.clientX, e.clientY);
+    if (this.pendingBuild && e.pointerType === 'mouse') this._updateBuildPreview(e.clientX, e.clientY);
     if (!p) return;
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
     p.x = e.clientX; p.y = e.clientY;
@@ -131,10 +135,10 @@ export class Input {
     if (p.type === 'mouse') {
       if (p.button === 1 || (p.button === 0 && this.keys.has('Alt'))) { g.camera.rotate(-dx * 0.006); return; }
       if (p.button === 2) { const s = g.camera.dist / window.innerHeight * 1.6; g.camera.pan(-dx * s, -dy * s); return; }
-      if (p.button === 0 && p.moved && !this.pendingAbility) this.showBox(p.sx, p.sy, p.x, p.y);
+      if (p.button === 0 && p.moved && !this.pendingAbility && !this.pendingBuild) this.showBox(p.sx, p.sy, p.x, p.y);
     } else {
       // Touch: ein Finger
-      if (this.boxMode && !this.pendingAbility) { if (p.moved) this.showBox(p.sx, p.sy, p.x, p.y); return; }
+      if (this.boxMode && !this.pendingAbility && !this.pendingBuild) { if (p.moved) this.showBox(p.sx, p.sy, p.x, p.y); return; }
       if (p.moved) { const s = g.camera.dist / window.innerHeight * 1.6; g.camera.pan(-dx * s, -dy * s); }
     }
   }
@@ -148,7 +152,7 @@ export class Input {
     if (cancel || !g.active || p.longPressed) { this.hideBox(); return; }
     if (p.type === 'mouse') {
       if (p.button === 0) {
-        if (p.moved && !this.pendingAbility) { this.boxSelect(p.sx, p.sy, p.x, p.y, e.shiftKey); this.hideBox(); }
+        if (p.moved && !this.pendingAbility && !this.pendingBuild) { this.boxSelect(p.sx, p.sy, p.x, p.y, e.shiftKey); this.hideBox(); }
         else if (!p.moved) this.leftClick(p.x, p.y, e.shiftKey);
       } else if (p.button === 2 && !p.moved) this.rightClick(p.x, p.y, e.ctrlKey);
     } else {
@@ -163,6 +167,16 @@ export class Input {
   orderAt(own, x, y, u, attackMove = false) {
     const g = this.game;
     const ids = own.map((o) => o.id);
+    if (u && u.abandoned) {
+      // Infanterie übernimmt das verlassene Fahrzeug, alles andere schießt es ggf. zusammen
+      const inf = own.filter((o) => o.type.infantry);
+      if (inf.length) {
+        g.issueCommand({ t: 'crew', ids: inf.map((o) => o.id), target: u.id });
+        const rest = own.filter((o) => !o.type.infantry);
+        if (rest.length) g.issueCommand({ t: 'attack', ids: rest.map((o) => o.id), target: u.id });
+        return;
+      }
+    }
     if (u && u.side !== g.localSide) { g.issueCommand({ t: 'attack', ids, target: u.id }); return; }
     const p = this.ground(x, y);
     if (p) g.issueCommand({ t: 'move', ids, x: p.x, z: p.z, attackMove });
@@ -172,6 +186,7 @@ export class Input {
   leftClick(x, y, shift) {
     const g = this.game;
     if (this.pendingAbility) { this.fireAbility(x, y); return; }
+    if (this.pendingBuild) { this.fireBuild(x, y, shift); return; }
     const u = g.pickUnit(x, y);
     const now = performance.now();
     if (u && g.isOwn(u)) {
@@ -186,6 +201,7 @@ export class Input {
   rightClick(x, y, ctrl) {
     const g = this.game;
     if (this.pendingAbility) { this.cancelAbility(); return; }
+    if (this.pendingBuild) { this.cancelBuild(); return; }
     const own = this.ownSelected();
     if (!own.length) return;
     this.orderAt(own, x, y, g.pickUnit(x, y), ctrl);
@@ -194,6 +210,7 @@ export class Input {
   tap(x, y) {
     const g = this.game;
     if (this.pendingAbility) { this.fireAbility(x, y); return; }
+    if (this.pendingBuild) { this.fireBuild(x, y, false); return; }
     const u = g.pickUnit(x, y, 34);
     const now = performance.now();
     const own = this.ownSelected();
@@ -281,6 +298,76 @@ export class Input {
     this.cancelAbility();
   }
 
+  // ---------- Pioniere: Bauen / Minen räumen / Sprengen (Platzieren per Klick bzw. Antippen) ----------
+  engineers() { return this.ownSelected().filter((u) => u.type.engineer); }
+  startBuild(mode, kind = null) {
+    const g = this.game;
+    if (!this.engineers().length) { g.audio.ui('fail'); return; }
+    if (this.pendingBuild && this.pendingBuild.mode === mode && this.pendingBuild.kind === kind) { this.cancelBuild(); return; }
+    this.cancelAbility();
+    this.pendingBuild = { mode, kind };
+    const touch = this.touch;
+    const txt = mode === 'build' ? `${UNIT_TYPES[kind].name} platzieren` : mode === 'clearmines' ? 'Minenfeld zum Räumen wählen' : 'Brücke/Gebäude zum Sprengen wählen';
+    this.hud.showTargetHint(txt + (touch ? ' – Karte antippen' : ' – Klick platziert (R dreht)'), () => this.cancelBuild());
+    if (mode === 'build') {
+      const d = UNIT_TYPES[kind].build;
+      if (!this.buildPreview) {
+        this.buildPreview = new THREE.Mesh(new THREE.BoxGeometry(1, 0.3, 1), new THREE.MeshBasicMaterial({ color: 0x5dff8a, transparent: true, opacity: 0.45, depthTest: false }));
+        this.buildPreview.renderOrder = 6;
+      }
+      this.buildPreview.scale.set(d.w, 1, d.d);
+      g.scene.add(this.buildPreview);
+      this.buildPreview.visible = false;
+      if (this.mouse.inside && !touch) this._updateBuildPreview(this.mouse.x, this.mouse.y);
+    }
+    this.hud.refreshBuildbar(true);
+  }
+  _autoRot(px, pz) {
+    const e = this.engineers()[0];
+    return e ? Math.atan2(px - e.pos.x, pz - e.pos.z) : 0;
+  }
+  _updateBuildPreview(x, y) {
+    const pb = this.pendingBuild;
+    if (!pb || pb.mode !== 'build' || !this.buildPreview) return;
+    const p = this.ground(x, y);
+    if (!p) { this.buildPreview.visible = false; return; }
+    const rot = this.buildRot ?? this._autoRot(p.x, p.z);
+    this.buildPreview.visible = true;
+    this.buildPreview.position.set(p.x, p.y + 0.5, p.z);
+    this.buildPreview.rotation.y = rot;
+    const ok = this.game.logi.footprintOk(pb.kind, p.x, p.z, rot);
+    this.buildPreview.material.color.setHex(ok ? 0x5dff8a : 0xff4d4d);
+  }
+  cancelBuild() {
+    if (!this.pendingBuild) return;
+    this.pendingBuild = null;
+    this.buildRot = null;
+    this.hud.hideTargetHint();
+    if (this.buildPreview) this.game.scene.remove(this.buildPreview);
+    this.hud.refreshBuildbar(true);
+  }
+  fireBuild(x, y, keep) {
+    const g = this.game, pb = this.pendingBuild;
+    const eng = this.engineers();
+    const ids = eng.map((u) => u.id);
+    if (!eng.length) { this.cancelBuild(); return; }
+    let ok = false;
+    if (pb.mode === 'build') {
+      const p = this.ground(x, y); if (!p) return;
+      ok = g.issueCommand({ t: 'build', ids, kind: pb.kind, x: p.x, z: p.z, rot: this.buildRot ?? this._autoRot(p.x, p.z) });
+    } else if (pb.mode === 'clearmines') {
+      const p = this.ground(x, y); if (!p) return;
+      ok = g.issueCommand({ t: 'clearmines', ids, x: p.x, z: p.z });
+    } else {
+      const u = g.pickUnit(x, y, 36);
+      if (!u) { g.audio.ui('fail'); return; }
+      ok = g.issueCommand({ t: 'demolish', ids, target: u.id });
+    }
+    if (ok === false) { g.audio.ui('fail'); if (pb.mode === 'build') g.alert('Hier kann nicht gebaut werden (Material, Gelände oder Hindernis).', 1.8); return; }
+    g.audio.ui('ack');
+    if (!keep) this.cancelBuild();
+  }
+
   // ---------- Tastatur ----------
   onKey(e, down) {
     const g = this.game;
@@ -288,7 +375,8 @@ export class Input {
     if (down) this.keys.add(k.length === 1 ? k.toLowerCase() : k); else this.keys.delete(k.length === 1 ? k.toLowerCase() : k);
     if (!down || !g.active) return;
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
-    if (k === 'Escape') { if (this.pendingAbility) this.cancelAbility(); else this.hud.togglePause(); return; }
+    if (k === 'Escape') { if (this.pendingAbility) this.cancelAbility(); else if (this.pendingBuild) this.cancelBuild(); else this.hud.togglePause(); return; }
+    if ((k === 'r' || k === 'R') && this.pendingBuild?.mode === 'build') { this.buildRot = ((this.buildRot ?? 0) + Math.PI / 4) % (Math.PI * 2); this._updateBuildPreview(this.mouse.x, this.mouse.y); return; }
     if (g.paused && k !== ' ') return;
     if (k === ' ') { e.preventDefault(); this.hud.togglePause(); return; }
     if (/^F[1-6]$/.test(k)) { e.preventDefault(); const a = g.abilities[+k.slice(1) - 1]; if (a) this.startAbility(a); return; }
