@@ -953,7 +953,9 @@ export class Game {
   }
   _canStand(u, x, z) {
     const k = this.terrain.cellIndex(x, z);
-    return k >= 0 && this.pathfinder.passable(k, u.type.naval ? 'water' : 'ground', !!u.type.vehicle);
+    if (k < 0 || !this.pathfinder.passable(k, u.type.naval ? 'water' : 'ground', !!u.type.vehicle)) return false;
+    // Fahrzeuge: ganze Grundfläche prüfen (verhindert, dass das Auseinanderschieben sie in Häuser drückt)
+    return !(u.type.vehicle && typeof u.fitsAt === 'function') || u.fitsAt(x, z);
   }
   // Fernglas-Kegel der eigenen Beobachter (dezent, Bodenfächer in Blickrichtung)
   updateCones() {
