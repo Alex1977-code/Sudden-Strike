@@ -22,13 +22,14 @@ function footPen(u, x, z, h, m = FP_M) {
   const r = u.radius, hw = 0.55 * r + m, hl = 1.15 * r + m;
   const c = Math.cos(h), s = Math.sin(h), ac = Math.abs(c), as = Math.abs(s);
   const ex = hw * ac + hl * as, ez = hw * as + hl * ac, axy = ac + as; // Ausdehnung in x/z; Zellprojektion auf Rechteckachsen
-  const [i0, j0] = t.cellOf(x - ex - 1, z - ez - 1), [i1, j1] = t.cellOf(x + ex + 1, z + ez + 1);
+  const hf = t.half, C = 2; // Rasterweite (terrain CELL)
+  const i0 = Math.max(0, Math.floor((x - ex - 1 + hf) / C)), j0 = Math.max(0, Math.floor((z - ez - 1 + hf) / C));
+  const i1 = Math.min(gw - 1, Math.floor((x + ex + 1 + hf) / C)), j1 = Math.min(gw - 1, Math.floor((z + ez + 1 + hf) / C));
   let pen = 0, px = 0, pz = 0;
-  for (let j = Math.max(0, j0); j <= Math.min(gw - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(gw - 1, i1); i++) {
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
     const k = j * gw + i;
     if (!pf.hardBlock(k)) continue;
-    const [cx, cz] = t.cellCenter(i, j);
-    const dx = cx - x, dz = cz - z;
+    const dx = (i + 0.5) * C - hf - x, dz = (j + 0.5) * C - hf - z;
     // Trennachsentest: Welt-x, Welt-z, Rechteck quer (c,-s), Rechteck längs (s,c)
     const ox = ex + 1 - Math.abs(dx); if (ox <= FP_EPS) continue;
     const oz = ez + 1 - Math.abs(dz); if (oz <= FP_EPS) continue;
@@ -509,10 +510,10 @@ export class Unit {
     const curK = t.cellIndex(p.x, p.z);
     const stuckInside = curK >= 0 && !pf.passable(curK, 'ground', true);
     const lim = Math.max(FP_EPS, cur + 1e-4);
-    const canAt = (x, z, l = lim) => {
+    const canAt = (x, z) => {
       const k = t.cellIndex(x, z);
       if (k < 0 || (!pf.passable(k, 'ground', true) && !stuckInside)) return false;
-      return footPen(this, x, z, h, 0) <= l;
+      return footPen(this, x, z, h, 0) <= lim;
     };
     const fx = Math.sin(h), fz = Math.cos(h);
     this.moving = true;
