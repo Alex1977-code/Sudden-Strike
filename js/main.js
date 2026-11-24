@@ -3,6 +3,7 @@ import { icon } from './game/icons.js';
 import './eras/index.js';
 import { GameRenderer } from './engine/renderer.js';
 import { Audio } from './engine/audio.js';
+import { Music } from './engine/music.js';
 import { Terrain } from './engine/terrain.js';
 import { Game } from './game/game.js';
 import { RTSCamera, Input } from './game/input.js';
@@ -63,6 +64,21 @@ document.addEventListener('touchstart', () => audio.init(), { once: true, passiv
 
 let inMission = false;
 let currentMission = null;
+
+// ---------- Musik (V3-MUS): prozedural, Thema nach Epoche, Intensität aus Kampfereignissen ----------
+const music = new Music(audio);
+if (typeof settings.music !== 'boolean') settings.music = true;
+if (typeof settings.musicVolume !== 'number') settings.musicVolume = 0.7;
+music.setVolume(settings.musicVolume); music.setEnabled(settings.music); music.start('menu');
+document.addEventListener('click', () => music.resume(), true);
+document.addEventListener('touchstart', () => music.resume(), { once: true, passive: true });
+const eraOf = (m) => { const e = m?.era || m?.meta?.era; if (e) return e === 'ww1' ? 'ww2' : e; const d = String(m?.date || ''); return /19[34]\d/.test(d) ? 'ww2' : /afghan|198\d|200\d/i.test(d) ? 'afghan' : 'modern'; };
+let combat = 0;
+game.on('loaded', () => { combat = 0; music.setIntensity(0); music.start(game.demo || !game.mission ? 'menu' : eraOf(game.mission)); });
+game.on('underAttack', () => { combat = Math.min(1, combat + 0.12); });
+game.on('kill', (u, killer, silent) => { if (!silent) combat = Math.min(1, combat + 0.07); });
+game.on('end', (won) => music.start(won ? 'victory' : 'defeat'));
+setInterval(() => { combat *= 0.9; music.setIntensity(game.active && !game.demo && !game.paused && !game.ended ? Math.max(0.1, combat) : 0); }, 500);
 
 function loadWithSpinner(text, fn) {
   $('loading-text').textContent = text;
@@ -431,7 +447,15 @@ $('btn-editor').onclick = () => editor.open();
 $('btn-mods').onclick = () => openMods();
 
 // Einstellungen
+function ensureMusicUI() {
+  if ($('set-music')) return;
+  const host = $('set-volume').closest('label'); if (!host) return;
+  host.insertAdjacentHTML('afterend', '<label class="check"><input id="set-music" type="checkbox"> Musik</label><label>Musiklautstärke <input id="set-musicvol" type="range" min="0" max="1" step="0.05"></label>');
+  $('set-music').addEventListener('input', () => { settings.music = $('set-music').checked; saveSettings(); music.setEnabled(settings.music); });
+  $('set-musicvol').addEventListener('input', () => { settings.musicVolume = +$('set-musicvol').value; saveSettings(); music.setVolume(settings.musicVolume); });
+}
 function openSettings() {
+  ensureMusicUI(); $('set-music').checked = settings.music; $('set-musicvol').value = settings.musicVolume;
   $('set-quality').value = settings.quality;
   $('set-upscale').value = settings.upscale;
   $('set-targetfps').value = String(settings.targetFps);

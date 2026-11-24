@@ -150,7 +150,7 @@ class Ctx {
     if (!extra.square && this.fixed.length) {
       // nicht durch vorgegebene Gebäude (Landmarken der Vorlage): Polyline an solchen Stellen auftrennen
       const parts = this._avoidFixed(pts, width / 2 + ROAD_MIN);
-      if (parts.length !== 1 || parts[0].length !== pts.length) {
+      if (parts !== null) {
         let first = null;
         for (const q of parts) { const g = this.road(q, width, paved, { ...extra, split: true }); if (!first) first = g; }
         return first;
@@ -176,7 +176,7 @@ class Ctx {
       if (near(pts[i][0], pts[i][1])) { cut = true; if (cur.length > 1) parts.push(cur); cur = []; } else cur.push(pts[i]);
     }
     if (cur.length > 1) parts.push(cur);
-    return cut ? parts : [pts];
+    return cut ? parts : null; // null = unverändert
   }
   water(x, z, m = 0) {
     if (!this.waters.length) return false;
@@ -614,8 +614,8 @@ function layoutGrid(C) {
     for (const n of list) { if (n && n.ok) cur.push(n); else flush(); }
     flush();
   };
-  for (let j = -nv; j <= nv; j++) { const list = []; for (let i = -nu; i <= nu; i++) list.push(N(i, j)); mkLine(list, j === 0 ? Tt.main : Tt.street, j === 0 ? Tt.mainPaved : Tt.mainPaved || rnd() < 0.3, j === 0, j === 0, j === 0); }
-  for (let i = -nu; i <= nu; i++) { const list = []; for (let j = -nv; j <= nv; j++) list.push(N(i, j)); mkLine(list, i === 0 ? Math.max(Tt.street, Tt.main - 2) : Tt.street, Tt.mainPaved || i === 0, i === 0, i === 0, i === 0); }
+  for (let j = -nv; j <= nv; j++) { const list = []; for (let i = -nu; i <= nu; i++) list.push(N(i, j)); mkLine(list, j === 0 ? Tt.main : Tt.street, j === 0 ? Tt.mainPaved : Tt.mainPaved && rnd() < 0.8, j === 0, j === 0, j === 0); }
+  for (let i = -nu; i <= nu; i++) { const list = []; for (let j = -nv; j <= nv; j++) list.push(N(i, j)); mkLine(list, i === 0 ? Math.max(Tt.street, Tt.main - 2) : Tt.street, Tt.mainPaved, i === 0, i === 0, i === 0); }
   const main = streets.find((s) => s.main) || streets[0];
   if (!main) return null;
   connectRoads(C);
@@ -657,7 +657,7 @@ function layoutGrid(C) {
     }
     // Platzfläche pflastern (zwischen den Gebäuden)
     const pw = nearR + nearC - 3, pc = (nearR - nearC) / 2;
-    if (pw > 5) C.road([[sqB.x - ux * inner * 0.55 + vx * pc, sqB.z - uz * inner * 0.55 + vz * pc], [sqB.x + ux * inner * 0.55 + vx * pc, sqB.z + uz * inner * 0.55 + vz * pc]], pw, true, { square: true });
+    if (pw > 5) C.road([[sqB.x - ux * inner * 0.55 + vx * pc, sqB.z - uz * inner * 0.55 + vz * pc], [sqB.x + ux * inner * 0.55 + vx * pc, sqB.z + uz * inner * 0.55 + vz * pc]], Math.min(pw, inner * 1.2), Tt.mainPaved, { square: true });
     C.landmarks.push({ name: Tt.set === 'afghan' ? 'Basarplatz' : 'Marktplatz', x: r1(sqB.x), z: r1(sqB.z) });
   }
   // Park (Stadt): ein Block mit Bäumen

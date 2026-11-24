@@ -24,16 +24,18 @@ const ENDPOINT = 'https://overpass.private.coffee/api/interpreter';
 const UA = 'Steppensturm-map-builder';
 export const ATTRIBUTION = '© OpenStreetMap-Mitwirkende (ODbL)';
 
-// Orte: bbox [Süd, West, Nord, Ost], region (Gebäudeart-Zuordnung), size (Spielkarte, m), rot (Drehung, rad)
+// Orte: Mittelpunkt [lat, lon] und Kantenlänge (m) der realen Box, region (Gebäudeart-Zuordnung), size (Spielkarte, m),
+// rot (Drehung, rad). Maßstab = size / extent (≈ 0,8–1: Gebäude behalten annähernd ihre echte Größe).
+const box = (lat, lon, extent) => { const dLat = extent / 2 / 110540, dLon = extent / 2 / (111320 * Math.cos(lat * Math.PI / 180)); return [lat - dLat, lon - dLon, lat + dLat, lon + dLon]; };
 export const OSM_PLACES = {
-  remagen: { bbox: [50.5755, 7.2340, 50.5840, 7.2510], region: 'de', size: 560 },
-  pegasus: { bbox: [49.2380, -0.2800, 49.2460, -0.2640], region: 'fr', size: 520 },
-  carentan: { bbox: [49.2990, -1.2560, 49.3080, -1.2400], region: 'fr', size: 560 },
-  bastogne: { bbox: [49.9960, 5.7080, 50.0050, 5.7230], region: 'be', size: 560 },
-  arnheim: { bbox: [51.9740, 5.9040, 51.9830, 5.9200], region: 'nl', size: 580 },
-  berlin: { bbox: [52.5140, 13.3660, 52.5230, 13.3810], region: 'de', size: 600 },
-  bachmut: { bbox: [48.5900, 37.9900, 48.5990, 38.0060], region: 'ua', size: 560 },
-  kunduz: { bbox: [36.7240, 68.8550, 36.7330, 68.8700], region: 'af', size: 560 },
+  remagen: { bbox: box(50.5797, 7.2440, 680), region: 'de', size: 560 },
+  pegasus: { bbox: box(49.2420, -0.2720, 640), region: 'fr', size: 520 },
+  carentan: { bbox: box(49.3035, -1.2480, 680), region: 'fr', size: 560 },
+  bastogne: { bbox: box(50.0003, 5.7153, 680), region: 'be', size: 560 },
+  arnheim: { bbox: box(51.9776, 5.9118, 700), region: 'nl', size: 580 },
+  berlin: { bbox: box(52.5190, 13.3740, 720), region: 'de', size: 600 },
+  bachmut: { bbox: box(48.5950, 37.9990, 680), region: 'ua', size: 560 },
+  kunduz: { bbox: box(36.7290, 68.8610, 720), region: 'af', size: 600 },
 };
 
 // ---------------------------------------------------------------------------------------------------------------
