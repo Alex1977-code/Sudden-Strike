@@ -42,7 +42,7 @@ export default {
   id: 'duenkirchen', name: 'Dünkirchen', label: 'angelehnt an Dünkirchen (1940)', era: 'ww2', size: 600,
   date: 'Mai/Juni 1940',
   map: { size: 600, seed: 1940, season: 'summer', relief: 1.2, baseHeight: 3, seaLevel: 0, scatterTrees: 20, scarred: true, features: feats },
-  env: { season: 'summer', sunElev: 34, sunAzim: 170, fogDensity: 0.003 },
+  env: { season: 'summer', sunElev: 38, sunAzim: 15, fogDensity: 0.0022 },
   camera: { x: -60, z: -80, dist: 150 },
   landmarks: landmarksOf(feats, [{ name: 'Ostmole', x: -150, z: -230 }, { name: 'Westmole', x: -234, z: -230 }, { name: 'Strand Malo-les-Bains', x: 120, z: -150 }, { name: 'Hafenbecken', x: -150, z: -40 }, { name: 'Canal de Furnes', x: 80, z: 208 }]),
   spawns: { A: [0, 270], B: [-60, -140] },

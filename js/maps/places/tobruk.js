@@ -38,7 +38,7 @@ export default {
   id: 'tobruk', name: 'Tobruk', label: 'angelehnt an Tobruk (1941/42)', era: 'ww2', size: 600,
   date: '1941/42',
   map: { size: 600, seed: 1941, season: 'summer', palette: 'desert', relief: 3, baseHeight: 5, seaLevel: 0, scatterTrees: 8, features: feats },
-  env: { season: 'summer', sunElev: 50, sunAzim: 180, fogDensity: 0.0018 },
+  env: { season: 'summer', sunElev: 50, sunAzim: 10, fogDensity: 0.0016 },
   camera: { x: 0, z: -60, dist: 150 },
   landmarks: landmarksOf(feats, [{ name: 'Hafenbucht', x: 140, z: -20 }, { name: 'Festungsperimeter', x: 0, z: 232 }, { name: 'Landzunge mit Stadt', x: 10, z: -170 }]),
   structures: [
