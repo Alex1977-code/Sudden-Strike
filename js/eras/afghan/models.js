@@ -209,7 +209,7 @@ reg('af_soldier', (side, type, ctx) => {
 });
 
 // ====================== Bundeswehr: Radfahrzeuge ======================
-const ifft = (ctx, side, g, y, z, w = 1.2) => ctx.iff(g, side, y, z, w);
+const ifft = () => {}; // keine Team-Streifen: Fraktionen unterscheiden sich über Farben/Kennzeichen
 
 function mrap(side, type, ctx, eagle) {
   const { add, box, cyl, hullGeo, wheel, antenna, sphG, M } = ctx; const a = mats(ctx);
@@ -359,7 +359,6 @@ function cargo(side, type, ctx) {
   if (fac === 'BW') { for (const s of [-1, 1]) emblem(ctx, 'BW', g, s * 1.32, 2.0, 1.9, s > 0 ? '+x' : '-x', 0.5); }
   if (fac === 'SA') star(ctx, g, 1.32, 2.0, 1.9, '+x', 0.5);
   const muzzle = new THREE.Object3D(); g.add(muzzle);
-  ctx.iff(g, side, 3.75, -1.2, 1.4);
   return { root: g, muzzle, height: 3.4 };
 }
 reg('af_truck', cargo); reg('af_ural', cargo);
@@ -421,7 +420,6 @@ function bmp(side, type, ctx, v) { // v: 'bmp1' | 'bmp2' | 'bmd'
     cyl(barrel, 0.09, 0.1, 1.5, M.gunMetal, 0, 0, 0.75, Math.PI / 2, 0, 0, 8); box(turret, 0.1, 0.1, 1.2, M.darkMetal, 0, 0.6, 0.1); cyl(turret, 0.05, 0.05, 0.8, c, 0, 0.7, 0.1, Math.PI / 2, 0, 0, 6);
   }
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, v === 'bmp2' ? 2.4 : 1.6); barrel.add(muzzle);
-  ctx.iff(g, side, bmd ? 1.9 : 2.1, -2.0);
   return { root: g, turret, barrel, muzzle, height: 2.8 };
 }
 reg('af_bmp', (s, t, c) => bmp(s, t, c, 'bmp1')); reg('af_bmp2', (s, t, c) => bmp(s, t, c, 'bmp2')); reg('af_bmd', (s, t, c) => bmp(s, t, c, 'bmd'));
@@ -440,7 +438,6 @@ function btr(side, type, ctx, v80) {
   const barrel = new THREE.Group(); barrel.position.set(0, 0.1, 0.8); turret.add(barrel);
   cyl(barrel, 0.06, 0.07, 1.6, M.gunMetal, 0, 0, 0.8, Math.PI / 2, 0, 0, 6); cyl(barrel, 0.11, 0.11, 0.5, M.darkMetal, 0, 0, 0.3, Math.PI / 2, 0, 0, 8);
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, 1.7); barrel.add(muzzle);
-  ctx.iff(g, side, 2.05, -2.3);
   return { root: g, turret, barrel, muzzle, height: 2.7 };
 }
 reg('af_btr70', (s, t, c) => btr(s, t, c, false)); reg('af_btr80', (s, t, c) => btr(s, t, c, true));
@@ -463,7 +460,6 @@ function tank55(side, type, ctx, t62) {
   if (!t62) cyl(barrel, 0.14, 0.14, 0.6, M.darkMetal, 0, 0, 2.2, Math.PI / 2, 0, 0, 8); else cyl(barrel, 0.12, 0.12, 0.5, M.darkMetal, 0, 0, 1.0, Math.PI / 2, 0, 0, 8);
   cyl(barrel, 0.2, 0.2, 0.6, M.darkMetal, 0, 0, 0.3, Math.PI / 2, 0, 0, 8);
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, 4.1); barrel.add(muzzle);
-  ctx.iff(g, side, 1.78, -2.1, 1.4);
   return { root: g, turret, barrel, muzzle, height: 2.9 };
 }
 reg('af_t55', (s, t, c) => tank55(s, t, c, false)); reg('af_t62', (s, t, c) => tank55(s, t, c, true));
@@ -483,7 +479,6 @@ reg('af_shilka', (side, type, ctx) => {
   for (const [x, y] of [[-0.55, 0.12], [-0.2, 0.12], [0.2, 0.12], [0.55, 0.12]]) cyl(barrel, 0.045, 0.05, 2.2, M.gunMetal, x, y, 1.0, Math.PI / 2, 0, 0, 6);
   box(barrel, 1.5, 0.3, 0.8, M.darkMetal, 0, 0.1, 0.2);
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0.1, 2.2); barrel.add(muzzle);
-  ctx.iff(g, side, 1.98, -2.4, 1.4);
   return { root: g, turret, barrel, muzzle, height: 3.3, radar };
 });
 
@@ -497,7 +492,6 @@ reg('af_bm21', (side, type, ctx) => {
   box(barrel, 2.0, 1.6, 0.3, M.darkMetal, 0, 0.4, -0.2);
   for (let r = 0; r < 5; r++) for (let q = 0; q < 8; q++) cyl(barrel, 0.1, 0.1, 3.0, M.gunMetal, -0.84 + q * 0.24, -0.2 + r * 0.28 + (q % 2) * 0.04, 1.3, Math.PI / 2, 0, 0, 6);
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0.2, 2.9); barrel.add(muzzle);
-  ctx.iff(g, side, 3.0, 2.0, 1.2);
   return { root: g, turret, barrel, muzzle, height: 3.6 };
 });
 
@@ -514,7 +508,6 @@ reg('af_2s1', (side, type, ctx) => {
   const barrel = new THREE.Group(); barrel.position.set(0, 0.55, 1.3); turret.add(barrel);
   cyl(barrel, 0.1, 0.12, 3.8, M.gunMetal, 0, 0, 1.9, Math.PI / 2, 0, 0, 8); cyl(barrel, 0.17, 0.17, 0.7, M.darkMetal, 0, 0, 3.7, Math.PI / 2, 0, 0, 8); cyl(barrel, 0.22, 0.22, 0.6, M.darkMetal, 0, 0, 0.4, Math.PI / 2, 0, 0, 8);
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, 3.9); barrel.add(muzzle);
-  ctx.iff(g, side, 2.0, -2.5, 1.4);
   return { root: g, turret, barrel, muzzle, height: 3.2 };
 });
 
@@ -531,7 +524,6 @@ reg('af_uaz', (side, type, ctx) => {
   const barrel = new THREE.Group(); barrel.position.set(0, 0.45, 0); turret.add(barrel);
   box(barrel, 0.18, 0.2, 0.6, M.darkMetal, 0, 0, 0.1); cyl(barrel, 0.025, 0.03, 0.7, M.gunMetal, 0, 0, 0.7, Math.PI / 2, 0, 0, 6);
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, 1.1); barrel.add(muzzle);
-  ctx.iff(g, side, 2.3, -0.7, 0.9);
   return { root: g, turret, barrel, muzzle, height: 2.8 };
 });
 
@@ -553,13 +545,11 @@ function hilux(side, type, ctx, kind) { // 'technical' | 'transport'
     box(barrel, 0.2, 0.25, 0.9, M.darkMetal, 0, 0, 0.2); cyl(barrel, 0.045, 0.05, 1.6, M.gunMetal, 0, 0, 1.3, Math.PI / 2, 0, 0, 6); cyl(barrel, 0.09, 0.09, 0.15, M.darkMetal, 0, 0.1, 0.4, 0, 0, 0, 8);
     box(barrel, 0.25, 0.25, 0.25, a.rust, 0.25, -0.1, 0.1);
     const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, 2.1); barrel.add(muzzle);
-    ctx.iff(g, side, 2.17, 0.6, 1.0);
     return { root: g, turret, barrel, muzzle, height: 2.9 };
   }
   for (let i = 0; i < 4; i++) { const x = (i % 2 ? 0.45 : -0.45), z = -1.2 - (i >> 1) * 1.1;
     box(g, 0.45, 0.5, 0.3, a.shirts[i], x, 1.95, z); add(g, sphG(0.14, 8, 6), M.skin, x, 2.37, z); cyl(g, 0.15, 0.14, 0.1, a.hats[i % 3], x, 2.52, z, 0, 0, 0, 8); box(g, 0.05, 0.9, 0.05, M.gunMetal, x + 0.28, 2.1, z, 0, 0, 0.1); }
   const muzzle = new THREE.Object3D(); g.add(muzzle);
-  ctx.iff(g, side, 1.4, 1.5, 0.9);
   return { root: g, muzzle, height: 2.8 };
 }
 reg('af_technical', (s, t, c) => hilux(s, t, c, 'technical')); reg('af_pickup', (s, t, c) => hilux(s, t, c, 'transport'));
