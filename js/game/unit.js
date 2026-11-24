@@ -573,6 +573,12 @@ export class Unit {
     }
     this._fpStalled();
   }
+  // Darf die Einheit bei (x, z) stehen, ohne dass die Fahrzeug-Grundfläche tiefer in ein hartes Hindernis ragt als jetzt?
+  // (für Verschiebungen von außen, z. B. game.separate/_canStand; Nicht-Fahrzeuge: immer true)
+  fitsAt(x, z) {
+    if (!usesFootprint(this)) return true;
+    return footPen(this, x, z, this.heading, 0) <= Math.max(FP_EPS, footPen(this, this.pos.x, this.pos.z, this.heading, 0));
+  }
   // Kein Durchkommen: letzter Wegpunkt → so nah wie möglich, Auftrag erfüllt; sonst (gedrosselt) neu planen
   _fpStalled() {
     if (!this.path || !this.path.length) return;
