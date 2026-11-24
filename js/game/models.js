@@ -1412,6 +1412,7 @@ function facade(c, o) {
     for (let fl = o.fl0 ?? 0; fl < (o.fl1 ?? c.floors); fl++) for (let i = 0; i < n; i++) {
       const u = -len / 2 + mg + (i + 0.5) * st, y = (o.y0 ?? 0) + fl * fh + o.sill + wh / 2;
       if (o.skip && o.skip(fi, fl, i, n, u)) continue;
+      (c.wins || (c.wins = [])).push({ fi, u, y, ww, wh });
       fput(c, winG(ww, wh, o.v || 0), o.frame, fi, u, y);
       fput(c, planeG(ww, wh), glassFor(c), fi, u, y, WIN_Z[o.v || 0]);
       if (o.shut && (!o.shutP || c.rnd() < o.shutP)) fput(c, shutG(ww, wh), o.shut, fi, u, y);
@@ -1445,12 +1446,13 @@ function gableRoof(c, o) {
     }
   }
   if (c.snow) for (const s of [-1, 1]) add(p, tiledBoxG(+(ls + 0.1).toFixed(3), 0.12, +(len - 0.1).toFixed(3), 3), pm(0xf2f5f8, 1), s * half / 2, y + rh / 2 + 0.15, 0, 0, 0, -s * ang, false);
+  if (!c.roofInfo && o.main !== false && (!o.parent || o.rotY !== undefined)) c.roofInfo = { y, rh, half, ls, ang, len, rotY: o.rotY || 0, W, D };
   return { rh, half, at: (u) => y + rh * (1 - Math.min(1, Math.abs(u) / half)) };
 }
 function roof(c, o) { // ridgeX: First entlang x
   if (!o.ridgeX) return gableRoof(c, { ...o, W: c.w, D: c.d });
   const rp = new THREE.Group(); rp.rotation.y = Math.PI / 2; c.g.add(rp);
-  return gableRoof(c, { ...o, parent: rp, W: c.d, D: c.w });
+  return gableRoof(c, { ...o, parent: rp, W: c.d, D: c.w, rotY: Math.PI / 2 });
 }
 function chimney(c, x, z, y0, y1, o = {}) {
   const sw = o.sw || 0.7, sd = o.sd || sw, mat = o.mat || pm(0x86483a, 0.95);
@@ -1461,7 +1463,7 @@ function chimney(c, x, z, y0, y1, o = {}) {
 function tvAnt(c, x, y, z, ry = 0) { const m = add(c.g, tvAntG(), pm(0xb8bcbe, 0.5, 0.7), x, y, z, 0, ry, 0, false); return m; }
 function dish(c, x, y, z, ry = 0) { return add(c.g, dishG(), pm(0xe2e2dc, 0.5, 0.3), x, y, z, 0, ry, 0, false); }
 function gardenFence(c, z, len, mat) { add(c.g, fenceG(len), mat || pm(0xcfc8b6, 0.9), 0, 0, z, 0, 0, 0, false); }
-function baseWall(c, tex, hex, H, s = 4) { return add(c.g, tiledBoxG(c.w, H, c.d, s), wmat(tex, hex), 0, H / 2, 0); }
+function baseWall(c, tex, hex, H, s = 4) { c.wallH = H; return add(c.g, tiledBoxG(c.w, H, c.d, s), wmat(tex, hex), 0, H / 2, 0); }
 function plinth(c, hh, mat, grow = 0.12) { add(c.g, boxG(+(c.w + grow).toFixed(3), hh, +(c.d + grow).toFixed(3)), mat || M.concreteDark, 0, hh / 2, 0); }
 
 // ---- Gebäudearten ----
@@ -1472,6 +1474,7 @@ function flatRoof(c, W, D, y, o = {}) { // Flachdach mit Bitumenbahn und Attika
   add(c.g, tiledBoxG(+(W + 0.3).toFixed(3), 0.3, +(D + 0.3).toFixed(3), 4), wmat('bitu', o.hex ?? 0xffffff, 0.95), 0, y + 0.15, 0);
   const ph = o.ph ?? 0.5, pt = 0.18, pm_ = o.pmat || M.concreteDark;
   for (const s of [-1, 1]) { add(c.g, boxG(+(W + 0.3).toFixed(3), ph, pt), pm_, 0, y + 0.3 + ph / 2, s * (D / 2 + 0.06)); add(c.g, boxG(pt, ph, +(D + 0.3).toFixed(3)), pm_, s * (W / 2 + 0.06), y + 0.3 + ph / 2, 0); }
+  if (!c.roofInfo) c.roofInfo = { flat: true, y, W, D };
   return y + 0.3;
 }
 function sub(c, x, y, z, ry = 0) { const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; c.g.add(g); return g; }
@@ -2031,7 +2034,11 @@ export function house(h) {
   addBlob(c.g, h.w + 5, h.d + 5);
   _kindByDims.set(dimKey(h.w, h.d), kind);
   c.g.userData.houseKind = kind;
-  return { root: c.g, height: r.height, body: merged.get(r.body) || r.body, kind };
+  const cls = RUBBLE_CLASS[kind] || 'brick';
+  c.g.userData.houseClass = cls; c.fxH = r.height * 0.45;
+  const set = makeDamage(c, c.g, cls, r.height);
+  c.g.userData.setDamage = set;
+  return { root: c.g, height: r.height, body: merged.get(r.body) || r.body, kind, setDamage: set };
 }
 
 const RUBBLE_CLASS = {
@@ -2075,6 +2082,127 @@ export function rubble(w, d, kind) {
   optimize(g);
   return g;
 }
+
+
+// ---- Schadensstufen (0–3) ----
+// Stufe 1: Einschüsse/Ruß (Decals), einzelne zerschossene Fenster; Stufe 2: große Wandlöcher, Dachloch mit Sparren,
+// Ruß an der Fassade; Stufe 3: Wandteile eingestürzt (Haus sackt zusammen), Schutt am Fuß, Dach großteils weg.
+// Alle Schadensteile nutzen geteilte Geometrien/Materialien; je Stufe höchstens 2 zusätzliche Meshes (Decal + Festkörper).
+const DM = {};
+function dmInit() {
+  if (DM.ok) return; DM.ok = true;
+  initMats();
+  const [cv, x] = mkCanvas(256, 128), r = mkRand(77);
+  let g = x.createRadialGradient(64, 92, 4, 64, 92, 56); g.addColorStop(0, 'rgba(8,6,5,0.9)'); g.addColorStop(0.6, 'rgba(8,6,5,0.45)'); g.addColorStop(1, 'rgba(8,6,5,0)'); x.fillStyle = g; x.fillRect(0, 40, 128, 88);
+  g = x.createLinearGradient(0, 100, 0, 0); g.addColorStop(0, 'rgba(8,6,5,0.65)'); g.addColorStop(1, 'rgba(8,6,5,0)'); x.fillStyle = g; x.beginPath(); x.moveTo(40, 100); x.lineTo(88, 100); x.lineTo(70, 4); x.lineTo(58, 4); x.fill();
+  for (let i = 0; i < 40; i++) { x.fillStyle = `rgba(8,6,5,${r() * 0.3})`; x.fillRect(20 + r() * 90, r() * 100, 1 + r() * 4, 3 + r() * 10); }
+  for (let i = 0; i < 22; i++) { const px = 140 + r() * 108, py = 12 + r() * 104, rr = 2 + r() * 3.5; x.fillStyle = 'rgba(235,225,205,0.55)'; x.beginPath(); x.arc(px, py, rr + 2, 0, 6.3); x.fill(); x.fillStyle = 'rgba(10,8,6,0.92)'; x.beginPath(); x.arc(px, py, rr, 0, 6.3); x.fill(); }
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 2;
+  DM.decalMat = applyFow(new THREE.MeshStandardMaterial({ map: tex, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  const mk = (u0, u1) => { const p = new THREE.PlaneGeometry(1, 1), uv = p.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setX(i, u0 + uv.getX(i) * (u1 - u0)); p.userData.shared = true; return p; };
+  DM.soot = mk(0, 0.5); DM.pock = mk(0.5, 1);
+  DM.holes = [0, 1, 2].map((k) => { // gezackte Öffnung
+    const sh = new THREE.Shape(), rr = mkRand(300 + k), n = 9; for (let i = 0; i < n; i++) { const a = i / n * 6.283, rad = 0.5 * (0.62 + rr() * 0.5); const px = Math.cos(a) * rad, py = Math.sin(a) * rad * 1.05; i ? sh.lineTo(px, py) : sh.moveTo(px, py); } sh.closePath();
+    const p = new THREE.ShapeGeometry(sh); p.userData.shared = true; return p;
+  });
+  DM.black = pm(0x070606, 1); DM.char = pm(0x1c1713, 1); DM.ember = pm(0xff5a1a, 0.6, 0, 0xff4a10, 2.2); DM.rafter = pm(0x3a2a1c, 0.95); DM.rebar = pm(0x6a4a32, 0.8, 0.5); DM.glass = pm(0x040404, 0.25, 0.3);
+}
+const DMG_CLASS_COL = { mud: [0xc9b088, 0xa88f68], brick: [0x7a5548, 0x5a4a42], concrete: [0xa09d95, 0x77746d], wood: [0x4a3a2c, 0x2a2420] };
+const _dm = new THREE.Object3D();
+function dmMatrix(c, fi, u, y, out, sx, sy, rz = 0) {
+  const f = c.faces[fi], cs = Math.cos(f.ry), sn = Math.sin(f.ry);
+  _dm.position.set(f.cx + cs * u + sn * out, y, f.cz - sn * u + cs * out); _dm.rotation.set(0, f.ry, rz); _dm.scale.set(sx, sy, 1); _dm.updateMatrix();
+  return _dm.matrix.clone();
+}
+function dmStage(c, st, cls) {
+  const rnd = mkRand(9001 + st * 131 + Math.floor(c.w * 17 + c.d * 29)), out = new THREE.Group(), decals = [], solids = [];
+  const wins = c.wins || [], H = c.wallH || c.fxH || 4, ci = DMG_CLASS_COL[cls];
+  const face = (fi) => (fi < 2 ? c.w : c.d);
+  const rndFace = () => Math.floor(rnd() * 4);
+  const decal = (geo, fi, u, y, sx, sy) => decals.push({ geo, matrix: dmMatrix(c, fi, u, y, 0.035 + rnd() * 0.01, sx, sy), mat: DM.decalMat });
+  const solid = (geo, mat, m) => solids.push({ geo, mat, m });
+  const add3 = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.scale.set(sx, sy, sz); m.castShadow = true; m.receiveShadow = true; out.add(m); return m; };
+  const facePos = (fi, u, y, o) => { const f = c.faces[fi], cs = Math.cos(f.ry), sn = Math.sin(f.ry); return [f.cx + cs * u + sn * o, y, f.cz - sn * u + cs * o]; };
+  if (st === 1) {
+    const nb = Math.max(2, Math.min(6, Math.floor(wins.length * 0.25)));
+    for (let i = 0; i < nb && wins.length; i++) { const w = wins[Math.floor(rnd() * wins.length)]; const m = new THREE.Mesh(planeG(w.ww, w.wh), DM.glass); const f = c.faces[w.fi], cs = Math.cos(f.ry), sn = Math.sin(f.ry); m.position.set(f.cx + cs * w.u + sn * 0.075, w.y, f.cz - sn * w.u + cs * 0.075); m.rotation.y = f.ry; out.add(m); if (i < 3) decal(DM.soot, w.fi, w.u, w.y + w.wh * 0.5 + 0.9, w.ww * 2.2, 2.4); }
+    for (let i = 0; i < 7; i++) { const fi = rndFace(), len = face(fi); decal(DM.pock, fi, (rnd() - 0.5) * len * 0.8, 0.8 + rnd() * Math.max(1.5, H - 1.8), 1.4 + rnd() * 1.4, 0.8 + rnd() * 0.8); }
+  } else if (st === 2) {
+    const nh = Math.min(4, 2 + Math.floor(c.w / 10));
+    for (let i = 0; i < nh; i++) {
+      const fi = i % 4, len = face(fi), u = (rnd() - 0.5) * len * 0.7, y = Math.max(1.4, Math.min(H - 1.2, 1.5 + rnd() * (H - 2.5))), s = 1.5 + rnd() * 1.1, k = i % 3;
+      const mchar = cls === 'mud' || cls === 'concrete' ? pm(ci[1], 1) : DM.char;
+      for (const [mat, sc, o] of [[mchar, 1.35, 0.04], [DM.black, 1.0, 0.055]]) { const m = new THREE.Mesh(DM.holes[k], mat); const [px, py, pz] = facePos(fi, u, y, o); m.position.set(px, py, pz); m.rotation.y = c.faces[fi].ry; m.scale.set(s * sc, s * sc * 0.9, 1); m.castShadow = false; out.add(m); }
+      decal(DM.soot, fi, u, y + s * 0.9, s * 2.2, s * 2.4);
+      if (cls === 'concrete') for (let b = 0; b < 5; b++) { const a = rnd() * 6.283, [px, py, pz] = facePos(fi, u + Math.cos(a) * s * 0.5, y + Math.sin(a) * s * 0.5, 0.35); const m = add3(cylG(0.025, 0.025, 0.9, 4), DM.rebar, px, py, pz, 0.9 + rnd() * 0.5, c.faces[fi].ry, (rnd() - 0.5)); }
+      if (cls === 'mud') for (let b = 0; b < 3; b++) { const [px, py, pz] = facePos(fi, u + (rnd() - 0.5) * 3, 0.25, 0.7 + rnd() * 0.4); add3(new THREE.DodecahedronGeometry(0.35, 0), pm(ci[0], 1), px, py, pz, rnd(), rnd(), rnd(), 1, 0.6, 1); }
+    }
+    for (let i = 0; i < 3; i++) { const fi = rndFace(); decal(DM.soot, fi, (rnd() - 0.5) * face(fi) * 0.7, H * 0.7, 3 + rnd() * 2, 4); }
+    roofHole(c, out, rnd, 0.35, cls);
+  } else {
+    // Stufe 3: Schuttkranz am Fuß, abgebrochene Wandkrone, großes Dachloch
+    const n = 12;
+    for (let i = 0; i < n; i++) { const a = i / n * 6.283, rx = (c.w / 2 + 0.2 + rnd() * 0.9) * Math.cos(a) * 1.0, rz = (c.d / 2 + 0.2 + rnd() * 0.9) * Math.sin(a); const r = 0.5 + rnd() * 0.7; add3(_bgk(`dod${r.toFixed(1)}`, () => new THREE.DodecahedronGeometry(+r.toFixed(1), 0)), pm(ci[i % 2], 1), rx, 0.3 + rnd() * 0.3, rz, rnd(), rnd(), rnd(), 1.2, 0.6, 1.2); }
+    for (let i = 0; i < 14; i++) { const fi = i % 4, len = face(fi), bw = 0.5 + rnd() * 1.4, bh = 0.4 + rnd() * 1.6; const [px, py, pz] = facePos(fi, (rnd() - 0.5) * len * 0.9, H * 0.98 + bh * 0.4, 0.0); add3(boxG(+bw.toFixed(2), +bh.toFixed(2), 0.4), pm(ci[(i + 1) % 2], 1), px, py, pz, (rnd() - 0.5) * 0.3, c.faces[fi].ry, (rnd() - 0.5) * 0.4); }
+    for (let i = 0; i < 5; i++) { const fi = rndFace(); decal(DM.soot, fi, (rnd() - 0.5) * face(fi) * 0.8, H * 0.6, 4 + rnd() * 3, 4.5); }
+    for (let i = 0; i < 3; i++) { const fi = i % 4, len = face(fi), u = (rnd() - 0.5) * len * 0.6, y = 1.8 + rnd() * Math.max(0.5, H - 3.4), s = 2 + rnd() * 1.4; const [px, py, pz] = facePos(fi, u, y, 0.05); const m = new THREE.Mesh(DM.holes[i % 3], DM.black); m.position.set(px, py, pz); m.rotation.y = c.faces[fi].ry; m.scale.set(s, s * 0.9, 1); out.add(m); const e = new THREE.Mesh(DM.holes[(i + 1) % 3], DM.ember); const [qx, qy, qz] = facePos(fi, u, y - s * 0.3, 0.07); e.position.set(qx, qy, qz); e.rotation.y = c.faces[fi].ry; e.scale.set(s * 0.45, s * 0.25, 1); out.add(e); }
+    roofHole(c, out, rnd, 0.85, cls);
+  }
+  // zusammenführen: Decals (transparent) → 1 Mesh, Festkörper → via optimize (Sammelmaterial)
+  if (decals.length) { const geo = mergeParts(decals, false); const dmesh = new THREE.Mesh(geo, DM.decalMat); dmesh.renderOrder = 2; dmesh.userData.noWreck = true; dmesh.raycast = () => {}; out.add(dmesh); }
+  optimize(out);
+  out.traverse((o) => { o.userData.dmg = true; });
+  return out;
+}
+// Dachloch mit Sparren (Satteldach: auf der Dachfläche, Flachdach: Krater auf dem Dach)
+function roofHole(c, out, rnd, frac, cls) {
+  const R = c.roofInfo, add3 = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); out.add(m); return m; };
+  const wood = cls === 'mud' ? DM.rafter : DM.char;
+  if (!R || R.flat) {
+    const y = R ? R.y + 0.3 : (c.fxH || 4), W = (R ? R.W : c.w) * frac * 0.7, D = (R ? R.D : c.d) * frac * 0.7;
+    add3(boxG(+W.toFixed(2), 0.08, +D.toFixed(2)), DM.black, (rnd() - 0.5) * 2, y + 0.04, (rnd() - 0.5) * 2);
+    for (let i = 0; i < 4; i++) add3(boxG(0.14, 0.14, +(D * 0.9).toFixed(2)), DM.rafter, (i - 1.5) * W * 0.25, y + 0.35, 0, 0.3 * (rnd() - 0.5), 0, 0.5 * (rnd() - 0.5));
+    return;
+  }
+  const g = new THREE.Group(); g.rotation.y = R.rotY; out.add(g);
+  const slopes = frac > 0.5 ? [-1, 1] : [rnd() < 0.5 ? -1 : 1];
+  for (const s of slopes) {
+    const len = R.ls * (frac > 0.5 ? 0.78 : 0.45), wd = R.len * (frac > 0.5 ? 0.78 : 0.42), ux = R.half * (frac > 0.5 ? 0.5 : 0.55);
+    const m = new THREE.Group(); m.position.set(s * ux, R.y + R.rh * (1 - ux / R.half) + 0.1, (rnd() - 0.5) * R.len * 0.25); m.rotation.z = -s * R.ang; g.add(m);
+    const p = new THREE.Mesh(boxG(+len.toFixed(2), 0.06, +wd.toFixed(2)), DM.black); m.add(p);
+    const n = Math.max(3, Math.round(wd / 0.55));
+    for (let i = 0; i < n; i++) { const b = new THREE.Mesh(boxG(+(len * (0.7 + rnd() * 0.4)).toFixed(2), 0.12, 0.1), wood); b.position.set((rnd() - 0.5) * 0.3, 0.1, -wd / 2 + (i + 0.5) * wd / n); b.rotation.set(0, (rnd() - 0.5) * 0.1, (rnd() - 0.5) * 0.12); m.add(b); }
+    for (let i = 0; i < 3; i++) { const b = new THREE.Mesh(boxG(0.12, 0.12, +(wd * 0.9).toFixed(2)), wood); b.position.set(-len / 2 + (i + 0.5) * len / 3, 0.2, 0); m.add(b); }
+  }
+}
+function makeDamage(c, root, cls, baseHeight) {
+  const stages = [null, null, null, null];
+  let cur = 0;
+  const pts = () => {
+    const w = (c.wins && c.wins.length) ? c.wins[Math.floor(c.wins.length * 0.37)] : null;
+    let win;
+    if (w) { const f = c.faces[w.fi], cs = Math.cos(f.ry), sn = Math.sin(f.ry); win = new THREE.Vector3(f.cx + cs * w.u + sn * 0.3, w.y, f.cz - sn * w.u + cs * 0.3); } else win = new THREE.Vector3(0, (c.wallH || 3) * 0.6, c.d / 2 + 0.2);
+    const R = c.roofInfo; const roofp = new THREE.Vector3(0, (R ? R.y + (R.rh || 0) * 0.5 : baseHeight * 0.6) + 0.5, 0);
+    return { win, roof: roofp };
+  };
+  const set = (stage) => {
+    stage = Math.max(0, Math.min(3, stage | 0));
+    dmInit();
+    for (let s = 1; s <= 3; s++) { if (s <= stage && !stages[s]) { stages[s] = dmStage(c, s, cls); root.add(stages[s]); } if (stages[s]) stages[s].visible = s <= stage; }
+    const sq = stage >= 3 ? 0.72 : 1; // Stufe 3: Haus sackt zusammen
+    if (root.scale.y !== sq) { root.scale.y = sq; root.updateMatrix(); root.updateMatrixWorld(true); }
+    cur = stage; root.userData.damageStage = stage; root.userData.fxPts = pts();
+    return sq;
+  };
+  return set;
+}
+// Öffentliche Hilfen für game.js
+export function setBuildingDamage(root, stage, opts = {}) { const f = root && root.userData && root.userData.setDamage; return f ? f(stage, opts) : 1; }
+export function buildingFxPoint(root, which = 'win') { // Weltposition eines Rauch-/Feuerpunkts (win | roof)
+  const p = root.userData.fxPts || (root.userData.setDamage && (root.userData.setDamage(0), root.userData.fxPts)); if (!p) return root.position.clone().setY(root.position.y + 2);
+  root.updateMatrixWorld(true); return root.localToWorld(p[which].clone());
+}
+export function buildingClass(root) { return (root && root.userData && root.userData.houseClass) || 'brick'; }
 
 function sandbags(g, x, z, len, ry = 0, rows = 2) {
   const m = new Merger();

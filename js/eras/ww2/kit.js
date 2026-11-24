@@ -13,9 +13,9 @@ export function once(key, make) { let v = cache.get(key); if (v === undefined) c
 
 // ---- Fraktionsfarben ----
 export const FAC = {
-  US: { camo: ['#5a5e38', '#515531', '#646840', '#4a4e2e'], seed: 41, uni: 0x6b6a47, uniDark: 0x55553a, helm: 0x575b3b, canvas: 0x6a6b48, name: 'US' },
+  US: { camo: ['#575b36', '#4f532f', '#5f633c', '#474b2c'], seed: 41, uni: 0x6b6a47, uniDark: 0x55553a, helm: 0x575b3b, canvas: 0x6a6b48, name: 'US' },
   UK: { camo: ['#5c5d3d', '#54563a', '#676640', '#4b4c33'], seed: 47, uni: 0x7a6d4b, uniDark: 0x5d5238, helm: 0x5b5d3c, canvas: 0x6e6c4a, name: 'UK' },
-  SU: { camo: ['#4b5b35', '#44532f', '#566539', '#3d4a2a'], seed: 53, uni: 0x6c6b45, uniDark: 0x55553a, helm: 0x5b6046, canvas: 0x5a6340, name: 'SU' },
+  SU: { camo: ['#44522f', '#3d4a2a', '#4d5b35', '#363f26'], seed: 53, uni: 0x6c6b45, uniDark: 0x55553a, helm: 0x5b6046, canvas: 0x5a6340, name: 'SU' },
   DE: { camo: ['#b39d5e', '#5a6035', '#6c4c32', '#a38b4f'], seed: 59, uni: 0x5f6458, uniDark: 0x4a4f46, helm: 0x4f5550, canvas: 0x8c7d52, name: 'DE' },
 };
 const WINTER = ['#d6d9d5', '#bfc4bf', '#e9ebe7', '#a9b0a8'];

@@ -9,6 +9,7 @@ const h155 = (name, over) => ({ name, kind: 'artillery', range: 235, minRange: 3
 registerWeapons({
   // ---- Kampfpanzer / Schützenpanzer ----
   m_tank105: { name: '105-mm-Kanone L7', kind: 'shell', range: 42, dmg: 270, reload: 3.9, acc: 0.78, vs: VS_TANK, splash: 2.2, sound: 'cannon', bigMuzzle: true, groundTargetsOnly: true, prefer: ['heavy', 'light'], stock: 44, wt: 7 },
+  m_tank125: { name: '125-mm-Kanone 2A46M', kind: 'shell', range: 46, dmg: 300, reload: 5, acc: 0.8, vs: VS_TANK, splash: 2.5, sound: 'cannon', bigMuzzle: true, groundTargetsOnly: true, prefer: ['heavy', 'light'], stock: 40, wt: 8 }, // modernisierte Feuerleitung (Sosna-U/Relikt-Generation), Werte wie T125 in skirmish.js
   m_ac40: { name: '40-mm-Bofors', kind: 'bullet', range: 38, dmg: 34, reload: 1.1, acc: 0.62, vs: { soft: 1, light: 0.95, heavy: 0.1, air: 0.8, struct: 0.15 }, canAir: true, airAcc: 0.3, sound: 'autocannon', tracer: 'y', burst: 3, splash: 1.2, stock: 200, wt: 1 },
   m_ac20: { name: '20-mm-Rh 202', kind: 'bullet', range: 32, dmg: 20, reload: 1.0, acc: 0.58, vs: { soft: 1, light: 0.8, heavy: 0.05, air: 0.7, struct: 0.1 }, canAir: true, airAcc: 0.22, sound: 'autocannon', tracer: 'y', burst: 4, stock: 300, wt: 0.6 },
   m_milan: { name: 'MILAN', kind: 'atgm', range: 42, dmg: 380, reload: 11, acc: 0.82, vs: { soft: 0.25, light: 1, heavy: 1, air: 0, struct: 0.35 }, speed: 38, splash: 2, sound: 'missile', groundTargetsOnly: true, prefer: ['heavy', 'light'], straight: true, stock: 4, wt: 14 },
