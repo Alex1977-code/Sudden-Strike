@@ -181,7 +181,7 @@ export class Terrain {
       const u = (x * ca + z * sa + warp) / lam, p = u - Math.floor(u);
       const prof = p < 0.76 ? smoothstep(0, 0.76, p) : 1 - smoothstep(0.76, 1, p);
       const v = -x * sa + z * ca;
-      const patch = smoothstep(-0.2, 0.3, N.fbm(x / 170 + 40, z / 170 + 9, 2)) * (0.65 + 0.35 * Math.sin(v / 31 + warp * 0.08));
+      const patch = (0.25 + 0.75 * smoothstep(-0.35, 0.15, N.fbm(x / 170 + 40, z / 170 + 9, 2))) * (0.7 + 0.3 * Math.sin(v / 31 + warp * 0.08));
       return base + relief * N.fbm(x / 130, z / 130, 3) + amp * prof * patch + 0.25 * N.fbm(x / 9, z / 9, 2);
     }
     if (st === 'bocage') return base + relief * N.fbm(x / 85, z / 85, 4) + relief * 0.22 * N.fbm(x / 22 + 50, z / 22 - 30, 2);
@@ -879,6 +879,7 @@ export class Terrain {
     const mud = pal === 'mud', arid = pal === 'desert' || pal === 'afghan', spring = pal === 'spring';
     const TP = TEX_PAL[pal] || TEX_PAL.summer;
     const snowLine = this.snowLine, modern = this.modernRelief;
+    const dunes = this.style === 'desert', dA = this.def.windDir ?? 0.5, dCa = Math.cos(dA), dSa = Math.sin(dA);
     const sea = this.seaLevel, hasWater = this.hasWater;
     const vn = makeVNoise((this.def.seed || 1) * 131 + 7);
     const noise = this.noise;
@@ -1082,6 +1083,12 @@ export class Terrain {
           bm -= pv * 0.4; bare *= 1 - pv;
         }
         // Palettenbesonderheiten: Geröllflächen (arid), Schlammfelder/Pfützen (Rasputiza), Grüne Zone, Wadi, Heckensaum
+        if (dunes) {
+          // Dünen: Luvseite heller, Leeseite dunkler/röter (Gradient in Windrichtung)
+          const gx = H[k00 + 1 < NN ? k00 + 1 : k00] - H[k00], gz = H[k00 + n < NN ? k00 + n : k00] - H[k00];
+          const lee = clamp(-(gx * dCa + gz * dSa) * 1.6, -1, 1);
+          mul(1 - lee * 0.1); if (lee > 0) mxs(C[0] * 0.95, C[1] * 0.86, C[2] * 0.78, lee * 0.35);
+        }
         if (arid) {
           const gv = smoothstep(0.58, 0.84, nm * 0.7 + nl * 0.3);
           if (gv > 0) { const st = 0.82 + 0.3 * nh; mxs(TP.gravel2[0] * st, TP.gravel2[1] * st, TP.gravel2[2] * st, gv * 0.8); bm = Math.max(bm, 0.85); }
@@ -1185,6 +1192,8 @@ export class Terrain {
           if (g > 0.96) mx(TP.dry, 0.5);
           if (bare > 0) mx(TP.dirt, bare * smoothstep(0.35, 0.6, nf) * 0.65);
           if (fw > 0.05 && nf > 0.6) mx(TP.needle, fw * (nf - 0.6) * 1.5);
+          // Wüste: feine Windrippeln quer zur Windrichtung
+          if (dunes && FI[k] < 0 && RG[k] < 0) mul(0.965 + 0.05 * sin((x * dCa + z * dSa) * 5.3 + nf * 4 + nm * 9));
           // Frühling: Wiesenblumen (gelb/weiß/violett) auf Grasland
           if (spring && g > 0.975 && bare < 0.3 && fw < 0.2) { const fc = (hs >>> 10) % 3; mxs(fc === 0 ? 0.92 : fc === 1 ? 0.95 : 0.62, fc === 0 ? 0.82 : fc === 1 ? 0.94 : 0.48, fc === 0 ? 0.22 : fc === 1 ? 0.92 : 0.78, 0.75 * smoothstep(0.35, 0.65, nm)); }
         }
@@ -2106,10 +2115,10 @@ Object.assign(TEX_PAL, {
     dirtroad: [0.31, 0.25, 0.18], rut: [0.20, 0.16, 0.12], mudSoil: [0.27, 0.21, 0.15], puddle: [0.17, 0.18, 0.17], village: [0.33, 0.28, 0.21], yard: [0.32, 0.27, 0.20],
   },
   desert: {
-    ...TEX_PAL.summer, grassA: [0.80, 0.68, 0.47], grassB: [0.74, 0.60, 0.41], dry: [0.86, 0.76, 0.56], moss: [0.62, 0.52, 0.38], dirt: [0.66, 0.52, 0.36],
+    ...TEX_PAL.summer, grassA: [0.80, 0.68, 0.47], grassB: [0.76, 0.62, 0.43], dry: [0.86, 0.76, 0.56], moss: [0.68, 0.57, 0.42], dirt: [0.72, 0.58, 0.42],
     forestFloor: [0.50, 0.42, 0.28], needle: [0.52, 0.40, 0.26], village: [0.74, 0.64, 0.48], pave: [0.70, 0.64, 0.54], yard: [0.72, 0.62, 0.46],
     rock: [0.66, 0.53, 0.40], sand: [0.84, 0.74, 0.54], wetSand: [0.60, 0.50, 0.36], mud: [0.42, 0.36, 0.26], gravel: [0.66, 0.58, 0.46],
-    dirtroad: [0.70, 0.58, 0.42], rut: [0.58, 0.46, 0.33], asphalt: [0.30, 0.29, 0.28], gravel2: [0.52, 0.44, 0.36], bed: [0.88, 0.80, 0.64], lush: [0.34, 0.44, 0.18],
+    dirtroad: [0.70, 0.58, 0.42], rut: [0.58, 0.46, 0.33], asphalt: [0.30, 0.29, 0.28], gravel2: [0.60, 0.52, 0.42], bed: [0.88, 0.80, 0.64], lush: [0.34, 0.44, 0.18],
     furrow: [0.50, 0.40, 0.28], ridge: [0.64, 0.52, 0.38], soilGreen: [0.50, 0.44, 0.30], scorch: [0.25, 0.21, 0.17], ejecta: [0.62, 0.52, 0.38], hedgeSoil: [0.50, 0.42, 0.30],
   },
   afghan: {
@@ -2138,11 +2147,11 @@ const GRASS_FRESH = { summer: [0.40, 0.52, 0.20], autumn: [0.50, 0.46, 0.24], wi
 const G_SUM = [[0.33, 0.45, 0.17], [0.28, 0.40, 0.15], [0.38, 0.47, 0.20], [0.30, 0.42, 0.14]];
 const BUSH_TINT = {
   summer: G_SUM, bocage: [[0.26, 0.40, 0.14], [0.30, 0.43, 0.16], [0.23, 0.36, 0.12]], spring: [[0.38, 0.54, 0.19], [0.34, 0.50, 0.17], [0.86, 0.86, 0.82], [0.42, 0.56, 0.21]],
-  autumn: [[0.60, 0.42, 0.18], [0.48, 0.40, 0.18], [0.36, 0.38, 0.17], [0.62, 0.30, 0.14]], mud: [[0.44, 0.36, 0.17], [0.38, 0.34, 0.16], [0.50, 0.32, 0.14]],
+  autumn: [[0.60, 0.42, 0.18], [0.48, 0.40, 0.18], [0.36, 0.38, 0.17], [0.62, 0.30, 0.14]], mud: [[0.40, 0.37, 0.20], [0.36, 0.34, 0.19], [0.44, 0.39, 0.22]],
   winter: [[0.92, 0.92, 0.95], [0.85, 0.82, 0.80]], desert: [[0.80, 0.78, 0.56], [0.86, 0.80, 0.60], [0.74, 0.74, 0.52]], afghan: [[0.56, 0.62, 0.34], [0.68, 0.66, 0.44], [0.50, 0.58, 0.30]],
 };
 const HEDGE_TINT = {
-  summer: [[0.24, 0.38, 0.13], [0.28, 0.42, 0.15], [0.21, 0.34, 0.12]], bocage: [[0.20, 0.34, 0.11], [0.24, 0.38, 0.13], [0.18, 0.31, 0.10], [0.27, 0.40, 0.15]],
+  summer: [[0.28, 0.42, 0.15], [0.32, 0.46, 0.17], [0.25, 0.38, 0.13]], bocage: [[0.26, 0.40, 0.14], [0.30, 0.44, 0.16], [0.23, 0.37, 0.12], [0.33, 0.46, 0.18]],
   spring: [[0.34, 0.50, 0.17], [0.30, 0.46, 0.15], [0.84, 0.84, 0.78]], autumn: [[0.52, 0.40, 0.16], [0.44, 0.38, 0.16], [0.56, 0.32, 0.13]], mud: [[0.40, 0.34, 0.16], [0.34, 0.31, 0.15]],
   winter: [[0.80, 0.76, 0.72], [0.70, 0.66, 0.62]], desert: [[0.48, 0.48, 0.30]], afghan: [[0.36, 0.44, 0.20], [0.32, 0.40, 0.18]],
 };

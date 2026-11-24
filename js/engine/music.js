@@ -222,7 +222,7 @@ export class Music {
   setVolume(v) { this.volume = clamp(+v || 0, 0, 1); if (this.out) for (const g of [this.out, this.wetOut]) g.gain.setTargetAtTime(this.level * this.volume, this.ctx.currentTime, 0.05); }
   setEnabled(on) {
     on = !!on; if (on === this.enabled) return; this.enabled = on;
-    if (!on) { this._retire(this.S, 0.6); this.S = null; } else if (this.want) this.start(this.want);
+    if (!on) { this._retire(this.S, 0.6); this.S = null; } else if (this.want && !THEMES[this.want].once) this.start(this.want);
   }
   duck(depth = 0.45, dur = 0.9) {
     if (!this.out) return; const t = this.ctx.currentTime, base = this.level * this.volume;
