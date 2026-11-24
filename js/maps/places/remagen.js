@@ -7,7 +7,7 @@ const feats = [
   // Rhein
   water([[-30, -280], [108, -280], [124, -120], [120, 80], [112, 280], [-40, 280], [-26, 90], [-16, -110]], { depth: 6, bank: 9 }),
   // Brückendamm unter dem Brückendeck (Straßen- und Gleisfahrbahn)
-  { type: 'causeway', pts: [[-48, BZ - 1], [150, BZ - 1]], width: 24, name: 'Ludendorff-Brücke' },
+  { type: 'causeway', pts: [[-48, BZ - 1], [150, BZ - 1]], width: 24, name: 'Ludendorff-Brücke', style: 'steel_truss' },
   road([[-48, BZ - 7], [150, BZ - 7]], 8, true, { name: 'Brückenfahrbahn' }),
   rail([[-48, BZ + 7], [150, BZ + 7]]),
   // Westufer: B9, Bahnstrecke, Zufahrt

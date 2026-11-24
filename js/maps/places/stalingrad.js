@@ -14,10 +14,10 @@ const feats = [
   // Prospekt (Nord–Süd) außerhalb der Innenstadt, Bahn West
   road([[40, -300], [42, -170], [40, -95]], 12),
   road([[28, 190], [20, 300]], 12),
-  ...bridge([[34, 150], [30, 190]], 12, 'Zariza-Brücke'),
+  ...bridge([[34, 150], [30, 190]], 12, 'Zariza-Brücke', true, 'stone_arch'),
   road([[30, 140], [34, 150]], 12),
   rail([[-112, -300], [-110, -100], [-100, 100], [-104, 150]]),
-  ...bridge([[-104, 150], [-106, 192]], 5, 'Eisenbahnbrücke Zariza', false).map((f) => (f.type === 'road' ? { ...f, rail: true } : f)),
+  ...bridge([[-104, 150], [-106, 192]], 5, 'Eisenbahnbrücke Zariza', false, 'steel_truss').map((f) => (f.type === 'road' ? { ...f, rail: true } : f)),
   rail([[-106, 192], [-110, 300]]),
   road([[-300, -40], [-110, -40], [40, -95]], 7, false), // Straße über den Hügelsattel
   road([[-300, 120], [-100, 100]], 7),
@@ -45,8 +45,8 @@ const feats = [
   bldg('watchtower', 60, 228, 7, 7, 0, 9),
   bldg('watchtower', 100, 228, 7, 7, 0, 9),
   // Fähranlegestellen
-  { type: 'causeway', pts: [[130, 40], [186, 40]], width: 7, name: 'Zentraler Fähranleger' },
-  { type: 'causeway', pts: [[144, -160], [196, -160]], width: 7, name: 'Fähre Traktorenwerk' },
+  { type: 'causeway', pts: [[130, 40], [186, 40]], width: 7, name: 'Zentraler Fähranleger', style: 'pontoon' },
+  { type: 'causeway', pts: [[144, -160], [196, -160]], width: 7, name: 'Fähre Traktorenwerk', style: 'pontoon' },
   road([[90, 40], [130, 40]], 6, false),
   treeline([[-20, 0], [-80, -20], [-120, -60]]),
 ];

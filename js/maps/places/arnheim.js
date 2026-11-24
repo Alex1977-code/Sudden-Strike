@@ -5,7 +5,7 @@ const feats = [
   // Nederrijn im Süden
   water([[-290, 112], [-100, 126], [60, 120], [290, 100], [290, 218], [60, 236], [-100, 242], [-290, 226]], { depth: 5, bank: 8 }),
   // Rheinbrücke (Straßenbrücke, heute John-Frost-Brücke) mit Rampe
-  ...bridge([[60, 98], [60, 258]], 10, 'Rheinbrücke'),
+  ...bridge([[60, 98], [60, 258]], 10, 'Rheinbrücke', true, 'steel_truss'),
   road([[60, 98], [60, 40], [50, -30]], 10, true, { name: 'Brückenrampe' }),
   road([[60, 258], [60, 290]], 9), road([[-290, 270], [290, 262]], 6, false),
   // Eisenbahnbrücke (gesprengt): Damm nur bis Flussmitte

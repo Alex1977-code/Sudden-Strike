@@ -8,14 +8,14 @@ const feats = [
   water([[-300, -152], [-196, -158], [-190, -60], [-230, -30], [-300, -30]], { depth: 5, bank: 5 }),
   water([[-186, -52], [-120, -52], [-120, -22], [-186, -22]], { depth: 5, bank: 4 }),
   // Ostmole (lange Holzmole in See) und Westmole
-  { type: 'causeway', pts: [[-176, -150], [-150, -220], [-122, -298]], width: 6, name: 'Ostmole' },
+  { type: 'causeway', pts: [[-176, -150], [-150, -220], [-122, -298]], width: 6, name: 'Ostmole', style: 'wood' },
   road([[-176, -150], [-150, -220], [-122, -298]], 4, false, { name: 'Ostmole' }),
-  { type: 'causeway', pts: [[-232, -150], [-236, -298]], width: 6, name: 'Westmole' },
+  { type: 'causeway', pts: [[-232, -150], [-236, -298]], width: 6, name: 'Westmole', style: 'stone_arch' },
   // Kanäle im Süden (Canal de Furnes / de Bergues)
   river([[-300, 196], [-150, 200], [0, 204], [150, 210], [300, 216]], 16, { depth: 3, bank: 3 }),
   river([[-160, 300], [-150, 205]], 14, { depth: 3, bank: 3 }),
-  ...bridge([[-30, 186], [-30, 222]], 9, 'Kanalbrücke Süd'),
-  ...bridge([[150, 192], [150, 228]], 8, 'Brücke Rosendaël'),
+  ...bridge([[-30, 186], [-30, 222]], 9, 'Kanalbrücke Süd', true, 'stone_arch'),
+  ...bridge([[150, 192], [150, 228]], 8, 'Brücke Rosendaël', true, 'stone_arch'),
   // Straßen
   road([[-30, 186], [-30, 120], [-40, 60], [-60, -20], [-110, -70], [-176, -150]], 9, true, { name: 'Hafenstraße' }),
   road([[-30, 222], [-30, 300]], 9),

@@ -15,7 +15,7 @@ const feats = [
   // Perimeter: Panzergraben als Piste entlang der Postenkette
   road(POSTS, 5, false, { name: 'Perimeter (Panzergraben)' }),
   // Hafenanlagen: Molen in die Bucht, Lagerhäuser, Kirche, Kommandantur
-  { type: 'causeway', pts: [[40, -70], [44, -30]], width: 8, name: 'Hafenmole' },
+  { type: 'causeway', pts: [[40, -70], [44, -30]], width: 8, name: 'Hafenmole', style: 'concrete_beam' },
   { type: 'causeway', pts: [[120, -100], [126, -60]], width: 8 },
   bldg('warehouse', 70, -110, 26, 12, faceTo(70, -110, 70, -60), 1, 'Hafenlager'),
   bldg('warehouse', 150, -122, 22, 12, faceTo(150, -122, 150, -80), 1),

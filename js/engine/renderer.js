@@ -493,6 +493,12 @@ export class GameRenderer {
       this.scene.remove(o);
       o.traverse((c) => {
         if (c.geometry && !c.geometry.userData.shared) c.geometry.dispose();
+        // Texturen pro Szene (z. B. Gelände-Farbkarte) freigeben; geteilte, gecachte Texturen
+        // lädt three.js bei erneuter Nutzung automatisch wieder hoch.
+        if (c.material) for (const m of Array.isArray(c.material) ? c.material : [c.material]) {
+          if (!m || m.userData?.shared) continue;
+          for (const k in m) { const t = m[k]; if (t && t.isTexture && !t.userData?.shared && !t.isRenderTargetTexture) t.dispose(); }
+        }
       });
     }
   }

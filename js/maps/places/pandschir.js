@@ -8,8 +8,8 @@ const feats = [
   hill(-120, 300, 150, 58), hill(120, 210, 160, 62), hill(280, 80, 120, 50),
   river(RIVER, 24, { depth: 2.5, bank: 4, name: 'Pandschir' }),
   road([[-300, 190], [-190, 118], [-70, 58], [20, -16], [140, -100], [300, -190]], 8, false, { name: 'Talstraße' }),
-  ...bridge([[-60, 66], [-44, 104]], 7, 'Brücke Bazarak'),
-  ...bridge([[130, -92], [152, -56]], 7, 'Brücke Rokha'),
+  ...bridge([[-60, 66], [-44, 104]], 7, 'Brücke Bazarak', false, 'wood'),
+  ...bridge([[130, -92], [152, -56]], 7, 'Brücke Rokha', false, 'wood'),
   road([[-44, 104], [-20, 160]], 6, false), road([[152, -56], [180, -20]], 6, false),
   // Massoud-Mausoleum auf dem Hügel bei Saricha
   hill(-120, 10, 40, 10),

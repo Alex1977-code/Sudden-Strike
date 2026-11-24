@@ -50,11 +50,13 @@ export class Rail {
     if (T.hasWater && g.mapobj) {
       let run = null;
       const runs = [];
+      T._deckOff = true; // vorhandene Brücken verdecken das Wasser nicht
       for (let s = 0; s <= rail.len; s += 1) {
         const p = polyAt(pts, cum, s);
         if (T.isWater(p.x, p.z)) { if (!run) run = [s, s]; else run[1] = s; } else if (run) { runs.push(run); run = null; }
       }
       if (run) runs.push(run);
+      T._deckOff = false;
       for (const [a, b] of runs) {
         const sub = [];
         for (let s = Math.max(0, a - 12); s <= Math.min(rail.len, b + 12) + 0.01; s += 2) { const p = polyAt(pts, cum, Math.min(s, rail.len)); sub.push([p.x, p.z]); }

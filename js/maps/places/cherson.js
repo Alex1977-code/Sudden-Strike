@@ -7,10 +7,10 @@ const feats = [
   island(-130, 168, 40, 1.3), island(-60, 190, 26, 1.1),
   forest([[-300, 250], [300, 240], [300, 300], [-300, 300]], 'deciduous', 0.04),
   // Antoniwka-Straßenbrücke (gesprengt: Damm mit Lücke) und Eisenbahnbrücke
-  { type: 'causeway', pts: [[200, 104], [200, 160]], width: 12, name: 'Antoniwka-Brücke (gesprengt)' },
-  { type: 'causeway', pts: [[200, 200], [200, 300]], width: 12 },
+  { type: 'causeway', pts: [[200, 104], [200, 160]], width: 12, name: 'Antoniwka-Brücke (gesprengt)', style: 'concrete_beam' },
+  { type: 'causeway', pts: [[200, 200], [200, 300]], width: 12, style: 'concrete_beam' },
   road([[200, 104], [200, 160]], 10), road([[200, 200], [200, 300]], 10),
-  { type: 'causeway', pts: [[120, 112], [120, 150]], width: 8 },
+  { type: 'causeway', pts: [[120, 112], [120, 150]], width: 8, style: 'steel_truss' },
   rail([[-300, 60], [0, 70], [120, 80], [120, 150]]),
   // Hafen am Nordufer
   { type: 'causeway', pts: [[-200, 122], [-200, 150]], width: 10, name: 'Hafen Cherson' },

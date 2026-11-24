@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { UNIT_TYPES } from '../game/unitTypes.js';
 import { Missile } from '../game/combat.js';
 import { createCodec } from './codec.js';
+import { getAirShow } from '../engine/aircraft.js';
 import { packMods, unpackMods } from '../game/tactics.js';
 import { AICommander } from '../skirmish/ai.js';
 import { normalizeSetup, netPointState, applyNetPoints, endFor, ROLES, TEAM_NAME } from '../skirmish/skirmish.js';
@@ -718,6 +719,7 @@ export class ClientSession {
         else if (kind === 'ui') g.audio.ui(a[0]);
         else if (kind === 'marker') fx?.marker(...a);
         else if (kind === 'chat') this.onSys?.(a[0]);
+        else if (kind === 'air') { if (this.loaded) getAirShow(g).play(a[0]); }
         break;
       }
     }

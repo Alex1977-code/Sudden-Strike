@@ -14,9 +14,10 @@ export const faceTo = (x, z, tx, tz) => Math.atan2(tx - x, tz - z);
 
 export const road = (pts, width = 7, paved = true, extra = {}) => ({ type: 'road', pts, width, paved, ...extra });
 export const rail = (pts, extra = {}) => ({ type: 'road', pts, width: 5, paved: false, rail: true, ...extra });
-// Brücke/Damm über Wasser: begehbarer Damm + Fahrbahn
-export function bridge(pts, width = 9, name, paved = true) {
-  return [{ type: 'causeway', pts, width: width + 2, name }, { type: 'road', pts, width, paved, name }];
+// Brücke über Wasser: Fahrbahn + Bauwerk (V3-M2: style 'stone_arch'|'steel_truss'|'concrete_beam'|'cable_arch'|'wood'|'pontoon',
+// ohne style nach Epoche; das Bauwerk über dem Wasser baut js/game/mapobjects.js)
+export function bridge(pts, width = 9, name, paved = true, style) {
+  return [{ type: 'causeway', pts, width: width + 2, name, ...(style ? { style } : {}) }, { type: 'road', pts, width, paved, name }];
 }
 export const river = (pts, width, extra = {}) => ({ type: 'river', pts, width, ...extra });
 export const water = (poly, extra = {}) => ({ type: 'water', poly, ...extra });

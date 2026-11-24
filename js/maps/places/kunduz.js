@@ -4,7 +4,7 @@ import { bldg, faceTo, road, river, bridge, hill, settlement, field, treeline, l
 const CAMP = { x: 205, z: 170 };
 const feats = [
   river([[-220, -300], [-196, -120], [-210, 40], [-240, 300]], 32, { depth: 2.5, bank: 8, name: 'Kunduz-Fluss' }),
-  ...bridge([[-236, 10], [-180, 14]], 9, 'Brücke Kunduz'),
+  ...bridge([[-236, 10], [-180, 14]], 9, 'Brücke Kunduz', true, 'concrete_beam'),
   road([[-300, 6], [-236, 10]], 9), road([[-180, 14], [-60, 10]], 9, false, { name: 'Straße nach Imam Sahib/Kabul' }),
   road([[-20, -300], [-10, -150], [20, 0]], 9, false, { name: 'Straße nach Imam Sahib' }),
   road([[20, 0], [120, 90], [CAMP.x - 30, CAMP.z - 20]], 9, false, { name: 'Straße zum Flugplatz' }),

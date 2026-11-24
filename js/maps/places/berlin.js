@@ -8,7 +8,7 @@ const feats = [
   // Humboldthafen
   water([[-62, -110], [-22, -110], [-22, -196], [-62, -196]], { depth: 4, bank: 4 }),
   // Moltkebrücke
-  ...bridge([[-200, -168], [-136, -176]], 11, 'Moltkebrücke'),
+  ...bridge([[-200, -168], [-136, -176]], 11, 'Moltkebrücke', true, 'stone_arch'),
   // Straßen: Charlottenburger Chaussee / Unter den Linden (Ost–West), Königsplatz – Moltkebrücke, Ufer
   road([[-280, 110], [-228, 110], [-212, 96], [-188, 96], [-172, 110], [280, 112]], 14, true, { name: 'Charlottenburger Chaussee' }),
   road([[82, 112], [82, 30], [82, -62]], 10, true, { name: 'Friedrich-Ebert-Straße' }),
@@ -18,7 +18,7 @@ const feats = [
   road([[-200, -168], [-210, -280]], 9),
   road([[82, -62], [-20, -62], [-100, -80]], 7, true, { name: 'Reichstagufer' }),
   road([[150, -118], [150, -280]], 9),
-  ...bridge([[150, -60], [150, -118]], 10, 'Kronprinzenbrücke'),
+  ...bridge([[150, -60], [150, -118]], 10, 'Kronprinzenbrücke', true, 'stone_arch'),
   road([[82, -62], [150, -60]], 9),
   rail([[-280, -205], [-60, -232], [40, -262], [280, -252]]),
   // Reichstag (Front nach Westen zum Königsplatz) mit vier Ecktürmen

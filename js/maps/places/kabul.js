@@ -22,7 +22,7 @@ const feats = [
   road([[200, -94], [280, -110], [300, -112]], 9, true, { name: 'Zufahrt Osttor' }),
   bldg('watchtower', 262, -126, 4, 4, 0, 3, 'Osttor'),
   river([[100, 210], [180, 200], [300, 190]], 6, { depth: 1.6, bank: 2, name: 'Abwasserkanal' }),
-  ...bridge([[176, 186], [178, 214]], 8, 'Abbey Gate'),
+  ...bridge([[176, 186], [178, 214]], 8, 'Abbey Gate', true, 'concrete_beam'),
   road([[100, 84], [176, 186]], 9), road([[178, 214], [190, 300]], 9),
   bldg('townhouse_eu', 210, 170, 22, 12, faceTo(210, 170, 176, 186), 2, 'Baron Hotel'),
   hill(-250, -250, 60, 18), hill(260, 260, 40, 10),

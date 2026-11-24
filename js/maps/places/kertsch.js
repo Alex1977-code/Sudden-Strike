@@ -8,6 +8,9 @@ const feats = [
   // Zufahrten zur Brücke (Krim-Seite West, Taman-Seite Ost)
   road([[-300, -8], [-210, -7], [-150, -7]], 11, true, { name: 'Zufahrt Krim (A 290)' }), rail([[-300, 14], [-150, 7]]),
   road([[220, -7], [300, -12]], 11, true, { name: 'Zufahrt Taman' }), rail([[220, 7], [300, 14]]),
+  // Krimbrücke als Bauwerk (V3-M2): Straßen- und Eisenbahnbrücke, Stahlbogen über der Fahrrinne
+  { type: 'causeway', pts: [[-152, BZ - 7], [222, BZ - 7]], width: 12, name: 'Krimbrücke (Straße)', style: 'cable_arch' },
+  { type: 'causeway', pts: [[-152, BZ + 7], [222, BZ + 7]], width: 9, name: 'Krimbrücke (Bahn)', style: 'cable_arch', kind: 'rail' },
   // Kertsch (Westen): Mithridates-Berg, Hafen, Fährhafen
   hill(-240, -190, 60, 22),
   bldg('watchtower', -240, -190, 6, 6, 0, 4, 'Mithridates-Berg (Obelisk)'),
@@ -33,7 +36,7 @@ export default {
   },
   // Sonne im Süden (hinter der Standardkamera), damit die große Wasserfläche nicht blendet; wenig Dunst
   env: { season: 'summer', sunElev: 42, sunAzim: 20, fogDensity: 0.0014 },
-  camera: { x: 20, z: 40, dist: 150 },
+  camera: { x: -10, z: 20, dist: 150 },
   landmarks: landmarksOf(feats, [{ name: 'Krimbrücke', x: 40, z: -16 }, { name: 'Insel Tusla', x: 60, z: 30 }, { name: 'Kertsch', x: -230, z: 50 }, { name: 'Taman', x: 262, z: 150 }]),
   spawns: { A: [-260, 200], B: [250, -120] },
   notes: 'Meerenge zwischen Kertsch-Halbinsel (West) und Taman (Ost), Straßen- und Eisenbahnbrücke über die Insel Tusla (Deck als Kulisse wie in Mission 5; Seeweg darunter), Mithridates-Berg, Häfen und Fährhäfen.',

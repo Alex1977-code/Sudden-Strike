@@ -879,7 +879,7 @@ function canalCrossings(C, g) {
       const X = segInt(p[i], p[i + 1], g.pts[k], g.pts[k + 1]);
       if (X) {
         const dx = p[i + 1][0] - p[i][0], dz = p[i + 1][1] - p[i][1], L = Math.hypot(dx, dz) || 1, e = 7;
-        res.push({ type: 'causeway', pts: [[X[0] - dx / L * e, X[1] - dz / L * e], [X[0] + dx / L * e, X[1] + dz / L * e]].map(rp), width: Math.max(8, rd.width + 2), gen: 'settlement' });
+        res.push({ type: 'causeway', pts: [[X[0] - dx / L * e, X[1] - dz / L * e], [X[0] + dx / L * e, X[1] + dz / L * e]].map(rp), width: Math.max(8, rd.width + 2), gen: 'settlement', ...(C.T.set === 'afghan' ? { style: 'wood' } : {}) });
       }
     }
   }

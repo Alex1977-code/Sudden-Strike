@@ -10,12 +10,12 @@ const feats = [
   river([[-100, 150], [160, 150]], 3, { depth: 1.2, bank: 1.5 }),
   // Reichsstraße 1 von Küstrin über die Höhen nach Seelow, Bahn Küstrin–Berlin
   road([[300, -40], [185, -32], [140, -26], [0, -24], [-90, -20], [-118, -20], [-210, -18], [-300, -12]], 9, true, { name: 'Reichsstraße 1' }),
-  ...bridge([[140, -26], [190, -32]], 9, 'Brücke Alte Oder'),
-  ...bridge([[-118, -20], [-90, -20]], 9, 'Grabenbrücke'),
+  ...bridge([[140, -26], [190, -32]], 9, 'Brücke Alte Oder', true, 'steel_truss'),
+  ...bridge([[-118, -20], [-90, -20]], 9, 'Grabenbrücke', true, 'concrete_beam'),
   rail([[300, 60], [200, 50], [150, 46], [0, 40], [-88, 38], [-122, 36], [-300, 30]]),
-  { type: 'causeway', pts: [[148, 46], [200, 50]], width: 8 }, { type: 'causeway', pts: [[-122, 36], [-88, 38]], width: 8 },
+  { type: 'causeway', pts: [[148, 46], [200, 50]], width: 8, style: 'steel_truss' }, { type: 'causeway', pts: [[-122, 36], [-88, 38]], width: 8, style: 'steel_truss' },
   road([[0, -24], [10, -200], [40, -300]], 6, false), road([[40, 40], [60, 200], [80, 300]], 6, false),
-  ...bridge([[30, 138], [32, 162]], 6, 'Grabenbrücke Süd'),
+  ...bridge([[30, 138], [32, 162]], 6, 'Grabenbrücke Süd', true, 'wood'),
   bldg('townhouse_eu', -250, 58, 26, 10, Math.PI, 2, 'Bahnhof Seelow'),
   // Felder und Baumreihen im Oderbruch
   field([[-80, -280], [120, -280], [110, -60], [-80, -60]], 'plowed', 0.1),

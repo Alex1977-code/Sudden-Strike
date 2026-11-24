@@ -9,12 +9,12 @@ const feats = [
   water([[118, -110], [142, -112], [146, -200], [130, -250], [112, -205]], { depth: 3, bank: 5 }),
   water([[150, -275], [210, -270], [215, -235], [160, -240]], { depth: 3, bank: 5 }),
   // Brücken (die „sieben Brücken“, hier fünf)
-  ...bridge([[42, -22], [42, 34]], 8, 'Krämerbrücke'),
-  ...bridge([[42, 62], [42, 116]], 8, 'Grüne Brücke'),
-  ...bridge([[-22, -6], [-22, 46]], 7, 'Schmiedebrücke'),
-  ...bridge([[-22, 50], [-22, 100]], 7, 'Köttelbrücke'),
-  ...bridge([[160, 76], [160, 126]], 8, 'Hohe Brücke'),
-  ...bridge([[150, -18], [150, 34]], 7, 'Holzbrücke'),
+  ...bridge([[42, -22], [42, 34]], 8, 'Krämerbrücke', true, 'stone_arch'),
+  ...bridge([[42, 62], [42, 116]], 8, 'Grüne Brücke', true, 'stone_arch'),
+  ...bridge([[-22, -6], [-22, 46]], 7, 'Schmiedebrücke', true, 'stone_arch'),
+  ...bridge([[-22, 50], [-22, 100]], 7, 'Köttelbrücke', true, 'stone_arch'),
+  ...bridge([[160, 76], [160, 126]], 8, 'Hohe Brücke', true, 'stone_arch'),
+  ...bridge([[150, -18], [150, 34]], 7, 'Holzbrücke', true, 'stone_arch'),
   // Straßen
   road([[-60, 40], [-22, 38], [42, 36], [160, 38], [230, 50]], 8, true, { name: 'Kneiphöfsche Langgasse' }),
   road([[42, 36], [42, 62]], 8), road([[-22, 38], [-22, 50]], 7), road([[160, 38], [160, 76]], 8),
@@ -42,14 +42,14 @@ const feats = [
   // Fort Friedrichsburg am Pregel (Sternschanze)
   ...ring(-200, 120, 34, 0, Math.PI * 2, { ditch: 6, n: 12 }),
   bldg('warehouse', -200, 106, 22, 12, 0, 2, 'Fort Friedrichsburg'),
-  ...bridge([[-200, 160], [-200, 172]], 6, 'Friedrichsburger Tor'),
+  ...bridge([[-200, 160], [-200, 172]], 6, 'Friedrichsburger Tor', true, 'wood'),
   road([[-200, 128], [-200, 160]], 6, false),
   road([[-200, 172], [-200, 205]], 6, false),
   island(205, 60, 30, 1.2),
   treeline([[-280, -20], [-160, -10]]),
 ];
 // Ring-Durchlässe für die Ausfallstraßen (Brücken über den Wallgraben)
-for (const [x, z] of [[15, -192], [-150, -110], [228, -78]]) feats.push({ type: 'causeway', pts: [[x - 8, z - 2], [x + 8, z + 2]], width: 14 }, { type: 'causeway', pts: [[x, z - 10], [x, z + 10]], width: 14 });
+for (const [x, z] of [[15, -192], [-150, -110], [228, -78]]) feats.push({ type: 'causeway', pts: [[x - 8, z - 2], [x + 8, z + 2]], width: 14, style: 'stone_arch' }, { type: 'causeway', pts: [[x, z - 10], [x, z + 10]], width: 14, style: 'stone_arch' });
 feats.push(
   settlement('german_city', -50, -150, 90, 1945, { mainRoadAngle: 0.25, density: 0.8, fields: false, square: false, cemetery: false }),
   settlement('german_city', 140, -150, 70, 1946, { mainRoadAngle: Math.PI / 2, density: 0.75, fields: false, cemetery: false }),

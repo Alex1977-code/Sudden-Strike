@@ -219,8 +219,11 @@ export class Game {
       u.maxHp = u.hp = Math.round(500 + h.w * h.d * 6 * h.floors);
       this.vision.addHouse(u);
     }
+    // V3-M2: Brücken als Bauwerke über allen causeway-Features (Kulissen-Deck map.bridge entfällt, wenn ein gestaltetes
+    // causeway-Bauwerk dieselbe Achse belegt – Remagen, Kertsch)
+    this.mapobj.bridgesFromCauseways();
     // Brücke
-    if (map.bridge) {
+    if (map.bridge && !(map.features || []).some((f) => f.type === 'causeway' && f.style && Math.abs(f.pts[0][1] - map.bridge.z) < 16 && this.bridges.some((q) => q.name === f.name))) {
       const b = map.bridge;
       this.world.add(bridgeDecor(b.x0, b.x1, b.z, b.deckY, this.terrain.seaLevel, b.gaps || [], b.gapLen || 28));
     }

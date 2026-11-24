@@ -152,9 +152,11 @@ export class Terrain {
         const dd = Math.hypot(x - f.x, z - f.z);
         if (dd < f.r) h = Math.max(h, lerp(this.seaLevel - 2, this.seaLevel + (f.h ?? 1.5), 1 - smoothstep(f.r * 0.55, f.r, dd)));
       } else if (f.type === 'causeway') {
+        // V3-M2: kein Damm mehr über tiefem Wasser – nur Ufer/Flachwasser werden zum Widerlager aufgeschüttet; die Brücke
+        // selbst (Fahrbahn über dem Wasser, Rampen) baut js/game/mapobjects.js. Flache Furten bleiben begehbare Dämme.
         const dd = distToPolyline(x, z, f.pts);
         const w = f.width * 0.5;
-        if (dd < w + 3) h = Math.max(h, lerp(h, this.seaLevel + 0.7, 1 - smoothstep(w, w + 3, dd)));
+        if (dd < w + 3 && h > this.seaLevel - 0.6) h = Math.max(h, lerp(h, this.seaLevel + 0.7, 1 - smoothstep(w, w + 3, dd)));
       }
     }
     return h;
@@ -501,7 +503,7 @@ export class Terrain {
       if (f.type !== 'causeway') continue;
       for (let j = 0; j < this.gw; j++) for (let i = 0; i < this.gw; i++) {
         const x = (i + 0.5) * CELL - this.half, z = (j + 0.5) * CELL - this.half;
-        if (distToPolyline(x, z, f.pts) < f.width * 0.5) { const k = j * this.gw + i; this.gWater[k] = 0; this.gDeepWater[k] = 0; this.gBlocked[k] = 0; this.gRoad[k] = 1; }
+        if (distToPolyline(x, z, f.pts) < f.width * 0.5) { const k = j * this.gw + i; this.gWater[k] = 0; this.gBlocked[k] = 0; this.gRoad[k] = 1; } // V3-M2: tiefes Wasser bleibt für Boote (unter der Brücke)
       }
     }
     this._gridHedges();

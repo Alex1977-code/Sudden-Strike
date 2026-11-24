@@ -119,7 +119,7 @@ export function decorateWorld(g, world) {
   const T = g.terrain, sea = T.seaLevel;
   const M = mats();
   for (const e of doc.elements) {
-    if (e.type === 'bridge' && e.kind === 'bridge') {
+    if (e.type === 'bridge' && e.kind === 'bridge' && !g.mapobj) { // V3-M2: Brückenbauwerk baut sonst game.mapobj
       const [a, b] = e.pts, dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz);
       if (L < 1) continue;
       const bg = new THREE.Group();

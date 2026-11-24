@@ -4,8 +4,8 @@ import { bldg, faceTo, road, river, bridge, field, treeline, settlement, landmar
 const feats = [
   river([[-40, -260], [-40, 260]], 26, { depth: 4, bank: 3 }), // Caen-Kanal
   river([[150, -260], [128, -100], [150, 40], [130, 160], [146, 260]], 30, { depth: 3.5, bank: 5 }), // Orne
-  ...bridge([[-62, 0], [-18, 0]], 8, 'Pegasus-Brücke (Bénouville)'),
-  ...bridge([[112, 0], [170, 0]], 8, 'Horsa-Brücke (Ranville)'),
+  ...bridge([[-62, 0], [-18, 0]], 8, 'Pegasus-Brücke (Bénouville)', true, 'steel_truss'),
+  ...bridge([[112, 0], [170, 0]], 8, 'Horsa-Brücke (Ranville)', true, 'steel_truss'),
   road([[-260, 6], [-62, 0]], 8), road([[-18, 0], [112, 0]], 8), road([[170, 0], [260, 10]], 8),
   road([[-80, -260], [-72, 0], [-80, 260]], 7, true, { name: 'Uferstraße (Westufer)' }),
   road([[-8, 0], [-10, -200]], 5, false),

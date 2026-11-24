@@ -10,9 +10,9 @@ const feats = [
   ...ring(-10, -10, 205, -Math.PI * 0.92, -Math.PI * 0.12, { ditch: 9, n: 14 }),
   ...ring(-10, -10, 205, Math.PI * 0.12, Math.PI * 0.92, { ditch: 9, n: 14 }),
   // Tore und Brücken zur Zitadelle
-  ...bridge([[0, -92], [0, -52]], 7, 'Brücke am Brester Tor'),
-  ...bridge([[96, 30], [128, 62]], 7, 'Brücke am Cholmer Tor'),
-  ...bridge([[-112, -40], [-140, -66]], 7, 'Brücke am Terespoler Tor'),
+  ...bridge([[0, -92], [0, -52]], 7, 'Brücke am Brester Tor', true, 'stone_arch'),
+  ...bridge([[96, 30], [128, 62]], 7, 'Brücke am Cholmer Tor', true, 'stone_arch'),
+  ...bridge([[-112, -40], [-140, -66]], 7, 'Brücke am Terespoler Tor', true, 'stone_arch'),
   road([[0, -52], [0, -20], [40, 0], [96, 30]], 7, false), road([[0, -20], [-60, -20], [-112, -40]], 7, false),
   road([[0, -92], [0, -170], [10, -280]], 8), road([[128, 62], [180, 120], [280, 150]], 8),
   road([[-140, -66], [-180, -100], [-200, -160]], 6, false),

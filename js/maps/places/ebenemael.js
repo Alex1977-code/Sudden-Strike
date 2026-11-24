@@ -12,7 +12,7 @@ const feats = [
   river([...OUT, OUT[0]], 9, { depth: 2, bank: 2, name: 'Fortgraben' }),
   // Geer-Tal (Süden) und Kanne-Brücke
   river([[-260, 230], [-80, 215], [80, 228], [150, 236]], 8, { depth: 2, bank: 3, name: 'Geer (Jeker)' }),
-  ...bridge([[146, 190], [200, 190]], 8, 'Brücke Kanne (gesprengt)'),
+  ...bridge([[146, 190], [200, 190]], 8, 'Brücke Kanne (gesprengt)', true, 'concrete_beam'),
   road([[-260, 190], [-60, 200], [146, 190]], 7), road([[200, 190], [260, 200]], 7),
   road([[-150, 0], [-190, 80], [-200, 190]], 6, false, { name: 'Zufahrt Bloc 1' }),
   { type: 'causeway', pts: [[-142, -6], [-160, 14]], width: 8 },
