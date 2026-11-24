@@ -31,8 +31,9 @@ export default {
     size: 600, seed: 2018, season: 'summer', relief: 3, baseHeight: 4, seaLevel: 0, scatterTrees: 25, features: feats,
     bridge: { x0: -152, x1: 222, z: BZ, deckY: 9, gaps: [], gapLen: 28 },
   },
-  env: { season: 'summer', sunElev: 30, sunAzim: 150, fogDensity: 0.0022 },
-  camera: { x: -80, z: 20, dist: 150 },
+  // Sonne im Süden (hinter der Standardkamera), damit die große Wasserfläche nicht blendet; wenig Dunst
+  env: { season: 'summer', sunElev: 42, sunAzim: 20, fogDensity: 0.0014 },
+  camera: { x: 20, z: 40, dist: 150 },
   landmarks: landmarksOf(feats, [{ name: 'Krimbrücke', x: 40, z: -16 }, { name: 'Insel Tusla', x: 60, z: 30 }, { name: 'Kertsch', x: -230, z: 50 }, { name: 'Taman', x: 262, z: 150 }]),
   spawns: { A: [-260, 200], B: [250, -120] },
   notes: 'Meerenge zwischen Kertsch-Halbinsel (West) und Taman (Ost), Straßen- und Eisenbahnbrücke über die Insel Tusla (Deck als Kulisse wie in Mission 5; Seeweg darunter), Mithridates-Berg, Häfen und Fährhäfen.',
