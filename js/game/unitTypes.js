@@ -141,7 +141,8 @@ export const UNIT_TYPES = {
   minefield: { name: 'Minenfeld', icon: '💣', cls: 'struct', model: 'minefield', hp: 150, armor: 'struct', sight: 0, radius: 5, weapons: [], noAutoTarget: true, build: { cost: 2, time: 14, w: 9, d: 9, mines: 8, hidden: true }, desc: 'Für den Gegner unsichtbar. Beschädigt Fahrzeuge und Infanterie.' },
   house: { name: 'Gebäude', icon: '🏠', cls: 'struct', model: 'house', hp: 900, armor: 'struct', sight: 0, radius: 4, weapons: [], neutral: true },
 };
-for (const [k, t] of Object.entries(UNIT_TYPES)) {
+// Aufbereitung eines Typs (für Basis-Typen und per registerUnitTypes nachgeladene Epochen)
+function prepareType(k, t) {
   t.key = k;
   t.weaponDefs = t.weapons.map((w) => W[w]);
   t.air = t.cls === 'air';
@@ -153,4 +154,25 @@ for (const [k, t] of Object.entries(UNIT_TYPES)) {
   if (t.vehicle) t.speed *= 0.72;
   if (t.infantry) t.speed *= 0.95;
   t.engineer = t.engineer || null;
+  t.era = t.era || 'modern';
+}
+for (const [k, t] of Object.entries(UNIT_TYPES)) prepareType(k, t);
+
+/**
+ * Epochen-Registry: Weitere Epochen (z. B. js/eras/ww2/units.js, js/eras/afghan/units.js) registrieren
+ * eigene Waffen und Einheitentypen, ohne diese Datei zu ändern.
+ *   registerWeapons({ mg42: {...} })                 – vor den Einheiten aufrufen
+ *   registerUnitTypes({ sherman: {..., era:'ww2', faction:'US'} })
+ * Gleiche Regeln wie oben (cls, model, weapons[] als Schlüssel aus W, Tempo-Faktoren werden angewendet).
+ */
+export function registerWeapons(obj) {
+  for (const [k, w] of Object.entries(obj)) { if (W[k]) console.warn('Waffe überschrieben:', k); W[k] = w; }
+}
+export function registerUnitTypes(obj) {
+  for (const [k, t] of Object.entries(obj)) {
+    if (UNIT_TYPES[k]) console.warn('Einheitentyp überschrieben:', k);
+    for (const w of t.weapons || []) if (!W[w]) throw new Error(`Unbekannte Waffe ${w} in ${k}`);
+    UNIT_TYPES[k] = t;
+    prepareType(k, t);
+  }
 }

@@ -1609,10 +1609,24 @@ function structureRail(g, x) {
 const NO_BLOB = new Set(['quad', 'reconquad', 'shahed', 'lancet', 'orlan', 'recon_wing', 'heli', 'seadrone', 'boat', 'bridge_road', 'bridge_rail']);
 const TURRET_SKIP = new Set(['leopard', 't72', 't90', 'bradley', 'bmp', 'gepard', 'spg', 'tankdestroyer']);
 
+/**
+ * Modell-Registry für Epochen-Module: registerModel('sherman', (side, type, ctx) => ({ root, turret, barrel, muzzle, height, … }))
+ * ctx enthält die Bau-Helfer (siehe MODEL_KIT). Registrierte Modelle haben Vorrang vor den eingebauten.
+ */
+const MODEL_REGISTRY = {};
+export function registerModel(name, fn) { MODEL_REGISTRY[name] = fn; }
+/** Bau-Helfer für Epochen-Module (gleiche Funktionen wie intern verwendet). */
+export const MODEL_KIT = {
+  THREE, get M() { initMats(); return M; }, add, box, cyl, boxG, cylG, sphG, hullGeo, wheel, antenna, headlights, trackSet,
+  camoTexture, iff, addBlob, truckBase, soldier, tank, ifv, quad, fixedWing, helicopter,
+};
+
 export function buildModel(type, side, season, quality) {
   initMats();
   let r;
-  switch (type.model) {
+  if (MODEL_REGISTRY[type.model]) {
+    r = MODEL_REGISTRY[type.model](side, type, { ...MODEL_KIT, M, season, quality });
+  } else switch (type.model) {
     case 'leopard': r = tank(side, 'leopard'); break;
     case 't72': r = tank(side, 't72'); break;
     case 't90': r = tank(side, 't90'); break;

@@ -1,4 +1,5 @@
 // Einstiegspunkt: Menüs, Einstellungen, Kampagnenfortschritt, Spielschleife
+import './eras/index.js';
 import { GameRenderer } from './engine/renderer.js';
 import { Audio } from './engine/audio.js';
 import { Terrain } from './engine/terrain.js';
