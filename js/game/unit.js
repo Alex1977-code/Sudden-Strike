@@ -693,6 +693,12 @@ export class Unit {
       if (this.garrison) this.garrison.revealT = game.time;
       game.combat.fire(this, ws, target, threat);
     }
+    // Turm klemmt (V3-M1): Fahrzeug richtet die Waffen mit der Wanne aus (stehend, Kette intakt)
+    if (this.mods?.tur && aimPoint && !this.moving && !this.cantMove && this.type.vehicle) {
+      const want = angleDiff(this.heading + this.turretYaw, Math.atan2(aimPoint.x - this.pos.x, aimPoint.z - this.pos.z));
+      const tr = (this.type.turnRate || 1.5) * 0.6 * dt;
+      this.heading += clamp(want, -tr, tr);
+    }
     // Turm drehen
     if (this.model.turret) {
       const rate = (this.mods?.tur ? 0 : (this.type.turretRate || 1.5)) * dt; // Turm klemmt

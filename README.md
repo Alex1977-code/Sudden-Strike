@@ -109,6 +109,75 @@ iceServers: [
 
 Technik: `js/net/transport.js` (PeerJS bzw. BroadcastChannel), `js/net/lobby.js` (Lobby-Protokoll), `js/net/codec.js` (kompakte Zustandsbilder), `js/net/session.js` (Host-Simulation, Zustandsbilder je Team, Ereignisse, Client-Interpolation) und `js/net/onlineui.js` (Menüs, Lobby, Chat).
 
+## Karteneditor
+
+Hauptmenü → **Editor**. Die Karte wird in der normalen 3D-Ansicht bearbeitet (ohne Nebel des Krieges, Simulation angehalten).
+
+- **Werkzeuge (links):** Auswahl · Hügel / Senke / Ebnen (Gelände-Pinsel) · Wasser (Polygon) · Fluss, Straße, Feldweg, Bahn, Baumreihe (Polylinie) · Wald (Polygon oder Kreis) · Feld (Polygon + Feldfrucht) · Siedlung (Kreis + Gebäude-Set aus `buildingKinds.js`) · Gebäude (einzelne Art) · Brücke / Furt (zwei Uferpunkte) · Einheiten (alle Typen, gefiltert nach Epoche/Fraktion, Team, Blickrichtung, KI-Verhalten, „Zielobjekt") · Punkte (Zeppelin, Ballon, Flugfeld, Depot, Funkturm, Bahnhof) · Startzone · Zielgebiet („Gebiet halten").
+- **Rechts:** Optionen des Werkzeugs bzw. Eigenschaften des gewählten Elements. **Oben:** Titel, Rückgängig/Wiederholen, *Karte* (Größe, Epoche, Jahreszeit, Nacht, Relief, Seed), *Mission* (Spielerteam, Ziele, Briefing), *Datei* (Speichern/Laden in Speicherplätzen, Export, Import, Neu), *Testen*.
+- **PC:** Klick setzt Punkte/platziert, „Fertig"/Enter/Rechtsklick schließt Linien und Flächen. Auswahl: Element anklicken und ziehen, weiße Ecken einzeln ziehen, gelbe Griffe ändern Radius/Drehung. Entf löscht, R dreht, Strg+Z/Strg+Y, WASD/Q/E, Mausrad, rechte Maus schiebt, mittlere Maus dreht.
+- **Handy/Tablet:** Werkzeug antippen, Tippen setzt Punkte, „Fertig" schließt ab, ein Finger schiebt die Kamera (bzw. das gewählte Element), zwei Finger zoomen/drehen; die Eigenschaftenleiste lässt sich einklappen.
+- Nach jeder Änderung wird das Gelände (verzögert) neu berechnet; Einheiten und Punkte werden sofort neu gesetzt.
+- **Testspielen** baut aus der Karte eine Mission (Ziele: alle Feinde vernichten, Ziel-Einheiten zerstören, Gebiet X Minuten halten, Zeitlimit) und kehrt danach in den Editor zurück.
+- **Speichern** im Browser (localStorage, bis 24 Speicherplätze, plus automatische Sicherung). **Export** als JSON-Datei (Download) oder per „In Zwischenablage kopieren" (im Artifact sind Downloads gesperrt); **Import** per Datei-Upload oder Einfügen.
+- Gespeicherte Karten erscheinen unter **Mods & Karten → Eigene Karten** (als Mission oder Gefecht startbar) und im **Gefecht** unter „Karte", sofern beide Teams eine Startzone haben und mindestens ein Eroberungspunkt existiert (Ukraine möglichst im Süden, Russland im Norden – Verstärkung rückt vom eigenen Kartenrand ein).
+
+### Kartenformat „steppensturm-karte" (Version 1)
+
+```json
+{
+  "format": "steppensturm-karte", "version": 1,
+  "meta": { "title": "…", "author": "…", "era": "modern|ww2|afghan", "description": "…" },
+  "map": { "size": 260, "seed": 4711, "season": "summer|autumn|winter", "night": false, "relief": 4, "scatterTrees": 30 },
+  "player": "UA",
+  "briefing": "Text (Absätze durch Leerzeile)",
+  "elements": [
+    { "type": "river", "pts": [[-128, 0], [128, 0]], "width": 16, "depth": 3 },
+    { "type": "road", "kind": "road|track|rail", "pts": [[0, 128], [0, -128]], "width": 7 },
+    { "type": "bridge", "kind": "bridge|ford", "pts": [[0, 15], [0, -15]], "width": 7 },
+    { "type": "water", "poly": [[x, z], …], "depth": 5 },
+    { "type": "forest", "poly": [[x, z], …] | "x": 0, "z": 0, "r": 20, "kind": "mixed|pine|deciduous", "density": 0.05 },
+    { "type": "treeline", "pts": [[x, z], …] },
+    { "type": "field", "poly": [[x, z], …], "crop": "wheat|sunflower|stubble|green|plowed", "angle": 0 },
+    { "type": "village", "x": 0, "z": -70, "r": 30, "houses": 10, "set": "ukraine_village", "urban": false },
+    { "type": "building", "x": 0, "z": 0, "rot": 0, "kind": "warehouse", "w": 16, "d": 11, "floors": 1 },
+    { "type": "hill", "x": 0, "z": 0, "r": 30, "h": 6 },
+    { "type": "flat", "x": 0, "z": 0, "r": 25, "h": 3 }
+  ],
+  "units": [ { "type": "leopard", "team": "UA", "x": 0, "z": 90, "heading": 3.14, "ai": "guard|hold|attack", "target": false } ],
+  "points": [ { "kind": "zeppelin|aerostat|airfield|depot|radio|railway", "x": 0, "z": 0, "name": "Brücke", "value": 3, "radius": 18 } ],
+  "zones": [ { "team": "UA", "x": 0, "z": 100, "r": 22 } ],
+  "objectives": [ { "kind": "annihilate" }, { "kind": "destroy" }, { "kind": "hold", "x": 0, "z": 0, "r": 25, "minutes": 3 }, { "kind": "timelimit", "minutes": 20 } ]
+}
+```
+
+Koordinaten in Metern, Kartenmitte = (0, 0), +z = Süden. `heading` im Bogenmaß (π = Blick nach Norden). Alle Werte werden beim Laden geprüft und geklemmt (`js/editor/format.js`, `sanitizeMap`); `id`-Felder werden bei Bedarf ergänzt. Code: `js/editor/` (editor.js Bedienung, format.js Schema/Validierung, compile.js Karte → Mission/Gefecht, storage.js Speicherplätze, mods.js/modsui.js Mods).
+
+## Mods
+
+Hauptmenü → **Mods & Karten**. Mods sind JSON-Dateien im Format `steppensturm-mod`; laden per Datei-Upload oder Einfügen (auch eine exportierte Karte allein wird als Mod angenommen). Installierte Mods liegen im Browser (localStorage) und lassen sich einzeln an- und abschalten oder entfernen; beim Abschalten werden die Originalwerte wiederhergestellt.
+
+Ein Mod kann
+
+- **Karten hinzufügen** (`maps`: Liste von Karten im obigen Format) – sie erscheinen unter „Eigene Karten" und sind als Mission bzw. Gefecht startbar;
+- **Einheitenwerte anpassen** (`units`: Typschlüssel → `hp` 1–20000, `speed` 0,1–60 (Grundwert wie in `unitTypes.js`), `sight` 1–150);
+- **Waffenwerte anpassen** (`weapons`: Waffenschlüssel → `dmg` 0–5000, `range` 1–400, `reload` 0,05–120).
+
+**Sicherheit:** Mods sind reine Daten – es wird nie Code aus Mods ausgeführt (kein `eval`/`Function`, Texte werden escaped). Mods mit Code-Feldern (`setup`, `update`, `script`, `code`, … oder Texten wie `function(`/`<script`) oder Prototyp-Schlüsseln werden abgewiesen; unbekannte Typen/Felder werden ignoriert, Zahlen auf die erlaubten Bereiche geklemmt (mit Hinweis), Größe max. 2 MB.
+
+Beispiel ([`mods/beispiel.json`](mods/beispiel.json), im Spiel auch über „Beispiel-Mod laden" verfügbar):
+
+```json
+{
+  "format": "steppensturm-mod", "version": 1, "id": "beispiel",
+  "name": "Beispiel: Brückenkopf am Donez", "author": "Steppensturm",
+  "description": "Eine Karte (Mission und Gefecht) und leicht verstärkte Kampfpanzer.",
+  "units": { "leopard": { "hp": 1200, "speed": 9 }, "t72": { "hp": 950 } },
+  "weapons": { "tank125": { "range": 44 } },
+  "maps": [ { "format": "steppensturm-karte", "version": 1, "meta": { "title": "Brückenkopf am Donez" }, "…": "…" } ]
+}
+```
+
 ## Steuerung (Kurzfassung)
 
 | PC | Handy |
@@ -128,6 +197,8 @@ js/game/                      Einheiten, Waffen, Kampf, Fähigkeiten, KI, Eingab
 js/missions/                  Kampagne mit 5 Missionen
 js/skirmish/                  Gefecht 1v1–6v6: Kartengenerator, Eroberungspunkte, KI-Kommandeure
 js/net/                       Online-Multiplayer: Transport, Lobby, Codec, Sitzung (Host/Client), Online-Menüs
+js/editor/                    Karteneditor, Kartenformat, Mods (Validierung, Werte-Anpassung), eigene Karten
+mods/                         Beispiel-Mod (beispiel.json)
 vendor/three/                 Three.js r170 (MIT)
 vendor/peerjs/                PeerJS (MIT) für WebRTC-Verbindungen
 sw.js, manifest.webmanifest   PWA / Offline

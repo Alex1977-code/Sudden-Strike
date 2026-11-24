@@ -1,5 +1,5 @@
 // Waffen der Epoche „modern 2024–2026“ (Präfix m_). Struktur wie W in js/game/unitTypes.js.
-// Zusätzliche (dokumentierte) Waffenfelder: ew:true = EloKa-Wirkung (wirkungslos gegen Ziele mit type.ewImmune, siehe hooks.js).
+// Zusätzliche (dokumentierte) Waffenfelder: ew:true = EloKa-Wirkung (wirkungslos gegen Ziele mit type.ewImmune, Kern: game.applyDamage).
 import { registerWeapons } from '../../game/unitTypes.js';
 
 const VS_TANK = { soft: 0.6, light: 1, heavy: 1, air: 0, struct: 0.5 };

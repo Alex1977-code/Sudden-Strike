@@ -6,14 +6,14 @@
 // ABIL_MODERN: Fähigkeiten je Team (ids aus ABILITIES) mit empfohlenen Ladungen; REQUIRES: benötigter Typ je Fähigkeit.
 export const ROSTERS_MODERN = {
   UA: {
-    infantry: ['m_dronehunter', 'm_fibreop'],
+    infantry: ['m_dronehunter', 'm_fibreop', 'ua_officer'], // ua_officer/e_officer: Kerntypen (V3-M1, Führungsaura)
     armor: ['m_abrams', 'm_leo1', 'm_t64', 'm_cv90', 'm_marder', 'm_bmp2', 'm_stryker', 'm_senator'],
     support: ['m_pzh2000', 'm_caesar', 'm_bohdana', 'm_archer', 'm_krab', 'm_nasams', 'm_skynex', 'm_interceptor', 'm_neptun_tel'],
     logistics: ['m_ugv_log'],
     drones: ['m_leleka', 'm_vampire', 'm_fiberfpv', 'm_magura5', 'm_magura7', 'm_ugv_mg', 'm_ugv_kami', 'm_f16', 'm_mirage'],
   },
   RU: {
-    infantry: ['m_storm', 'm_rubikon', 'm_dronehunter_ru', 'm_moto', 'm_buggy'],
+    infantry: ['m_storm', 'm_rubikon', 'm_dronehunter_ru', 'm_moto', 'm_buggy', 'e_officer'],
     armor: ['m_t80', 'm_turtle', 'm_bmp3', 'm_mtlb'],
     support: ['m_2s7', 'm_tos1a', 'm_iskander_tel', 'm_tor', 'm_buk'],
     logistics: [],

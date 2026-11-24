@@ -201,7 +201,7 @@ export function applyFow(material, { detail = false, terrain = false, bump = fal
           float rk = smoothstep(0.12, 0.34, sl + (n2 - 0.5) * 0.08);
           if (rk > 0.0) {
             float strata = fNoise(vec2((p.x + p.y) * 0.12, vFowWorld.y * 2.4));
-            vec3 rockC = vec3(dot(diffuseColor.rgb, vec3(0.30, 0.59, 0.11))) * vec3(1.02, 0.98, 0.93) * (0.72 + 0.45 * strata);
+            vec3 rockC = vec3(dot(diffuseColor.rgb, vec3(0.30, 0.59, 0.11))) * vec3(1.02, 0.98, 0.93) * mix(0.9 + 0.2 * n2, 0.72 + 0.45 * strata, smoothstep(0.28, 0.6, sl)); // Schichtung nur an Steilwänden
             diffuseColor.rgb = mix(diffuseColor.rgb, rockC, rk * 0.6);
           }
         }` : detail ? `

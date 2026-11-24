@@ -56,6 +56,7 @@ export function initTactical(u) {
   u.mods = t.vehicle && !t.structure ? { eng: 0, tur: 0, gun: 0, crw: 0 } : null;
   u.smokeN = smokeCharges(t); u.smokeMax = u.smokeN;
   u.ambush = null; u.throwOrder = null; u.burnT = 0;
+  for (const ws of u.weapons) if (ws.def.kind === 'grenade' && ws.cd > 1.5) ws.cd = rand(0, 1.5); // erster Wurf ohne lange Wartezeit
 }
 // Bitfeld der Fahrzeugmodule (Snapshot): eng 2 Bit | tur | gun | crw 2 Bit
 export const packMods = (m) => (m ? (m.eng & 3) | (m.tur ? 4 : 0) | (m.gun ? 8 : 0) | ((m.crw & 3) << 4) : 0);
@@ -211,7 +212,7 @@ export class Tactics {
       for (const o of g.units) {
         if (!o.alive || o === u || o.side !== u.side || !o.type.infantry) continue;
         if ((o.pos.x - u.pos.x) ** 2 + (o.pos.z - u.pos.z) ** 2 > r2) continue;
-        this.addSupp(o, TAC.officer.shock, u.pos); o.ledT = -99; n++;
+        o.ledT = -99; this.addSupp(o, TAC.officer.shock, u.pos); n++; // Aura weg, dann Schock
       }
       g.alertTo(u.side, `⚠ ${u.name} gefallen – Moral der Truppe sinkt!`, 3);
       g.emit('officerDown', u, n);

@@ -2,6 +2,7 @@
 // Modellnamen werden je Fraktion suffigiert (af_dingo -> af_dingo_BW), damit der Geometrie-Cache in models.js nicht
 // Farben zwischen Fraktionen vermischt. Die Modelle selbst stehen in models.js.
 import { registerUnitTypes } from '../../game/unitTypes.js';
+import { registerBuildKinds } from '../../game/logistics.js';
 import './weapons.js';
 
 const T = {};
@@ -21,7 +22,7 @@ inf('BW', 'af_bw_at', { name: 'Panzerabwehr (Panzerfaust 3)', icon: '🚀', weap
 inf('BW', 'af_bw_milan', { name: 'Panzerabwehr (MILAN)', icon: '🚀', weaponModel: 'milan', hp: 62, speed: 3.6, sight: 36, weapons: ['af_milan', 'af_g36'], conceal: 0.38, desc: 'Lenkflugkörper-Panzerabwehr, große Reichweite.' });
 inf('BW', 'af_bw_engineer', { name: 'Pionier / Kampfmittelräumer', icon: '⛏️', weaponModel: 'engineer', hp: 72, speed: 4.1, sight: 32, weapons: ['af_g36', 'af_dm51', 'charge'], conceal: 0.35, engineer: { material: 4 }, desc: 'Räumt Minen und Sprengfallen (IEDs), baut Sandsäcke, Gräben und Sperren.' });
 inf('BW', 'af_bw_medic', { name: 'Sanitäter', icon: '⚕️', weaponModel: 'medic', hp: 60, speed: 4.2, sight: 30, weapons: ['pistol'], conceal: 0.35, medic: { rate: 3, radius: 10 }, desc: 'Heilt Infanterie im Umkreis.' });
-inf('BW', 'af_bw_jtac', { name: 'Offizier / JTAC', icon: '🔭', weaponModel: 'jtac', hp: 58, speed: 4.1, sight: 24, weapons: ['pistol'], conceal: 0.5, observer: OBS, desc: 'Fernglas: weite Sicht im Kegel. Leitet Luftnahunterstützung und Artillerie (Fähigkeiten).' });
+inf('BW', 'af_bw_jtac', { name: 'Offizier / JTAC', icon: '🔭', weaponModel: 'jtac', hp: 58, speed: 4.1, sight: 24, weapons: ['pistol'], conceal: 0.5, observer: OBS, officer: true, desc: 'Fernglas: weite Sicht im Kegel. Leitet Luftnahunterstützung und Artillerie (Fähigkeiten).' });
 inf('BW', 'af_bw_para', { name: 'Fallschirmjäger', icon: '🪂', weaponModel: 'para', hp: 100, speed: 4.8, sight: 38, weapons: ['af_g36p', 'af_dm51', 'af_ag36'], conceal: 0.45, desc: 'Elite-Infanterie, schnell und treffsicher.' });
 veh('BW', 'af_bw_dingo', { name: 'ATF Dingo 2', icon: '🛡️', model: 'af_dingo', hp: 620, speed: 10, sight: 34, radius: 2.8, weapons: ['af_mg3rws'], turnRate: 2, turretRate: 3, airSight: 45, iedResist: 0.7, desc: 'Minengeschütztes Patrouillenfahrzeug (MRAP) mit Fernwaffenstation. Sehr hohe Überlebensfähigkeit gegen Sprengfallen.' });
 veh('BW', 'af_bw_eagle', { name: 'Eagle IV', icon: '🛡️', model: 'af_eagle', hp: 560, speed: 10.5, sight: 34, radius: 2.8, weapons: ['af_hmg_rws'], turnRate: 2, turretRate: 3, airSight: 45, iedResist: 0.6, desc: 'Gepanzertes Mehrzweckfahrzeug (MRAP) mit schwerem MG in Fernwaffenstation.' });
@@ -59,6 +60,9 @@ veh('TAL', 'af_tal_pickup', { name: 'Pickup (Transport)', icon: '🛻', model: '
 veh('TAL', 'af_tal_ural', { name: 'Ural-Lkw (erbeutet)', icon: '🚚', model: 'af_ural', hp: 190, speed: 10, sight: 24, radius: 2.8, weapons: [], turnRate: 1.8, fuel: 1500, supply: { ...SUPPLY }, desc: 'Erbeuteter Lkw mit Nachschubvorrat.' });
 str('TAL', 'af_ied', { name: 'Sprengfalle (IED)', icon: '💣', model: 'af_ied', hp: 60, sight: 0, radius: 2.2, weapons: [], noAutoTarget: true, hidden: true, build: { cost: 1, time: 6, w: 3, d: 3, mines: 1, hidden: true }, desc: 'Versteckte Sprengfalle. Per placeIED() oder Missionsskript; nur für den Besitzer sichtbar, bis sie auslöst.' });
 
+// V3-M1: Anführer der Taliban (Führungsaura wie Offiziere)
+inf('TAL', 'af_tal_commander', { name: 'Kommandeur', icon: '⭐', weaponModel: 'rifle', hp: 66, speed: 4.2, sight: 30, weapons: ['af_ak', 'af_rgd5'], conceal: 0.45, officer: true, observer: OBS, desc: 'Anführer: Führungsaura 30 m (Treffer, Nachladen, Moral), Fernglas im Stand. Fällt er, wankt die Moral.' });
+
 // ======================= Sowjetarmee (SA) =======================
 inf('SA', 'af_sa_rifle', { name: 'Mot.-Schützen (AK-74)', icon: '🪖', weaponModel: 'rifle', hp: 72, speed: 4.2, sight: 33, weapons: ['af_ak74', 'af_f1', 'af_gp25'], conceal: 0.33, desc: 'Motorisierte Schützen.' });
 inf('SA', 'af_sa_pk', { name: 'PK-Schütze', icon: '🔫', weaponModel: 'mg', hp: 76, speed: 3.8, sight: 33, weapons: ['af_pk'], conceal: 0.3, desc: 'Gruppen-MG.' });
@@ -68,7 +72,7 @@ inf('SA', 'af_sa_sniper', { name: 'Scharfschütze (SWD)', icon: '🎯', weaponMo
 inf('SA', 'af_sa_vdv', { name: 'Fallschirmjäger (WDW)', icon: '🪂', weaponModel: 'vdv', hp: 105, speed: 4.7, sight: 38, weapons: ['af_ak74', 'af_f1', 'af_gp25'], conceal: 0.42, desc: 'Luftlandetruppen: zäh und schnell.' });
 inf('SA', 'af_sa_engineer', { name: 'Pionier', icon: '⛏️', weaponModel: 'engineer', hp: 70, speed: 3.9, sight: 30, weapons: ['af_ak74', 'af_f1', 'charge'], conceal: 0.3, engineer: { material: 4 }, desc: 'Baut Sperren, Sandsäcke, Gräben und Minenfelder, räumt Minen.' });
 inf('SA', 'af_sa_medic', { name: 'Sanitäter', icon: '⚕️', weaponModel: 'medic', hp: 60, speed: 4, sight: 28, weapons: ['pistol'], conceal: 0.3, medic: { rate: 2.5, radius: 10 }, desc: 'Heilt Infanterie im Umkreis.' });
-inf('SA', 'af_sa_officer', { name: 'Offizier', icon: '🔭', weaponModel: 'jtac', hp: 58, speed: 4, sight: 24, weapons: ['pistol'], conceal: 0.5, observer: OBS, desc: 'Fernglas: weite Sicht im Kegel.' });
+inf('SA', 'af_sa_officer', { name: 'Offizier', icon: '🔭', weaponModel: 'jtac', hp: 58, speed: 4, sight: 24, weapons: ['pistol'], conceal: 0.5, observer: OBS, officer: true, desc: 'Offizier: Führungsaura 30 m (Treffer, Nachladen, Moral), Fernglas: weite Sicht im Kegel.' });
 veh('SA', 'af_sa_bmp1', { name: 'BMP-1', icon: '🚙', model: 'af_bmp', hp: 400, speed: 9, sight: 32, radius: 3, weapons: ['af_2a28', 'af_malyutka', 'coaxRU'], turnRate: 2, turretRate: 2, desc: 'Schützenpanzer mit 73-mm-Kanone und Malyutka.' });
 veh('SA', 'af_sa_bmp2', { name: 'BMP-2', icon: '🚙', model: 'af_bmp2', hp: 430, speed: 9, sight: 33, radius: 3, weapons: ['ac30', 'af_konkurs'], turnRate: 2, turretRate: 2.2, desc: 'Schützenpanzer mit 30-mm-Maschinenkanone und Konkurs.' });
 veh('SA', 'af_sa_btr70', { name: 'BTR-70', icon: '🚙', model: 'af_btr70', hp: 310, speed: 11, sight: 32, radius: 3, weapons: ['kpvt'], turnRate: 2, turretRate: 2, desc: 'Radschützenpanzer, 14,5-mm-KPWT.' });
@@ -97,8 +101,11 @@ veh('MUJ', 'af_muj_zpu1', { name: 'ZPU-1', icon: '🎯', model: 'af_zpu1', hp: 1
 veh('MUJ', 'af_muj_zu23', { name: 'ZU-23', icon: '🎯', model: 'af_zu23', hp: 200, speed: 4.5, sight: 36, radius: 2.4, weapons: ['af_zu23'], turnRate: 1.4, turretRate: 3, airSight: 68, desc: 'Zwillings-Flak 23 mm (gezogen). Gefährlich für Hubschrauber.' });
 veh('MUJ', 'af_muj_caravan', { name: 'Packtier-Karawane', icon: '🐪', model: 'af_caravan', hp: 130, speed: 4.4, sight: 24, radius: 2.4, weapons: [], turnRate: 1.6, fuel: 1e7, supply: { ammo: 500, fuel: 600, material: 3, radius: 10 }, desc: 'Esel und Kamel mit kleinem Nachschubvorrat an Munition.' });
 
+// V3-M1: Anführer der Mudschaheddin (Führungsaura wie Offiziere)
+inf('MUJ', 'af_muj_commander', { name: 'Kommandant', icon: '⭐', weaponModel: 'rifle', hp: 64, speed: 4.2, sight: 30, weapons: ['af_ak', 'af_rgd5'], conceal: 0.45, officer: true, observer: OBS, desc: 'Anführer: Führungsaura 30 m (Treffer, Nachladen, Moral), Fernglas im Stand. Fällt er, wankt die Moral.' });
+
 // ======================= Feldbefestigungen (Pionierbauten, build-Feld wie tanktrap/sandbag/trench/minefield) =======================
-// Platzierung per placeFortification() (die Baumenü-Liste BUILD_KINDS im Kern ist fest); cover/conceal/blocks wie die Kern-Bauten.
+// Platzierung per placeFortification() oder durch Pioniere (Baumenü je Fraktion über registerBuildKinds, V3-M1).
 str('BW', 'af_hesco', { name: 'HESCO-Wall', icon: '🧱', model: 'af_hesco', hp: 1300, sight: 0, radius: 2.8, weapons: [], noAutoTarget: true, build: { cost: 3, time: 22, w: 5, d: 1.6, cover: 0.6, conceal: 0.2, blocks: true }, desc: 'Gefüllte Schutzwand (Feldlager). Starke Deckung (Schaden −60 %), sperrt Fahrzeuge.' });
 str('BW', 'af_concertina', { name: 'NATO-Draht', icon: '〰️', model: 'af_concertina', hp: 120, sight: 0, radius: 3, weapons: [], noAutoTarget: true, build: { cost: 1, time: 8, w: 6, d: 1.4, blocksInfantry: true }, blocksInfantry: true, desc: 'Drahtrolle. Sperrt Infanterie (Logik im Kern folgt).' });
 str('ALL', 'af_trench', { name: 'Kampfstand / Graben', icon: '⛏️', model: 'af_trench', hp: 500, sight: 0, radius: 3.2, weapons: [], noAutoTarget: true, build: { cost: 2, time: 18, w: 6, d: 2.4, cover: 0.6, conceal: 0.5 }, desc: 'Schützengraben mit Sandsackbrüstung (Schaden −60 %).' });
@@ -107,6 +114,11 @@ str('MUJ', 'af_sangar', { name: 'Sangar (Steinstellung)', icon: '🪨', model: '
 
 registerUnitTypes(T);
 export const AF_TYPES = T;
+// Pionier-Baumenü der Epoche je Fraktion (V3-M1)
+registerBuildKinds(['af_trench', 'af_foxhole'], { era: 'afghan' });
+registerBuildKinds(['af_hesco', 'af_concertina'], { era: 'afghan', factions: ['BW'] });
+registerBuildKinds(['af_ied'], { era: 'afghan', factions: ['TAL'] });
+registerBuildKinds(['af_sangar'], { era: 'afghan', factions: ['MUJ'] });
 
 /** Befestigung/Pionierbau fertig platzieren (progress 1). kind: af_hesco | af_concertina | af_trench | af_foxhole | af_sangar. */
 export function placeFortification(game, kind, team, x, z, rot = 0, opts = {}) {
@@ -128,7 +140,7 @@ export const ROSTERS = {
     logistics: k('BW', 'af_bw_truck', 'af_bw_buffel'),
   },
   TAL: {
-    infantry: k('TAL', 'af_tal_fighter', 'af_tal_pkm', 'af_tal_rpg', 'af_tal_sniper', 'af_tal_mortar', 'af_tal_ied'),
+    infantry: k('TAL', 'af_tal_fighter', 'af_tal_pkm', 'af_tal_rpg', 'af_tal_sniper', 'af_tal_mortar', 'af_tal_ied', 'af_tal_commander'),
     armor: k('TAL', 'af_tal_technical', 'af_tal_bike'),
     support: k('TAL', 'af_ied', 'af_trench', 'af_foxhole'),
     logistics: k('TAL', 'af_tal_pickup', 'af_tal_ural'),
@@ -140,7 +152,7 @@ export const ROSTERS = {
     logistics: k('SA', 'af_sa_ural'),
   },
   MUJ: {
-    infantry: k('MUJ', 'af_muj_rifle', 'af_muj_ak', 'af_muj_rpg', 'af_muj_stinger', 'af_muj_mortar'),
+    infantry: k('MUJ', 'af_muj_rifle', 'af_muj_ak', 'af_muj_rpg', 'af_muj_stinger', 'af_muj_mortar', 'af_muj_commander'),
     armor: k('MUJ', 'af_muj_btr'),
     support: k('MUJ', 'af_muj_dshk', 'af_muj_zpu1', 'af_muj_zu23', 'af_sangar', 'af_trench', 'af_foxhole'),
     logistics: k('MUJ', 'af_muj_caravan'),

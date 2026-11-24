@@ -32,6 +32,10 @@ export const SETTLEMENT_LABELS = {
 };
 
 const ROAD_MIN = 1.5; // Mindestabstand Hauswand – Fahrbahnkante (m)
+// Mindestbreite zwischen gegenüberliegenden Häuserfronten (m). Das 2-m-Wegfindungsraster verliert je Seite bis zu
+// ~2 m (Zellrundung + Sperrrand 0,6 m); 12 m nominal lassen ≥ 7–8 m freie Zellen für Fahrzeuge bis ~3,8 m Breite.
+const FREE_MIN = 12;
+const edgeMin = (width, roadMin = ROAD_MIN) => Math.max(roadMin, (FREE_MIN - width) / 2);
 const r1 = (v) => Math.round(v * 10) / 10;
 const TAU = Math.PI * 2;
 
@@ -123,16 +127,17 @@ class Ctx {
     this.half = (def.size || 240) / 2;
     this.cx = f.x; this.cz = f.z; this.r = f.r;
     this.roads = []; // alle Straßen (vorhandene + neue) zur Abstandsprüfung
-    this.waters = [];
+    this.waters = []; this._wc = new Map();
     this.houses = []; this.grid = new Map(); this.G = 32;
     this.zones = []; // Sperrzonen (keine Häuser)
+    this.fixed = []; // vorgegebene Gebäude (Straßen weichen aus)
     this.out = []; // erzeugte Features
     this.landmarks = [];
     for (const g of allFeatures) {
       if (g.type === 'road') this.addRoadRef(g);
       else if (g.type === 'river' || g.type === 'water') this.waters.push(g);
       else if (g.type === 'causeway') this.addRoadRef({ pts: g.pts, width: g.width, causeway: true });
-      else if (g.type === 'house') this._index({ x: g.x, z: g.z, w: g.w || 7, d: g.d || 6, rot: g.rot || 0 });
+      else if (g.type === 'house') { const h = { x: g.x, z: g.z, w: g.w || 7, d: g.d || 6, rot: g.rot || 0 }; this._index(h); this.fixed.push(h); }
     }
     for (const k of f.keepOut || []) this.zones.push(k);
   }
@@ -142,12 +147,47 @@ class Ctx {
   }
   road(pts, width, paved = true, extra = {}) {
     if (!pts || pts.length < 2) return null;
+    if (!extra.square && this.fixed.length) {
+      // nicht durch vorgegebene Gebäude (Landmarken der Vorlage): Polyline an solchen Stellen auftrennen
+      const parts = this._avoidFixed(pts, width / 2 + ROAD_MIN);
+      if (parts.length !== 1 || parts[0].length !== pts.length) {
+        let first = null;
+        for (const q of parts) { const g = this.road(q, width, paved, { ...extra, split: true }); if (!first) first = g; }
+        return first;
+      }
+    }
     const g = { type: 'road', pts: pts.map(rp), width, paved, gen: 'settlement', ...extra };
-    if (cumLen(g.pts).at(-1) < 4) return null;
+    delete g.split;
+    if (cumLen(g.pts).at(-1) < (extra.split ? 12 : 4)) return null;
     this.out.push(g); this.addRoadRef(g);
     return g;
   }
+  _avoidFixed(pts, m) {
+    const near = (x, z) => this.fixed.some((h) => { const [lx, lz] = toLocal(h, x, z); return Math.abs(lx) < h.w / 2 + m && Math.abs(lz) < h.d / 2 + m; });
+    const parts = []; let cur = [], cut = false;
+    for (let i = 0; i < pts.length; i++) {
+      if (i > 0) {
+        const a = pts[i - 1], b = pts[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.ceil(L / 2));
+        for (let k = 1; k < n; k++) {
+          const x = a[0] + (b[0] - a[0]) * k / n, z = a[1] + (b[1] - a[1]) * k / n;
+          if (near(x, z)) { cut = true; if (cur.length > 1) parts.push(cur); cur = []; } else if (!cur.length) cur.push([x, z]);
+        }
+      }
+      if (near(pts[i][0], pts[i][1])) { cut = true; if (cur.length > 1) parts.push(cur); cur = []; } else cur.push(pts[i]);
+    }
+    if (cur.length > 1) parts.push(cur);
+    return cut ? parts : [pts];
+  }
   water(x, z, m = 0) {
+    if (!this.waters.length) return false;
+    if (m === 0) { // auf 1 m gerastert zwischenspeichern (viele Abfragen je Haus)
+      const k = Math.round(x) * 8192 + Math.round(z); let v = this._wc.get(k);
+      if (v === undefined) { v = this._water(Math.round(x), Math.round(z), 0.7); this._wc.set(k, v); }
+      return v;
+    }
+    return this._water(x, z, m);
+  }
+  _water(x, z, m) {
     for (const w of this.waters) {
       if (w.type === 'river') { if (distToPolyline(x, z, w.pts) < w.width / 2 + (w.bank ?? 6) * 0.8 + 2 + m) return true; }
       else if (w.poly) {
@@ -178,7 +218,7 @@ class Ctx {
     const R = Math.hypot(h.w, h.d) / 2;
     for (const rd of this.roads) {
       const b = rd.box; if (h.x + R < b[0] || h.x - R > b[2] || h.z + R < b[1] || h.z - R > b[3]) continue;
-      if (houseRoadDist(h, rd.pts) < rd.width / 2 + roadMin - 0.05) return false;
+      if (houseRoadDist(h, rd.pts) < rd.width / 2 + edgeMin(rd.width, roadMin) - 0.05) return false;
     }
     return true;
   }
@@ -240,7 +280,7 @@ function frontage(C, road, o) {
         if (mid + b.w / 2 > s1) break;
         const p = at(pts, cum, mid);
         const nx = -p.tz * side, nz = p.tx * side;
-        const sb = (o.setback ? o.setback(zone, b) : 2);
+        const sb = Math.max(o.setback ? o.setback(zone, b) : 2, edgeMin(road.width || 5));
         const off = half + sb + b.d / 2;
         const h = { ...b, x: p.x + nx * off, z: p.z + nz * off, rot: Math.atan2(-nx, -nz) };
         const vac = rnd() < (o.vacancy || 0);
@@ -411,6 +451,7 @@ function layoutLinear(C) {
     const a = truncate(C, pts.slice(0, mid + 1).reverse()).reverse(), b = truncate(C, pts.slice(mid));
     main = C.road([...a.slice(0, -1), ...b], Tt.main, Tt.mainPaved);
   }
+  if (!main) return null;
   const mcum = cumLen(main.pts), mL = mcum.at(-1);
   // Zentrum = nächster Punkt der Hauptstraße zum Ortsmittelpunkt
   let sC = 0, bd = Infinity;
@@ -534,7 +575,8 @@ function layoutGrid(C) {
   const ang = f.mainRoadAngle ?? rnd() * Math.PI;
   C.a0 = ang;
   const ux = Math.cos(ang), uz = Math.sin(ang), vx = -uz, vz = ux;
-  const bx = Tt.block[0] * (0.92 + rnd() * 0.16), bz = Tt.block[1] * (0.92 + rnd() * 0.16);
+  // kleine Orte: Blöcke verkleinern, damit mindestens ein Kreuz aus Straßen entsteht
+  const bx = Math.min(Tt.block[0], Math.max(40, R * 0.72)) * (0.92 + rnd() * 0.16), bz = Math.min(Tt.block[1], Math.max(36, R * 0.62)) * (0.92 + rnd() * 0.16);
   const nu = Math.ceil(R / bx) + 1, nv = Math.ceil(R / bz) + 1;
   const J = Tt.jitter || 0;
   const node = new Map();
@@ -722,6 +764,7 @@ function layoutOrganic(C) {
     const a = truncate(C, pts.slice(0, mid + 1).reverse()).reverse(), b = truncate(C, pts.slice(mid));
     main = C.road([...a.slice(0, -1), ...b], Tt.main, false);
   }
+  if (!main) return null;
   const mcum = cumLen(main.pts), mL = mcum.at(-1);
   // Gassen als Zufallspfade
   const alleys = [];
@@ -791,6 +834,13 @@ function canal(C) {
   }
   const cp = pts.filter(([x, z]) => C.inBounds(x, z, 2));
   if (cp.length < 3) return null;
+  // nicht durch vorhandene Gebäude (z. B. eines Nachbarorts) führen
+  const clash = (line) => C.fixed.some((h) => distToPolyline(h.x, h.z, line) < Math.hypot(h.w, h.d) / 2 + 8);
+  if (clash(cp)) {
+    const alt = cp.map(([x, z]) => { const lu = (x - C.cx) * ux + (z - C.cz) * uz; return [C.cx + ux * lu - vx * off * side, C.cz + uz * lu - vz * off * side]; }).filter(([x, z]) => C.inBounds(x, z, 2));
+    if (alt.length < 3 || clash(alt)) return null;
+    return { type: 'river', pts: alt.map(rp), width: 3, depth: 1.2, bank: 2.5, gen: 'settlement', canal: true };
+  }
   // vorhandene Straßen, die den Kanal kreuzen, erhalten einen Damm (Brücke)
   const g = { type: 'river', pts: cp.map(rp), width: 3, depth: 1.2, bank: 2.5, gen: 'settlement', canal: true };
   return g;

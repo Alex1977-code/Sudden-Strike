@@ -1,5 +1,6 @@
 // WK2-Einheitenkatalog (US, UK, SU, DE). Alle Typen: era:'ww2', faction, Schlüssel ww2_*; model = Schlüssel.
 import { registerUnitTypes } from '../../game/unitTypes.js';
+import { registerBuildKinds } from '../../game/logistics.js';
 import './weapons.js';
 
 const T = {};
@@ -36,7 +37,7 @@ for (const fac of Object.keys(FACS)) {
   K.at = inf(fac, 'at', { k: f.tag === 'su' ? 'ptrd' : f.tag === 'uk' ? 'piat' : f.tag === 'de' ? 'panzer' : 'bazooka', icon: '🚀', t: { weapons: [...f.at, f.rifle], hp: 60, speed: 3.8, conceal: 0.4, desc: 'Panzerabwehr der Infanterie.' } });
   K.sniper = inf(fac, 'sniper', { k: 'sniper', icon: '🎯', t: { weapons: [f.sniper], hp: 50, speed: 4, sight: 48, conceal: 0.7, desc: 'Gut getarnt, große Sichtweite.' } });
   K.engineer = inf(fac, 'engineer', { k: 'engineer', icon: '⛏️', t: { weapons: [f.rifle, f.charge], engineer: { material: 4 }, desc: 'Baut Sperren, Stellungen, Minenfelder; räumt Minen; sprengt Brücken/Gebäude.' } });
-  K.officer = inf(fac, 'officer', { k: 'officer', icon: '🔭', t: { weapons: ['pistol'], hp: 55, sight: 24, conceal: 0.5, observer: { ...OBS }, desc: 'Im Stand nach 2 s Fernglas: sehr weite Sicht im Kegel.' } });
+  K.officer = inf(fac, 'officer', { k: 'officer', icon: '🔭', t: { weapons: ['pistol'], hp: 55, sight: 24, conceal: 0.5, observer: { ...OBS }, officer: true, smoke: 2, desc: 'Offizier: Führungsaura 30 m (Treffer, Nachladen, Moral), im Stand nach 2 s Fernglas.' } });
   K.medic = inf(fac, 'medic', { k: 'medic', icon: '⚕️', t: { weapons: ['pistol'], hp: 60, sight: 30, medic: true, healRate: 2.5, healRadius: 10, desc: 'Sanitäter (medic): heilt Infanterie im Umkreis.' } });
   K.mortar = inf(fac, 'mortar', { k: 'mortar', icon: '💥', t: { weapons: [f.mortar, f.rifle], hp: 65, speed: 3.4, sight: 30, desc: 'Indirektes Feuer, braucht Aufklärer.' } });
   if (f.para) K.para = inf(fac, 'para', { k: fac === 'DE' ? 'fj' : 'para', icon: '🪂', t: { weapons: [f.para, G], hp: 85, speed: 4.6, sight: 36, conceal: 0.45, paratrooper: true, desc: 'Elite-Fallschirmjäger (Abwurf per Fähigkeit).' } });
@@ -147,3 +148,5 @@ export const ROSTERS = {
   DE: { infantry: [...Object.values(infKeys.DE)], armor: ['ww2_pz4', 'ww2_panther', 'ww2_tiger', 'ww2_stug3', 'ww2_hetzer', 'ww2_jagdpz4'], support: ['ww2_puma', 'ww2_sdkfz251', 'ww2_wespe', 'ww2_nebelwerfer', 'ww2_pak40', 'ww2_flak88', 'ww2_flak37', 'ww2_lefh18', 'ww2_kubel', 'ww2_ju87', 'ww2_storch', 'ww2_ju52', 'ww2_de_train_armor', 'ww2_de_train_flak'], logistics: ['ww2_opel', 'ww2_de_train_loco', 'ww2_de_train_wagon'] },
 };
 export const FORTIFICATIONS = ['ww2_barbedwire', 'ww2_antitank_ditch', 'ww2_foxhole', 'ww2_mgnest', 'ww2_bunker', 'ww2_tetrahedron', 'ww2_mines_at', 'ww2_mines_ap'];
+// Pionier-Baumenü der Epoche (V3-M1): alle WK2-Pioniere; Schützenloch gräbt jede Infanterie zusätzlich selbst ({t:'dig'})
+registerBuildKinds(FORTIFICATIONS, { era: 'ww2' });

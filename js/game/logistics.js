@@ -273,7 +273,7 @@ export class Logistics {
     for (const u of this.g.units) {
       if (!u.alive || !u.type.build) continue;
       if (u.type.build.blocks === true) this.blockTrap(u);
-      else if (u.type.build.blocksInfantry && u.build?.progress >= 1) this.blockTrap(u, BLOCK_WIRE, 0.7);
+      else if (u.type.build.blocksInfantry && u.build?.progress >= 1) this.blockTrap(u, BLOCK_WIRE, 1.2); // Rand ≥ halbe Zelle: keine Lücke an den Enden
     }
   }
   blockTrap(u, val = BLOCK_TRAP, margin = 2.2) {
@@ -413,7 +413,10 @@ export class Logistics {
       }
       case 'clear': {
         if (t.type.build?.blocksInfantry && !t.type.build.mines) { // Draht durchschneiden
-          if (dist > t.radius + 1.6) { if (!u.order || u.order.type !== 'move') u._goto(t.pos.x, t.pos.z); return; }
+          // Abstand zur Drahtfläche (das Pfadraster sperrt die Fläche + 1,2 m für Infanterie)
+          const bd = t.type.build, c = Math.cos(t.heading), s = Math.sin(t.heading), dx = u.pos.x - t.pos.x, dz = u.pos.z - t.pos.z;
+          const ex = Math.max(0, Math.abs(dx * c - dz * s) - bd.w / 2), ez = Math.max(0, Math.abs(dx * s + dz * c) - bd.d / 2);
+          if (Math.hypot(ex, ez) > 3) { if (!u.order || u.order.type !== 'move') u._goto(t.pos.x, t.pos.z); return; }
           if (u.order) { u.order = null; u.path = null; }
           face(t); u.working = g.time;
           job.t = (job.t || 0) + dt;

@@ -1,9 +1,9 @@
 // Einheitentypen der Epoche „modern 2024–2026“ (Schlüssel m_*, era:'modern', faction:'UA'|'RU').
-// Zusätzliche (dokumentierte) Typfelder, ausgewertet in hooks.js (ohne Änderung der Kerndateien):
+// Zusätzliche (dokumentierte) Typfelder, seit V3-M1 im Kern ausgewertet (unit.js, game.js, logistics.js):
 //   ewImmune:true    – Störsender (Fähigkeit „EloKa-Störsender“ / game.jamZones) und EloKa-Waffen (weapon.ew) wirken nicht
-//                      (Glasfaser-Drohnen). Realisiert über einen Accessor auf Unit.prototype.jammed.
+//                      (Glasfaser-Drohnen). Kern: Accessor Unit.jammed.
 //   droneResist:0..1 – Anteil, um den Schaden durch Kamikaze-Waffen (kind 'kamikaze': FPV, Lancet, Molniya …) sinkt
-//                      (Schildkröten-Panzer mit Dachkäfig). Realisiert über einen Wrapper um Game.prototype.applyDamage.
+//                      (Schildkröten-Panzer mit Dachkäfig). Kern: game.applyDamage.
 //   unmanned:true    – Bodenroboter: keine Besatzung, steigt im Gefecht nicht aus (Logistics.canBail/bailOut).
 //   tether:m         – Kabellänge Glasfaser-Drohne (Meter): maximale Entfernung zum Operator, begrenzt in abilities.js.
 //   role             – Zuordnung zu den Gefechts-Rollen (infantry|armor|support|logistics|drones), siehe rosters.js.

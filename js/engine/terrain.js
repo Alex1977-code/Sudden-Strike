@@ -173,10 +173,10 @@ export class Terrain {
     }
     if (st === 'desert') {
       // Dünen: lange Luv-, steile Leeseite quer zur Windrichtung, fleckig verteilt
-      const a = d.windDir ?? 0.5, ca = Math.cos(a), sa = Math.sin(a), lam = d.duneWave ?? 44, amp = d.dunes ?? 3.2;
+      const a = d.windDir ?? 0.5, ca = Math.cos(a), sa = Math.sin(a), lam = d.duneWave ?? 48, amp = d.dunes ?? 4.5;
       const warp = 22 * N.fbm(x / 110 + 3, z / 110 - 8, 2);
       const u = (x * ca + z * sa + warp) / lam, p = u - Math.floor(u);
-      const prof = p < 0.7 ? smoothstep(0, 0.7, p) : 1 - smoothstep(0.7, 1, p);
+      const prof = p < 0.76 ? smoothstep(0, 0.76, p) : 1 - smoothstep(0.76, 1, p);
       const v = -x * sa + z * ca;
       const patch = smoothstep(-0.2, 0.3, N.fbm(x / 170 + 40, z / 170 + 9, 2)) * (0.65 + 0.35 * Math.sin(v / 31 + warp * 0.08));
       return base + relief * N.fbm(x / 130, z / 130, 3) + amp * prof * patch + 0.25 * N.fbm(x / 9, z / 9, 2);
@@ -863,7 +863,7 @@ export class Terrain {
     const winter = pal === 'winter', autumn = pal === 'autumn' || pal === 'mud';
     const mud = pal === 'mud', arid = pal === 'desert' || pal === 'afghan', spring = pal === 'spring';
     const TP = TEX_PAL[pal] || TEX_PAL.summer;
-    const snowLine = this.snowLine;
+    const snowLine = this.snowLine, modern = this.modernRelief;
     const sea = this.seaLevel, hasWater = this.hasWater;
     const vn = makeVNoise((this.def.seed || 1) * 131 + 7);
     const noise = this.noise;
@@ -1010,6 +1010,7 @@ export class Terrain {
     const MR = Math.min(Math.round(R / 2), Math.round(size * 2)), mpx = size / MR, MM = MR * MR;
     const MCr = new Float32Array(MM), MCg = new Float32Array(MM), MCb = new Float32Array(MM);
     const MB = new Float32Array(MM), MNM = new Float32Array(MM), MFW = new Float32Array(MM), MBA = new Float32Array(MM);
+    const MRK = modern ? new Float32Array(MM) : null; // Felsanteil (Detailrisse in der Texelebene)
     for (let j = 0; j < MR; j++) {
       const z = (j + 0.5) * mpx - half;
       let gz = z + half; if (gz > n - 1.001) gz = n - 1.001; if (gz < 0) gz = 0;
@@ -1090,10 +1091,11 @@ export class Terrain {
         // Fels an steilen Hängen
         const rk = smoothstep(0.08, 0.26, 1 - ny + (nh - 0.5) * 0.05);
         if (rk > 0) {
-          const st = 0.82 + 0.3 * vn(x * 0.15 + z * 0.15, h * 2.6);
+          const st = modern ? 0.76 + 0.26 * vn(x * 0.23 + h * 0.9, z * 0.23 - h * 0.6) + 0.12 * vn(x * 0.9 + 7, z * 0.9) : 0.82 + 0.3 * vn(x * 0.15 + z * 0.15, h * 2.6);
           mxs(TP.rock[0] * st, TP.rock[1] * st, TP.rock[2] * st, rk * (winter ? 0.7 : 0.9));
           bm = Math.max(bm, 0.9);
           bare *= 1 - rk;
+          if (MRK) MRK[mk] = rk;
         }
         // Ufer und Gewässergrund
         if (hasWater) {
@@ -1170,6 +1172,15 @@ export class Terrain {
           if (fw > 0.05 && nf > 0.6) mx(TP.needle, fw * (nf - 0.6) * 1.5);
           // Frühling: Wiesenblumen (gelb/weiß/violett) auf Grasland
           if (spring && g > 0.975 && bare < 0.3 && fw < 0.2) { const fc = (hs >>> 10) % 3; mxs(fc === 0 ? 0.92 : fc === 1 ? 0.95 : 0.62, fc === 0 ? 0.82 : fc === 1 ? 0.94 : 0.48, fc === 0 ? 0.22 : fc === 1 ? 0.92 : 0.78, 0.75 * smoothstep(0.35, 0.65, nm)); }
+        }
+        // Fels: Klüfte und helle Kanten (nur bei neuem Relief)
+        if (MRK) {
+          const rk = MRK[k00] * w00 + MRK[k10] * w10 + MRK[k01] * w01 + MRK[k11] * w11;
+          if (rk > 0.05) {
+            const c1 = vn(x * 1.1 + z * 0.35 + 50, z * 0.9 - x * 0.3), c2 = vn(x * 3.1 - 20, z * 3.1 + 11);
+            const crack = 1 - smoothstep(0.03, 0.09, Math.abs(c1 - 0.5));
+            mul(1 - rk * (0.42 * crack + 0.16 * (1 - c2)) + rk * 0.12 * smoothstep(0.6, 0.85, c2));
+          }
         }
         G0[0] = C[0]; G0[1] = C[1]; G0[2] = C[2]; // ungestörter Boden (für Mittelstreifen der Feldwege)
 
@@ -1450,7 +1461,7 @@ export class Terrain {
         // Felsen: an Hängen, in Bergen, selten im Flachland
         let mt = 0;
         for (const m of mountains) { const d = Math.hypot(x - m.x, z - m.z); if (d < m.r) mt = Math.max(mt, 1 - d / m.r); }
-        return smoothstep(0.08, 0.3, 1 - ny) * 1.2 + mt * 0.35 + (arid ? 0.05 : 0.01);
+        return smoothstep(0.14, 0.42, 1 - ny) * 1.3 + mt * mt * 0.12 + (arid ? 0.04 : 0.008);
       }
       if (kind === 2) p *= 0.4 + smoothstep(0.03, 0.2, 1 - ny) * 2.5;
       else if (ny < 0.8) p *= 0.3;
@@ -1874,10 +1885,10 @@ export class Terrain {
 // =====================================================================
 // Qualitätsstufen
 const QUALITY = {
-  low: { seg: 2.5, tex: 1024, aniso: 2, cover: 0, bushes: 0, stones: 0, bump: false, treeDetail: 0 },
-  medium: { seg: 2, tex: 2048, aniso: 4, cover: 5000, bushes: 160, stones: 140, bump: false, treeDetail: 1 },
-  high: { seg: 1.5, tex: 2048, aniso: 8, cover: 11000, bushes: 320, stones: 260, bump: true, treeDetail: 1 },
-  ultra: { seg: 1, tex: 3072, aniso: 16, cover: 20000, bushes: 500, stones: 400, bump: true, treeDetail: 1 },
+  low: { seg: 2.5, tex: 1024, aniso: 2, cover: 0, bushes: 0, stones: 0, rocks: 50, bump: false, treeDetail: 0, treeLod: 0 },
+  medium: { seg: 2, tex: 2048, aniso: 4, cover: 5000, bushes: 160, stones: 140, rocks: 150, bump: false, treeDetail: 1, treeLod: 140 },
+  high: { seg: 1.5, tex: 2048, aniso: 8, cover: 11000, bushes: 320, stones: 260, rocks: 240, bump: true, treeDetail: 1, treeLod: 190 },
+  ultra: { seg: 1, tex: 3072, aniso: 16, cover: 20000, bushes: 500, stones: 400, rocks: 340, bump: true, treeDetail: 1, treeLod: 250 },
 };
 
 // Bodenpaletten der Textur (sRGB)
@@ -2010,63 +2021,6 @@ function colorFaces(geo, fn) {
   return geo;
 }
 
-// Laubbaum-Krone aus mehreren Lagen; Farbe = Schattierung (Farbe kommt per Instanz), Winter: kahle Zweige + Schnee
-function deciduousGeometry(winter, hi) {
-  const lumps = hi
-    ? [[2.0, 0, 4.3, 0, 0.92], [1.45, 0.95, 5.25, 0.45, 0.9], [1.35, -0.9, 4.9, -0.55, 0.9], [1.1, 0.15, 6.05, -0.2, 0.95], [1.05, -0.3, 3.6, 1.0, 0.8]]
-    : [[2.0, 0, 4.3, 0, 0.92], [1.4, 0.6, 5.4, 0.3, 0.9]];
-  const twig = linC([0.50, 0.44, 0.38]), snow = linC([0.90, 0.93, 0.97]);
-  const parts = lumps.map(([r, x, y, z, sy], li) => {
-    const g = nonIndexed(new THREE.IcosahedronGeometry(r, hi ? 1 : 0));
-    g.deleteAttribute('uv');
-    jitterGeo(g, 0.16, li * 17);
-    g.scale(1, sy, 1);
-    g.translate(x, y, z);
-    return colorFaces(g, (ny, yy, rr) => {
-      const shade = 0.5 + 0.5 * clamp((ny + 1) * 0.5, 0, 1) * (0.75 + 0.25 * clamp((yy - 2.5) / 4, 0, 1));
-      const v = shade * (0.82 + rr * 0.3);
-      if (winter) {
-        if (ny > 0.2 && rr > 0.2) return snow;
-        return [twig[0] * v * 1.1, twig[1] * v * 1.1, twig[2] * v * 1.1];
-      }
-      return [v, v, v];
-    });
-  });
-  return mergeGeos(parts);
-}
-
-// Nadelbaum aus gestaffelten, unregelmäßigen Kegeln; Winter mit Schneekappen auf oberen Flächen
-function pineGeometry(winter, hi) {
-  const tiers = hi ? [[1.95, 2.7, 2.9], [1.6, 2.4, 4.1], [1.2, 2.1, 5.25], [0.75, 1.8, 6.35]] : [[1.85, 3.2, 3.2], [1.25, 2.6, 4.9], [0.7, 2.0, 6.3]];
-  const seg = hi ? 9 : 6;
-  const needle = linC([0.17, 0.27, 0.19]), snow = linC([0.90, 0.93, 0.97]);
-  const parts = tiers.map(([r, h, y], ti) => {
-    const g = nonIndexed(new THREE.ConeGeometry(r, h, seg, 1));
-    g.deleteAttribute('uv');
-    const p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) {
-      const vy = p.getY(i);
-      if (vy < 0) { // unterer Kranz: unregelmäßig und herabhängend
-        const x = p.getX(i), z = p.getZ(i);
-        const k = 0.85 + hash3(Math.round(x * 100) + ti * 31, 1, Math.round(z * 100)) * 0.35;
-        const len = Math.hypot(x, z);
-        p.setXYZ(i, x * k, vy - (len > 0.01 ? (k - 0.85) * 0.9 : 0.15), z * k);
-      }
-    }
-    g.translate(0, y, 0);
-    return colorFaces(g, (ny, yy, rr) => {
-      const shade = ny < -0.5 ? 0.42 : 0.62 + 0.38 * clamp((yy - 1.5) / 5.5, 0, 1);
-      const v = shade * (0.85 + rr * 0.25);
-      if (winter) {
-        if (ny > 0.3 && rr > 0.3) return [snow[0] * (0.92 + rr * 0.08), snow[1] * (0.92 + rr * 0.08), snow[2]];
-        return [needle[0] * v * 1.2, needle[1] * v * 1.2, needle[2] * v * 1.2];
-      }
-      return [v, v, v];
-    });
-  });
-  return mergeGeos(parts);
-}
-
 // Grasbüschel: mehrere schmale Halme (beidseitig), Normalen nach oben → Beleuchtung wie der Boden
 function grassTuftGeometry(blades, dry) {
   const pos = [], col = [];
@@ -2095,24 +2049,6 @@ function grassTuftGeometry(blades, dry) {
   return g;
 }
 
-function bushGeometry(winter, detail) {
-  const snow = linC([0.92, 0.94, 0.98]), twig = linC([0.46, 0.39, 0.33]);
-  const lumps = [[0.75, 0, 0.45, 0], [0.55, 0.5, 0.35, 0.2], [0.5, -0.4, 0.3, -0.3]];
-  const parts = lumps.map(([rr, x, y, z], li) => {
-    const g = nonIndexed(new THREE.IcosahedronGeometry(rr, detail > 0 ? 1 : 0));
-    g.deleteAttribute('uv');
-    jitterGeo(g, 0.22, li * 13 + 5);
-    g.scale(1, 0.8, 1);
-    g.translate(x, y, z);
-    return colorFaces(g, (ny, yy, rn) => {
-      const v = (0.55 + 0.45 * clamp((ny + 1) * 0.5, 0, 1)) * (0.85 + rn * 0.3);
-      if (winter) return ny > 0.15 && rn > 0.15 ? snow : [twig[0] * v * 1.2, twig[1] * v * 1.2, twig[2] * v * 1.2];
-      return [v, v, v];
-    });
-  });
-  return mergeGeos(parts);
-}
-
 function stoneGeometry(winter) {
   const g = nonIndexed(new THREE.DodecahedronGeometry(1, 0));
   g.deleteAttribute('uv');
@@ -2123,4 +2059,517 @@ function stoneGeometry(winter) {
     const v = 0.8 + rn * 0.35;
     return [base[0] * v, base[1] * v, base[2] * v];
   });
+}
+
+// =====================================================================
+// V3-B2a: Reliefstile, Paletten, Vegetation (Baumarten, Büsche, Hecken, Felsen)
+// terrainStyle → Standard-Reliefhöhe (m), falls map.relief fehlt
+const STYLE_RELIEF = { plains: 5, hills: 12, mountains: 26, desert: 3, bocage: 4, steppe: 3 };
+const RELIEF_TYPES = new Set(['mountain', 'ridge', 'valley', 'plateau', 'crater_field', 'cliff']);
+// Palette → Basisjahreszeit für Modelle/Licht
+const BASE_SEASON = { summer: 'summer', autumn: 'autumn', winter: 'winter', spring: 'summer', desert: 'summer', afghan: 'summer', bocage: 'summer', mud: 'autumn' };
+const R_CRATER_CELL = 16;
+// Baumarten (objects.trees[].kind): 0/1 wie bisher (Laub/Nadel)
+export const SP = { oak: 0, pine: 1, birch: 2, poplar: 3, palm: 4, fruit: 5, stump: 6 };
+const FOREST_MIX = {
+  pine: [[SP.pine, 1]], mixed: [[SP.pine, 0.45], [SP.oak, 0.35], [SP.birch, 0.2]], deciduous: [[SP.oak, 0.75], [SP.birch, 0.25]],
+  oak: [[SP.oak, 1]], birch: [[SP.birch, 0.85], [SP.oak, 0.15]], poplar: [[SP.poplar, 1]], palm: [[SP.palm, 1]], oasis: [[SP.palm, 0.85], [SP.fruit, 0.15]],
+  fruit: [[SP.fruit, 1]], mulberry: [[SP.fruit, 1]], dead: [[SP.stump, 1]], stumps: [[SP.stump, 1]],
+};
+const MIX_DECIDUOUS = [[SP.oak, 0.75], [SP.birch, 0.25]];
+const MIX_LINE = [[SP.oak, 0.55], [SP.poplar, 0.3], [SP.birch, 0.15]];
+const MIX_DESERT_SCATTER = [[SP.fruit, 0.55], [SP.palm, 0.3], [SP.stump, 0.15]];
+const MIX_AFGHAN_SCATTER = [[SP.fruit, 0.5], [SP.poplar, 0.3], [SP.oak, 0.2]];
+const MIX_AFGHAN_FOREST = [[SP.fruit, 0.6], [SP.poplar, 0.25], [SP.oak, 0.15]];
+
+// --- Paletten: Bodentextur ---
+Object.assign(TEX_PAL, {
+  spring: { ...TEX_PAL.summer, grassA: [0.30, 0.45, 0.16], grassB: [0.42, 0.54, 0.21], dry: [0.50, 0.53, 0.28], moss: [0.22, 0.36, 0.13], crop: [0.34, 0.52, 0.18], wheat: [0.46, 0.58, 0.22], stubble: [0.42, 0.47, 0.24], sunLeaf: [0.32, 0.46, 0.15] },
+  bocage: { ...TEX_PAL.summer, grassA: [0.26, 0.40, 0.14], grassB: [0.36, 0.47, 0.19], dry: [0.50, 0.50, 0.27], moss: [0.20, 0.32, 0.12], dirt: [0.38, 0.30, 0.21], village: [0.44, 0.40, 0.32], dirtroad: [0.46, 0.38, 0.27], hedgeSoil: [0.24, 0.22, 0.14] },
+  mud: {
+    ...TEX_PAL.autumn, grassA: [0.33, 0.32, 0.19], grassB: [0.40, 0.37, 0.22], dry: [0.45, 0.38, 0.25], moss: [0.27, 0.28, 0.16], dirt: [0.30, 0.24, 0.17],
+    dirtroad: [0.31, 0.25, 0.18], rut: [0.20, 0.16, 0.12], mudSoil: [0.27, 0.21, 0.15], puddle: [0.17, 0.18, 0.17], village: [0.33, 0.28, 0.21], yard: [0.32, 0.27, 0.20],
+  },
+  desert: {
+    ...TEX_PAL.summer, grassA: [0.80, 0.68, 0.47], grassB: [0.74, 0.60, 0.41], dry: [0.86, 0.76, 0.56], moss: [0.62, 0.52, 0.38], dirt: [0.66, 0.52, 0.36],
+    forestFloor: [0.50, 0.42, 0.28], needle: [0.52, 0.40, 0.26], village: [0.74, 0.64, 0.48], pave: [0.70, 0.64, 0.54], yard: [0.72, 0.62, 0.46],
+    rock: [0.66, 0.53, 0.40], sand: [0.84, 0.74, 0.54], wetSand: [0.60, 0.50, 0.36], mud: [0.42, 0.36, 0.26], gravel: [0.66, 0.58, 0.46],
+    dirtroad: [0.70, 0.58, 0.42], rut: [0.58, 0.46, 0.33], asphalt: [0.30, 0.29, 0.28], gravel2: [0.52, 0.44, 0.36], bed: [0.88, 0.80, 0.64], lush: [0.34, 0.44, 0.18],
+    furrow: [0.50, 0.40, 0.28], ridge: [0.64, 0.52, 0.38], soilGreen: [0.50, 0.44, 0.30], scorch: [0.25, 0.21, 0.17], ejecta: [0.62, 0.52, 0.38], hedgeSoil: [0.50, 0.42, 0.30],
+  },
+  afghan: {
+    ...TEX_PAL.summer, grassA: [0.68, 0.57, 0.40], grassB: [0.62, 0.52, 0.37], dry: [0.76, 0.66, 0.48], moss: [0.50, 0.45, 0.36], dirt: [0.58, 0.47, 0.34],
+    village: [0.66, 0.56, 0.42], pave: [0.62, 0.57, 0.50], yard: [0.66, 0.56, 0.42], rock: [0.54, 0.49, 0.44], sand: [0.70, 0.62, 0.48], wetSand: [0.48, 0.42, 0.32],
+    dirtroad: [0.66, 0.55, 0.40], rut: [0.52, 0.43, 0.31], gravel: [0.60, 0.55, 0.48], gravel2: [0.50, 0.46, 0.41], lush: [0.28, 0.42, 0.15], bed: [0.70, 0.66, 0.58],
+    crop: [0.30, 0.50, 0.16], wheat: [0.74, 0.64, 0.36], furrow: [0.44, 0.36, 0.26], ridge: [0.58, 0.48, 0.35], scorch: [0.22, 0.19, 0.16], ejecta: [0.58, 0.50, 0.38],
+    forestFloor: [0.40, 0.38, 0.24], hedgeSoil: [0.45, 0.38, 0.27],
+  },
+});
+Object.assign(TEX_PAL.winter, { hedgeSoil: [0.60, 0.60, 0.62], bed: [0.72, 0.74, 0.78], lush: [0.76, 0.79, 0.84], mudSoil: [0.42, 0.40, 0.38], puddle: [0.55, 0.58, 0.62] });
+{
+  const EXTRA = { gravel2: [0.50, 0.46, 0.40], mudSoil: [0.30, 0.24, 0.18], puddle: [0.20, 0.21, 0.20], lush: [0.26, 0.40, 0.14], bed: [0.62, 0.58, 0.50], hedgeSoil: [0.26, 0.24, 0.15] };
+  for (const k in TEX_PAL) for (const e in EXTRA) if (!TEX_PAL[k][e]) TEX_PAL[k][e] = EXTRA[e];
+}
+// Minikarte
+Object.assign(PALETTES, {
+  spring: { ...PALETTES.summer, grass: [0.34, 0.50, 0.20] },
+  bocage: { ...PALETTES.summer, grass: [0.30, 0.44, 0.18] },
+  mud: { ...PALETTES.autumn, grass: [0.36, 0.34, 0.20], dry: [0.42, 0.36, 0.24], dirtroad: [0.30, 0.24, 0.18] },
+  desert: { grass: [0.80, 0.68, 0.47], dry: [0.86, 0.76, 0.56], dirt: [0.66, 0.52, 0.36], rock: [0.66, 0.53, 0.40], sand: [0.84, 0.74, 0.54], road: [0.32, 0.30, 0.28], dirtroad: [0.70, 0.58, 0.42] },
+  afghan: { grass: [0.68, 0.57, 0.40], dry: [0.76, 0.66, 0.48], dirt: [0.58, 0.47, 0.34], rock: [0.54, 0.49, 0.44], sand: [0.70, 0.62, 0.48], road: [0.32, 0.30, 0.29], dirtroad: [0.66, 0.55, 0.40] },
+});
+// --- Paletten: Bewuchs (sRGB) ---
+const GRASS_FRESH = { summer: [0.40, 0.52, 0.20], autumn: [0.50, 0.46, 0.24], winter: [0.60, 0.52, 0.36], spring: [0.42, 0.58, 0.20], bocage: [0.36, 0.52, 0.18], mud: [0.44, 0.42, 0.22], desert: [0.70, 0.62, 0.40], afghan: [0.62, 0.56, 0.34] };
+const G_SUM = [[0.33, 0.45, 0.17], [0.28, 0.40, 0.15], [0.38, 0.47, 0.20], [0.30, 0.42, 0.14]];
+const BUSH_TINT = {
+  summer: G_SUM, bocage: [[0.26, 0.40, 0.14], [0.30, 0.43, 0.16], [0.23, 0.36, 0.12]], spring: [[0.38, 0.54, 0.19], [0.34, 0.50, 0.17], [0.86, 0.86, 0.82], [0.42, 0.56, 0.21]],
+  autumn: [[0.60, 0.42, 0.18], [0.48, 0.40, 0.18], [0.36, 0.38, 0.17], [0.62, 0.30, 0.14]], mud: [[0.44, 0.36, 0.17], [0.38, 0.34, 0.16], [0.50, 0.32, 0.14]],
+  winter: [[0.92, 0.92, 0.95], [0.85, 0.82, 0.80]], desert: [[0.80, 0.78, 0.56], [0.86, 0.80, 0.60], [0.74, 0.74, 0.52]], afghan: [[0.56, 0.62, 0.34], [0.68, 0.66, 0.44], [0.50, 0.58, 0.30]],
+};
+const HEDGE_TINT = {
+  summer: [[0.24, 0.38, 0.13], [0.28, 0.42, 0.15], [0.21, 0.34, 0.12]], bocage: [[0.20, 0.34, 0.11], [0.24, 0.38, 0.13], [0.18, 0.31, 0.10], [0.27, 0.40, 0.15]],
+  spring: [[0.34, 0.50, 0.17], [0.30, 0.46, 0.15], [0.84, 0.84, 0.78]], autumn: [[0.52, 0.40, 0.16], [0.44, 0.38, 0.16], [0.56, 0.32, 0.13]], mud: [[0.40, 0.34, 0.16], [0.34, 0.31, 0.15]],
+  winter: [[0.80, 0.76, 0.72], [0.70, 0.66, 0.62]], desert: [[0.48, 0.48, 0.30]], afghan: [[0.36, 0.44, 0.20], [0.32, 0.40, 0.18]],
+};
+const ROCK_TINT = { summer: [1, 1, 1], spring: [1, 1, 1], bocage: [0.98, 1, 0.98], autumn: [0.98, 0.97, 0.95], mud: [0.92, 0.9, 0.86], winter: [1, 1, 1.02], desert: [1.6, 1.3, 1.0], afghan: [1.3, 1.18, 1.04] };
+const OAK_S = [[0.26, 0.40, 0.14], [0.32, 0.46, 0.17], [0.22, 0.35, 0.12], [0.36, 0.44, 0.18], [0.28, 0.42, 0.20]];
+const PINE_S = [[0.13, 0.26, 0.15], [0.16, 0.30, 0.17], [0.11, 0.22, 0.13], [0.17, 0.28, 0.14]];
+const STUMP_S = [[0.82, 0.8, 0.78], [1, 0.98, 0.95], [0.66, 0.65, 0.64]];
+const PALM_S = [[0.36, 0.46, 0.20], [0.40, 0.48, 0.22], [0.32, 0.42, 0.18]];
+const BARE_W = [[0.92, 0.9, 0.88], [1, 1, 1], [0.82, 0.8, 0.78]];
+// Instanzfarben je Palette und Art (Index = SP)
+const TREE_TINT = {
+  summer: [OAK_S, PINE_S, [[0.40, 0.52, 0.18], [0.45, 0.56, 0.20], [0.36, 0.48, 0.16]], [[0.28, 0.44, 0.17], [0.32, 0.47, 0.19], [0.25, 0.40, 0.15]], PALM_S, [[0.30, 0.46, 0.16], [0.34, 0.50, 0.18], [0.27, 0.42, 0.15]], STUMP_S],
+  autumn: [[[0.72, 0.48, 0.14], [0.78, 0.60, 0.18], [0.62, 0.30, 0.12], [0.50, 0.46, 0.16], [0.36, 0.42, 0.16]], PINE_S, [[0.85, 0.70, 0.20], [0.78, 0.62, 0.18], [0.70, 0.58, 0.20]],
+    [[0.80, 0.68, 0.22], [0.72, 0.60, 0.20], [0.60, 0.55, 0.20]], PALM_S, [[0.72, 0.50, 0.16], [0.62, 0.44, 0.16], [0.50, 0.46, 0.18]], STUMP_S],
+  winter: [BARE_W, [[0.12, 0.22, 0.13], [0.14, 0.25, 0.15], [0.10, 0.20, 0.12]], BARE_W, BARE_W, PALM_S, BARE_W, STUMP_S],
+  spring: [[[0.36, 0.52, 0.18], [0.42, 0.58, 0.22], [0.32, 0.48, 0.16]], PINE_S, [[0.50, 0.62, 0.22], [0.55, 0.66, 0.26]], [[0.40, 0.55, 0.20], [0.44, 0.58, 0.22]], PALM_S,
+    [[0.97, 0.94, 0.95], [0.98, 0.86, 0.90], [0.95, 0.92, 0.88], [0.92, 0.80, 0.86], [0.42, 0.56, 0.20]], STUMP_S],
+  bocage: [[[0.22, 0.36, 0.12], [0.27, 0.41, 0.15], [0.20, 0.33, 0.11], [0.30, 0.42, 0.16]], PINE_S, [[0.38, 0.50, 0.17], [0.42, 0.54, 0.19]], [[0.26, 0.42, 0.16], [0.30, 0.45, 0.18]], PALM_S,
+    [[0.28, 0.42, 0.15], [0.32, 0.46, 0.17], [0.26, 0.40, 0.14]], STUMP_S],
+  mud: [[[0.46, 0.38, 0.16], [0.40, 0.34, 0.14], [0.52, 0.36, 0.14], [0.34, 0.32, 0.15]], PINE_S, [[0.66, 0.56, 0.20], [0.55, 0.48, 0.18]], [[0.58, 0.50, 0.20], [0.50, 0.44, 0.18]], PALM_S,
+    [[0.50, 0.40, 0.16], [0.44, 0.38, 0.16]], STUMP_S],
+  desert: [[[0.38, 0.42, 0.22], [0.42, 0.44, 0.24]], [[0.20, 0.28, 0.16]], [[0.40, 0.46, 0.22]], [[0.40, 0.46, 0.22], [0.44, 0.48, 0.24]], [[0.42, 0.48, 0.24], [0.46, 0.50, 0.26], [0.38, 0.44, 0.22]],
+    [[0.44, 0.46, 0.24], [0.48, 0.48, 0.27], [0.40, 0.43, 0.22]], STUMP_S],
+  afghan: [[[0.32, 0.42, 0.17], [0.36, 0.45, 0.19]], [[0.18, 0.28, 0.16], [0.20, 0.30, 0.17]], [[0.40, 0.50, 0.20]], [[0.36, 0.48, 0.20], [0.42, 0.52, 0.22], [0.33, 0.45, 0.18]], PALM_S,
+    [[0.28, 0.44, 0.15], [0.32, 0.48, 0.17], [0.36, 0.48, 0.19]], STUMP_S],
+};
+
+// --- Hilfsfunktionen Relief ---
+// Ridged-Multifractal (0..1): scharfe Grate, gewichtete Oktaven
+function ridgedNoise(N, x, z, oct) {
+  let s = 0, amp = 0.5, f = 1, w = 1, norm = 0;
+  for (let i = 0; i < oct; i++) {
+    let n = 1 - Math.abs(N.get(x * f + i * 17.3, z * f - i * 9.1));
+    n *= n; n *= w;
+    w = n * 1.8; if (w > 1) w = 1;
+    s += n * amp; norm += amp; amp *= 0.5; f *= 2.03;
+  }
+  return s / norm;
+}
+// Separabler Kastenfilter (Laufsummen) über ein n×n-Feld
+function boxBlur(A, n, r) {
+  const T = new Float32Array(n * n), O = new Float32Array(n * n), inv = 1 / (2 * r + 1), c = (i) => (i < 0 ? 0 : i > n - 1 ? n - 1 : i);
+  for (let j = 0; j < n; j++) {
+    const row = j * n;
+    let s = 0;
+    for (let i = -r; i <= r; i++) s += A[row + c(i)];
+    for (let i = 0; i < n; i++) { T[row + i] = s * inv; s += A[row + c(i + r + 1)] - A[row + c(i - r)]; }
+  }
+  for (let i = 0; i < n; i++) {
+    let s = 0;
+    for (let j = -r; j <= r; j++) s += T[c(j) * n + i];
+    for (let j = 0; j < n; j++) { O[j * n + i] = s * inv; s += T[c(j + r + 1) * n + i] - T[c(j - r) * n + i]; }
+  }
+  return O;
+}
+function polyEdgeDist(x, z, poly) {
+  let e = Infinity;
+  for (let a = 0; a < poly.length; a++) { const p = poly[a], q = poly[(a + 1) % poly.length]; e = Math.min(e, distToSegment(x, z, p[0], p[1], q[0], q[1])); }
+  return e;
+}
+
+// --- Vegetations-Baukasten: nicht-indizierte Geometrie mit position/normal/color/aTint ---
+class VegB {
+  constructor() { this.P = []; this.N = []; this.C = []; this.T = []; }
+  // Dreieck; Umlaufsinn wird an der mittleren Normale ausgerichtet
+  tri(a, b, c, na, nb, nc, ca, cb, cc, ta, tb, tc) {
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+    const fx = uy * vz - uz * vy, fy = uz * vx - ux * vz, fz = ux * vy - uy * vx;
+    if (fx * (na[0] + nb[0] + nc[0]) + fy * (na[1] + nb[1] + nc[1]) + fz * (na[2] + nb[2] + nc[2]) < 0) { [b, c] = [c, b]; [nb, nc] = [nc, nb]; [cb, cc] = [cc, cb]; [tb, tc] = [tc, tb]; }
+    for (const [p, n, col, t] of [[a, na, ca, ta], [b, nb, cb, tb], [c, nc, cc, tc]]) { this.P.push(p[0], p[1], p[2]); this.N.push(n[0], n[1], n[2]); this.C.push(col[0], col[1], col[2]); this.T.push(t); }
+  }
+  // beidseitiges Dreieck (Wedel, Blätter)
+  tri2(a, b, c, col, t, colB) {
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+    let fx = uy * vz - uz * vy, fy = uz * vx - ux * vz, fz = ux * vy - uy * vx;
+    const l = Math.hypot(fx, fy, fz) || 1; fx /= l; fy /= l; fz /= l;
+    if (fy < 0) { fx = -fx; fy = -fy; fz = -fz; }
+    const n = [fx * 0.6, fy * 0.6 + 0.4, fz * 0.6], m = [-fx * 0.6, -fy * 0.6 + 0.2, -fz * 0.6];
+    this.tri(a, b, c, n, n, n, col, col, col, t, t, t);
+    const cb = colB || col;
+    this.tri(a, c, b, m, m, m, cb, cb, cb, t, t, t);
+  }
+  // Kegelstumpf/Ast zwischen a und b, ringe Unterteilungen entlang; colFn(y, winkel, ny) → Farbe
+  tube(a, b, r0, r1, seg, colFn, tint = 0, rings = 1) {
+    const ax = b[0] - a[0], ay = b[1] - a[1], az = b[2] - a[2], L = Math.hypot(ax, ay, az) || 1;
+    const dx = ax / L, dy = ay / L, dz = az / L;
+    let ux, uy, uz;
+    if (Math.abs(dy) < 0.95) { ux = -dz; uy = 0; uz = dx; } else { ux = 0; uy = dz; uz = -dy; }
+    const ul = Math.hypot(ux, uy, uz); ux /= ul; uy /= ul; uz /= ul;
+    const vx = dy * uz - dz * uy, vy = dz * ux - dx * uz, vz = dx * uy - dy * ux;
+    const sl = (r0 - r1) / L;
+    const ring = [];
+    for (let k = 0; k <= rings; k++) {
+      const t = k / rings, r = r0 + (r1 - r0) * t, cx = a[0] + ax * t, cy = a[1] + ay * t, cz = a[2] + az * t;
+      const R = [];
+      for (let i = 0; i <= seg; i++) {
+        const an = (i / seg) * Math.PI * 2, co = Math.cos(an), si = Math.sin(an);
+        const nx = ux * co + vx * si, ny = uy * co + vy * si, nz = uz * co + vz * si;
+        const nn = [nx + dx * sl, ny + dy * sl, nz + dz * sl], nl = Math.hypot(nn[0], nn[1], nn[2]);
+        nn[0] /= nl; nn[1] /= nl; nn[2] /= nl;
+        const p = [cx + nx * r, cy + ny * r, cz + nz * r];
+        R.push({ p, n: nn, c: colFn(p[1], an, nn[1], t) });
+      }
+      ring.push(R);
+    }
+    for (let k = 0; k < rings; k++) for (let i = 0; i < seg; i++) {
+      const A = ring[k][i], B = ring[k][i + 1], C = ring[k + 1][i], D = ring[k + 1][i + 1];
+      this.tri(A.p, C.p, D.p, A.n, C.n, D.n, A.c, C.c, D.c, tint, tint, tint);
+      this.tri(A.p, D.p, B.p, A.n, D.n, B.n, A.c, D.c, B.c, tint, tint, tint);
+    }
+  }
+  // Laubbüschel: verformte Ikosaeder-Kugel, weiche Normalen (Mischung Fläche/radial), colFn(nyRadial, y, zufall) → Farbe
+  blob(c, rx, ry, rz, detail, jit, seed, colFn, tint = 1, tintFn = null, fluff = 0) {
+    const g = new THREE.IcosahedronGeometry(1, detail), p = g.attributes.position;
+    const V = [], RN = [];
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const k = 1 + (hash3(Math.round(x * 100) + seed, Math.round(y * 100), Math.round(z * 100)) - 0.5) * 2 * jit;
+      V.push([c[0] + x * k * rx, c[1] + y * k * ry, c[2] + z * k * rz]);
+      const nx = x / rx, ny = y / ry, nz = z / rz, nl = Math.hypot(nx, ny, nz);
+      RN.push([nx / nl, ny / nl, nz / nl]);
+    }
+    for (let f = 0; f < p.count; f += 3) {
+      const a = V[f], b = V[f + 1], d = V[f + 2];
+      const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = d[0] - a[0], vy = d[1] - a[1], vz = d[2] - a[2];
+      let fx = uy * vz - uz * vy, fy = uz * vx - ux * vz, fz = ux * vy - uy * vx;
+      const fl = Math.hypot(fx, fy, fz) || 1; fx /= fl; fy /= fl; fz /= fl;
+      const rn = [(RN[f][0] + RN[f + 1][0] + RN[f + 2][0]) / 3, (RN[f][1] + RN[f + 1][1] + RN[f + 2][1]) / 3, (RN[f][2] + RN[f + 1][2] + RN[f + 2][2]) / 3];
+      if (fx * rn[0] + fy * rn[1] + fz * rn[2] < 0) { fx = -fx; fy = -fy; fz = -fz; }
+      const rr = hash3(f * 0.37 + seed, a[1] * 3.3, a[0] * 5.7);
+      const yy = (a[1] + b[1] + d[1]) / 3;
+      const col = colFn(rn[1], yy, rr);
+      const tt = tintFn ? tintFn(rn[1], yy, rr) : tint;
+      const nrm = (i) => { const x = fx * 0.25 + RN[i][0] * 0.75, y = fy * 0.25 + RN[i][1] * 0.75, z = fz * 0.25 + RN[i][2] * 0.75, l = Math.hypot(x, y, z); return [x / l, y / l, z / l]; };
+      this.tri(a, b, d, nrm(f), nrm(f + 1), nrm(f + 2), col, col, col, tt, tt, tt);
+      // Blattbüschel: kleine abstehende Dreiecke brechen die glatte Silhouette auf
+      if (fluff && hash3(f, seed, 11) < fluff) {
+        const cx = (a[0] + b[0] + d[0]) / 3, cy = yy, cz = (a[2] + b[2] + d[2]) / 3, sz = 0.28 + rr * 0.22, o = 0.05 + rr * 0.15;
+        const q1 = hash3(f, 2, seed) * 6.283, q2 = hash3(f, 5, seed) * 6.283;
+        const px = cx + rn[0] * o, py = cy + rn[1] * o, pz = cz + rn[2] * o;
+        const p1 = [px + Math.cos(q1) * sz + rn[0] * sz * 0.6, py + Math.sin(q2) * sz * 0.5 + rn[1] * sz * 0.6, pz + Math.sin(q1) * sz + rn[2] * sz * 0.6];
+        const p2 = [px + Math.cos(q1 + 2.2) * sz * 0.8, py - sz * 0.3, pz + Math.sin(q1 + 2.2) * sz * 0.8];
+        const p3 = [px + Math.cos(q1 - 2.2) * sz * 0.8, py + sz * 0.2, pz + Math.sin(q1 - 2.2) * sz * 0.8];
+        const cl = scale3(col, 0.9 + rr * 0.25), nn = [rn[0], rn[1], rn[2]];
+        this.tri(p1, p2, p3, nn, nn, nn, cl, cl, cl, tt, tt, tt);
+        const mm = [-rn[0] * 0.3, -rn[1] * 0.3 + 0.2, -rn[2] * 0.3];
+        this.tri(p1, p3, p2, mm, mm, mm, scale3(cl, 0.7), scale3(cl, 0.7), scale3(cl, 0.7), tt, tt, tt);
+      }
+    }
+    g.dispose();
+  }
+  // Nadel-Etage: unregelmäßiger, am Rand hängender Kegel mit hohler Unterseite
+  cone(base, r, h, seg, droop, seed, colFn, tint = 1, tintFn = null) {
+    const apex = [base[0], base[1] + h, base[2]];
+    const rim = [];
+    for (let i = 0; i <= seg; i++) {
+      const an = (i % seg) / seg * Math.PI * 2 + seed * 0.7;
+      const k = 0.8 + hash3(i % seg, seed, 3) * 0.4;
+      rim.push([base[0] + Math.cos(an) * r * k, base[1] - droop * k, base[2] + Math.sin(an) * r * k, an]);
+    }
+    const inner = [base[0], base[1] + h * 0.22, base[2]];
+    for (let i = 0; i < seg; i++) {
+      const A = rim[i], B = rim[i + 1];
+      const na = [Math.cos(A[3]) * h, r * 0.9, Math.sin(A[3]) * h], nb = [Math.cos(B[3]) * h, r * 0.9, Math.sin(B[3]) * h];
+      const l1 = Math.hypot(...na), l2 = Math.hypot(...nb);
+      const NA = na.map((v) => v / l1), NB = nb.map((v) => v / l2), NT = [0, 1, 0];
+      const rr = hash3(i, seed, 7);
+      const ca = colFn(NA[1], A[1], rr), ct = colFn(0.9, apex[1], rr);
+      const ta = tintFn ? tintFn(NA[1], A[1], rr) : tint;
+      this.tri([A[0], A[1], A[2]], [B[0], B[1], B[2]], apex, NA, NB, NT, ca, ca, ct, ta, ta, ta);
+      const cu = colFn(-0.9, A[1], rr), D = [0, -1, 0];
+      this.tri([A[0], A[1], A[2]], inner, [B[0], B[1], B[2]], D, D, D, cu, cu, cu, tint, tint, tint);
+    }
+  }
+  // Palmwedel: gebogene, V-förmig gefaltete Fiederblattfläche (beidseitig)
+  frond(base, ang, elev, len, width, bend, segs, col, colEdge, tint = 1) {
+    const hx = Math.cos(ang), hz = Math.sin(ang), sx = -hz, sz = hx;
+    let p = base.slice(), th = elev;
+    const pts = [p.slice()];
+    for (let i = 1; i <= segs; i++) {
+      th -= bend / segs * (0.6 + 0.8 * i / segs);
+      const st = len / segs;
+      p = [p[0] + hx * Math.cos(th) * st, p[1] + Math.sin(th) * st, p[2] + hz * Math.cos(th) * st];
+      pts.push(p.slice());
+    }
+    const L = [], Rr = [];
+    for (let i = 0; i <= segs; i++) {
+      const t = i / segs, w = width * Math.sin(Math.PI * Math.min(1, 0.12 + t * 0.95)) * (1 - 0.35 * t);
+      const q = pts[i], drop = w * 0.4;
+      L.push([q[0] + sx * w, q[1] - drop, q[2] + sz * w]); Rr.push([q[0] - sx * w, q[1] - drop, q[2] - sz * w]);
+    }
+    for (let i = 0; i < segs; i++) {
+      this.tri2(L[i], pts[i], L[i + 1], colEdge, tint, col); this.tri2(pts[i], pts[i + 1], L[i + 1], col, tint);
+      this.tri2(Rr[i], Rr[i + 1], pts[i], colEdge, tint, col); this.tri2(pts[i], Rr[i + 1], pts[i + 1], col, tint);
+    }
+  }
+  build() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.P, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.N, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(this.C, 3));
+    g.setAttribute('aTint', new THREE.Float32BufferAttribute(this.T, 1));
+    g.computeBoundingSphere();
+    return g;
+  }
+}
+
+const C_BARK = linC([0.24, 0.18, 0.13]), C_PBARK = linC([0.27, 0.20, 0.15]), C_PBARK2 = linC([0.56, 0.33, 0.18]);
+const C_BIRCH = linC([0.86, 0.85, 0.80]), C_BIRCHD = linC([0.12, 0.11, 0.10]), C_PALM = linC([0.44, 0.36, 0.25]), C_PALMD = linC([0.27, 0.21, 0.15]);
+const C_CHAR = linC([0.11, 0.10, 0.09]), C_WOOD = linC([0.62, 0.52, 0.38]), C_SNOW = linC([0.90, 0.93, 0.97]), C_TWIG = linC([0.42, 0.36, 0.31]);
+const C_DEADFROND = linC([0.50, 0.40, 0.26]), C_DATE = linC([0.55, 0.30, 0.10]);
+const scale3 = (c, v) => [c[0] * v, c[1] * v, c[2] * v];
+const barkFn = (base) => (y, an) => scale3(base, 0.8 + 0.3 * hash3(Math.round(y * 6), Math.round(an * 2), 5));
+// Laubschattierung (grau, wird per Instanz eingefärbt): oben/außen hell, innen/unten dunkel
+const leafFn = (y0, y1, bright = 1) => (ny, y, rr) => { const v = bright * (0.46 + 0.42 * clamp((ny + 1) * 0.5, 0, 1)) * (0.7 + 0.3 * clamp((y - y0) / (y1 - y0), 0, 1)) * (0.8 + rr * 0.34); return [v, v, v]; };
+// Winter: kahle Zweigmasse mit Schnee auf der Oberseite
+const twigFn = (ny, y, rr) => (ny > 0.45 && rr > 0.35 ? C_SNOW : scale3(C_TWIG, 0.75 + rr * 0.4));
+const twigTint = (ny, y, rr) => (ny > 0.45 && rr > 0.35 ? 0 : 0.35);
+const snowyBark = (base) => (y, an, ny) => (ny > 0.55 ? C_SNOW : scale3(base, 0.8 + 0.3 * hash3(Math.round(y * 6), Math.round(an * 2), 5)));
+
+// Verzweigung: Äste vom Stamm (y0) radial nach außen/oben, je Ast optional Seitenzweige; liefert Astenden
+function limbs(b, rnd, { n, y0, out, up, r0, r1, seg, col, sub = 0, a0 = 0 }) {
+  const ends = [];
+  for (let i = 0; i < n; i++) {
+    const an = a0 + (i / n) * Math.PI * 2 + (rnd() - 0.5) * 0.7, o = out * (0.8 + rnd() * 0.4), u = up * (0.8 + rnd() * 0.4);
+    const s = [Math.cos(an) * 0.1, y0 + (rnd() - 0.3) * 0.4, Math.sin(an) * 0.1], e = [Math.cos(an) * o, y0 + u, Math.sin(an) * o];
+    b.tube(s, e, r0, r1, seg, col, 0);
+    ends.push(e);
+    for (let k = 0; k < sub; k++) {
+      const t = 0.45 + rnd() * 0.4, m = [s[0] + (e[0] - s[0]) * t, s[1] + (e[1] - s[1]) * t, s[2] + (e[2] - s[2]) * t];
+      const a2 = an + (rnd() - 0.5) * 1.8, l = o * (0.4 + rnd() * 0.3);
+      const e2 = [m[0] + Math.cos(a2) * l, m[1] + u * (0.25 + rnd() * 0.35), m[2] + Math.sin(a2) * l];
+      b.tube(m, e2, r1 * 0.9, r1 * 0.35, Math.max(3, seg - 1), col, 0);
+      ends.push(e2);
+    }
+  }
+  return ends;
+}
+
+// Kahle Krone (Winter): rekursive Verzweigung aus dünnen Ästen, Schnee auf der Oberseite
+function bareCrown(b, rnd, p, d, len, r, cfg, depth = 0) {
+  const e = [p[0] + d[0] * len, p[1] + d[1] * len, p[2] + d[2] * len];
+  if (depth > 0) b.tube(p, e, r, r * 0.55, depth >= 2 ? 3 : 4, snowyBark(depth >= 2 ? C_TWIG : C_BARK), 0);
+  if (depth >= cfg.depth) return;
+  const n = depth === 0 ? cfg.n0 : cfg.n1;
+  let ux, uy, uz;
+  if (Math.abs(d[1]) < 0.95) { ux = -d[2]; uy = 0; uz = d[0]; } else { ux = 0; uy = d[2]; uz = -d[1]; }
+  const ul = Math.hypot(ux, uy, uz); ux /= ul; uy /= ul; uz /= ul;
+  const vx = d[1] * uz - d[2] * uy, vy = d[2] * ux - d[0] * uz, vz = d[0] * uy - d[1] * ux;
+  for (let i = 0; i < n; i++) {
+    const t = depth === 0 ? cfg.t0 + (1 - cfg.t0) * (n > 1 ? i / (n - 1) : 1) * 0.95 : 0.45 + rnd() * 0.55;
+    const s = [p[0] + d[0] * len * t, p[1] + d[1] * len * t, p[2] + d[2] * len * t];
+    const az = (i / n) * Math.PI * 2 + rnd() * 1.2 + depth, a = (depth === 0 ? cfg.spread0 : cfg.spread) * (0.75 + rnd() * 0.5);
+    const ca = Math.cos(a), sa = Math.sin(a), cz = Math.cos(az), sz = Math.sin(az);
+    let nx = d[0] * ca + (ux * cz + vx * sz) * sa, ny = d[1] * ca + (uy * cz + vy * sz) * sa + cfg.up, nz = d[2] * ca + (uz * cz + vz * sz) * sa;
+    const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
+    const L = (depth === 0 ? cfg.len0 : len * cfg.lenK) * (0.8 + rnd() * 0.4);
+    bareCrown(b, rnd, s, [nx, ny, nz], L, (depth === 0 ? cfg.r0 : r * 0.55) * (0.85 + rnd() * 0.3), cfg, depth + 1);
+  }
+}
+
+// Eiche/Laubbaum: kräftiger Stamm, 3–4 Hauptäste, unregelmäßige Krone aus mehreren Büscheln (~7,5 m)
+function oakGeometry(winter, hi) {
+  const b = new VegB(), rnd = mulberry32(hi ? 101 : 102), seg = hi ? 7 : 5;
+  const bark = winter ? snowyBark(C_BARK) : barkFn(C_BARK);
+  b.tube([0, -0.3, 0], [0.06, 1.5, 0.02], 0.38, 0.30, seg, bark, 0, hi ? 2 : 1);
+  b.tube([0.06, 1.5, 0.02], [0, 2.6, 0.08], 0.30, 0.24, seg, bark, 0);
+  if (winter) {
+    bareCrown(b, rnd, [0, 0, 0], [0, 1, 0], 2.5, 0.3, { depth: hi ? 3 : 2, n0: hi ? 5 : 4, n1: hi ? 3 : 2, t0: 0.85, spread0: 0.85, spread: 0.6, up: 0.25, len0: 2.4, lenK: 0.7, r0: 0.17 });
+    return b.build();
+  }
+  const ends = limbs(b, rnd, { n: hi ? 4 : 3, y0: 2.4, out: 1.6, up: 2.0, r0: 0.2, r1: 0.09, seg: hi ? 5 : 4, col: bark, sub: hi ? 1 : 0 });
+  const lf = leafFn(3, 7.6), det = hi ? 1 : 0, fl = hi ? 0.45 : 0;
+  b.blob([0, 5.5, 0], 1.9, 1.4, 1.9, det, 0.22, 11, lf, 1, null, fl);
+  ends.slice(0, hi ? 6 : 3).forEach((e, i) => b.blob([e[0] * 1.1, e[1] + 0.45, e[2] * 1.1], 1.35 + rnd() * 0.35, 1.05 + rnd() * 0.3, 1.35 + rnd() * 0.35, det, 0.24, 20 + i * 7, lf, 1, null, fl));
+  if (hi) { b.blob([0.9, 4.2, -0.6], 1.2, 0.9, 1.2, det, 0.25, 61, lf, 1, null, fl); b.blob([-0.8, 6.4, 0.5], 1.15, 0.95, 1.15, det, 0.25, 67, lf, 1, null, fl); }
+  return b.build();
+}
+// Kiefer: gerader Stamm (unten graubraun, oben orange), Kronenetagen aus hängenden Kegeln (~9 m)
+function pineGeometry2(winter, hi) {
+  const b = new VegB(), seg = hi ? 7 : 4;
+  const bf = (y, an, ny) => (winter && ny > 0.55 ? C_SNOW : scale3(y < 3 ? C_PBARK : [C_PBARK[0] + (C_PBARK2[0] - C_PBARK[0]) * clamp((y - 3) / 3, 0, 1), C_PBARK[1] + (C_PBARK2[1] - C_PBARK[1]) * clamp((y - 3) / 3, 0, 1), C_PBARK[2] + (C_PBARK2[2] - C_PBARK[2]) * clamp((y - 3) / 3, 0, 1)], 0.85 + 0.25 * hash3(Math.round(y * 5), Math.round(an * 2), 9)));
+  b.tube([0, -0.3, 0], [0, 3.0, 0], 0.30, 0.23, seg, bf, 0, hi ? 3 : 1);
+  b.tube([0, 3.0, 0], [0.06, 8.8, 0.03], 0.23, 0.05, seg, bf, 0, hi ? 4 : 1);
+  const tiers = hi ? 6 : 3, cs = hi ? 10 : 7;
+  const col = (ny, y, rr) => {
+    if (winter && ny > 0.25 && rr > 0.25) return [C_SNOW[0] * (0.92 + rr * 0.08), C_SNOW[1] * (0.92 + rr * 0.08), C_SNOW[2]];
+    const v = (ny < -0.3 ? 0.36 : 0.6 + 0.4 * clamp((y - 3) / 6, 0, 1)) * (0.85 + rr * 0.25);
+    return [v, v, v];
+  };
+  const tintFn = winter ? (ny, y, rr) => (ny > 0.25 && rr > 0.25 ? 0 : 1) : null;
+  for (let i = 0; i < tiers; i++) {
+    const t = i / (tiers - 1), y = 3.1 + t * 5.3, r = 2.0 - t * 1.45, h = 1.75 - t * 0.55;
+    b.cone([(hash3(i, 2, 1) - 0.5) * 0.3, y, (hash3(i, 3, 1) - 0.5) * 0.3], r, h, cs, 0.35 + 0.15 * (1 - t), i + 1, col, 1, tintFn);
+  }
+  b.cone([0, 8.3, 0], 0.38, 1.3, hi ? 6 : 5, 0.05, 9, col, 1, tintFn);
+  return b.build();
+}
+// Birke: schlanker, leicht gebogener weißer Stamm mit dunklen Flecken, lockere hängende Krone (~8,5 m)
+function birchGeometry(winter, hi) {
+  const b = new VegB(), rnd = mulberry32(hi ? 201 : 202), seg = hi ? 6 : 4;
+  const bf = (y, an, ny) => {
+    if (winter && ny > 0.6) return C_SNOW;
+    if (y < 0.6) return scale3(C_BIRCHD, 1.6);
+    const d = hash3(Math.floor(y * 2.8), Math.floor(an * 1.3), 17) > 0.74 || hash3(Math.floor(y * 9), 3, Math.floor(an)) > 0.9;
+    return d ? C_BIRCHD : scale3(C_BIRCH, 0.9 + 0.12 * hash3(Math.round(y * 7), 1, 1));
+  };
+  const P = [[0, -0.3, 0], [0.12, 2.6, 0.05], [0.28, 5.2, 0.12], [0.32, 8.2, 0.16]], Rr = [0.18, 0.13, 0.09, 0.04];
+  for (let i = 0; i < 3; i++) b.tube(P[i], P[i + 1], Rr[i], Rr[i + 1], seg, bf, 0, hi ? 7 : 2);
+  if (winter) {
+    const d = [0.28 / 8.5, 1, 0.16 / 8.5], dl = Math.hypot(...d);
+    bareCrown(b, rnd, [0, 0, 0], d.map((v) => v / dl), 8.2, 0.12, { depth: 2, n0: hi ? 7 : 4, n1: hi ? 3 : 2, t0: 0.42, spread0: 1.0, spread: 0.7, up: -0.15, len0: 2.2, lenK: 0.6, r0: 0.05 });
+    return b.build();
+  }
+  limbs(b, rnd, { n: hi ? 5 : 3, y0: 4.2, out: 1.1, up: 2.4, r0: 0.06, r1: 0.025, seg: 3, col: barkFn(C_TWIG), sub: 0 });
+  const lf = leafFn(3.5, 8.6, 1.08), det = hi ? 1 : 0, fl = hi ? 0.5 : 0;
+  const cl = hi ? [[0.3, 7.6, 0.1, 0.9], [0.9, 6.3, 0.5, 1.0], [-0.6, 6.0, -0.4, 1.0], [0.4, 5.0, -0.8, 0.95], [-0.3, 4.6, 0.8, 0.9], [0.9, 4.4, 0.2, 0.8]] : [[0.3, 7.0, 0.1, 1.1], [0.2, 5.0, 0, 1.25]];
+  cl.forEach(([x, y, z, r], i) => b.blob([x, y, z], r, r * 1.35, r, det, 0.3, 30 + i * 5, lf, 1, null, fl));
+  return b.build();
+}
+// Pappel: säulenförmige, hohe Krone (~12 m)
+function poplarGeometry(winter, hi) {
+  const b = new VegB(), rnd = mulberry32(hi ? 301 : 302), seg = hi ? 6 : 4;
+  const bark = winter ? snowyBark(C_BARK) : barkFn(C_BARK);
+  b.tube([0, -0.3, 0], [0, 3.0, 0], 0.32, 0.22, seg, bark, 0);
+  b.tube([0, 3.0, 0], [0.05, 10.5, 0], 0.22, 0.05, seg, bark, 0, hi ? 2 : 1);
+  if (winter) {
+    bareCrown(b, rnd, [0, 0, 0], [0, 1, 0], 10.5, 0.2, { depth: 2, n0: hi ? 10 : 6, n1: 2, t0: 0.28, spread0: 0.32, spread: 0.3, up: 0.4, len0: 3.6, lenK: 0.55, r0: 0.07 });
+    return b.build();
+  }
+  const lf = leafFn(3, 12, 1.0), det = hi ? 1 : 0, fl = hi ? 0.4 : 0;
+  const st = hi ? [[0, 3.8, 0, 0.95, 1.5], [0.1, 5.7, 0, 1.2, 1.9], [-0.1, 7.9, 0.1, 1.08, 1.9], [0, 10.0, 0, 0.75, 1.5], [0, 11.4, 0, 0.38, 0.8]] : [[0, 5.2, 0, 1.15, 2.6], [0, 9.2, 0, 0.85, 2.3]];
+  st.forEach(([x, y, z, r, ry], i) => b.blob([x, y, z], r, ry, r, det, 0.2, 40 + i * 3, lf, 1, null, fl));
+  return b.build();
+}
+// Dattelpalme: gebogener, geringelter Stamm, Wedelkrone, hängende tote Wedel, Fruchtstände (~8,5 m)
+function palmGeometry(winter, hi) {
+  const b = new VegB(), rnd = mulberry32(hi ? 401 : 402), seg = hi ? 7 : 5;
+  const pf = (y) => (Math.floor(y / 0.3) % 2 ? C_PALMD : C_PALM);
+  const N = hi ? 6 : 3, P = [];
+  for (let i = 0; i <= N; i++) { const t = i / N; P.push([0.9 * t * t, -0.3 + t * 7.5, 0.25 * t * t]); }
+  for (let i = 0; i < N; i++) b.tube(P[i], P[i + 1], i === 0 ? 0.36 : 0.27 - 0.06 * i / N, 0.27 - 0.06 * (i + 1) / N, seg, pf, 0, hi ? 4 : 2);
+  const top = P[N].slice(); top[1] += 0.1;
+  const fc = (v) => [v, v, v];
+  const nF = hi ? 13 : 7;
+  for (let i = 0; i < nF; i++) {
+    const an = i * 2.399 + rnd() * 0.3, el = 0.9 - (i / nF) * 1.25 + (rnd() - 0.5) * 0.2;
+    b.frond(top, an, el, 3.4 + rnd() * 0.9, 0.55, 1.0 + rnd() * 0.5, hi ? 6 : 3, fc(0.85 + rnd() * 0.15), fc(0.62), 1);
+  }
+  if (hi) {
+    for (let i = 0; i < 5; i++) b.frond([top[0], top[1] - 0.35, top[2]], i * 1.26 + 0.4, -0.9, 2.2, 0.4, 0.3, 3, C_DEADFROND, scale3(C_DEADFROND, 0.8), 0);
+    for (let i = 0; i < 3; i++) { const an = i * 2.1 + 0.5; b.blob([top[0] + Math.cos(an) * 0.45, top[1] - 0.55, top[2] + Math.sin(an) * 0.45], 0.28, 0.38, 0.28, 0, 0.3, 90 + i, () => C_DATE, 0); }
+  }
+  b.blob(top, 0.45, 0.55, 0.45, 0, 0.2, 99, leafFn(7, 8, 0.8), 1);
+  return b.build();
+}
+// Obst-/Maulbeerbaum: kurzer Stamm, breite, flache Schirmkrone (~4,3 m)
+function fruitGeometry(winter, hi) {
+  const b = new VegB(), rnd = mulberry32(hi ? 501 : 502), seg = hi ? 6 : 4;
+  const bark = winter ? snowyBark(C_BARK) : barkFn(scale3(C_BARK, 1.15));
+  b.tube([0, -0.3, 0], [0.08, 1.3, 0], 0.25, 0.19, seg, bark, 0);
+  if (winter) {
+    bareCrown(b, rnd, [0.08, 0, 0], [0, 1, 0], 1.3, 0.18, { depth: hi ? 3 : 2, n0: hi ? 4 : 3, n1: hi ? 3 : 2, t0: 0.9, spread0: 1.0, spread: 0.65, up: 0.3, len0: 1.6, lenK: 0.7, r0: 0.11 });
+    return b.build();
+  }
+  const ends = limbs(b, rnd, { n: hi ? 4 : 3, y0: 1.2, out: 1.4, up: 1.1, r0: 0.13, r1: 0.06, seg: hi ? 4 : 3, col: bark, sub: 0 });
+  const lf = leafFn(1.8, 4.2, 1.02), det = hi ? 1 : 0, fl = hi ? 0.5 : 0;
+  b.blob([0, 3.0, 0], 1.9, 1.0, 1.9, det, 0.22, 51, lf, 1, null, fl);
+  ends.slice(0, hi ? 4 : 2).forEach((e, i) => b.blob([e[0] * 1.05, e[1] + 0.35, e[2] * 1.05], 1.2 + rnd() * 0.25, 0.85, 1.2 + rnd() * 0.25, det, 0.26, 55 + i * 3, lf, 1, null, fl));
+  return b.build();
+}
+// Zerschossener Baum: abgebrochener, angekohlter Stamm mit Splittern und Aststummeln
+function stumpGeometry(winter, hi) {
+  const b = new VegB(), rnd = mulberry32(hi ? 601 : 602), seg = hi ? 7 : 5;
+  const cf = (y, an, ny) => (winter && ny > 0.6 ? C_SNOW : scale3(hash3(Math.round(y * 4), Math.round(an * 2), 2) > 0.7 ? C_BARK : C_CHAR, 0.85 + 0.3 * hash3(Math.round(y * 9), 1, Math.round(an))));
+  b.tube([0, -0.3, 0], [0.05, 2.2, 0.02], 0.34, 0.27, seg, cf, 0.25, hi ? 3 : 1);
+  const spl = hi ? 5 : 2;
+  for (let i = 0; i < spl; i++) {
+    const an = i / spl * Math.PI * 2 + rnd() * 0.5, h = 0.4 + rnd() * 1.5;
+    const sf = (y) => (y > 2.3 + h * 0.4 ? C_WOOD : C_CHAR);
+    b.tube([Math.cos(an) * 0.17, 2.1, Math.sin(an) * 0.17], [Math.cos(an) * (0.22 + rnd() * 0.15), 2.2 + h, Math.sin(an) * (0.22 + rnd() * 0.15)], 0.13, 0.012, 3, sf, 0.25);
+  }
+  b.tube([0, 1.6, 0], [0.9, 2.3, 0.2], 0.12, 0.06, hi ? 4 : 3, cf, 0.25);
+  if (hi) b.tube([0.1, 1.9, 0], [-0.6, 1.2, 0.5], 0.07, 0.03, 3, cf, 0.25);
+  return b.build();
+}
+const TREE_GEO = { [SP.oak]: oakGeometry, [SP.pine]: pineGeometry2, [SP.birch]: birchGeometry, [SP.poplar]: poplarGeometry, [SP.palm]: palmGeometry, [SP.fruit]: fruitGeometry, [SP.stump]: stumpGeometry };
+function treeGeometry(sp, winter, hi) { return (TREE_GEO[sp] || oakGeometry)(winter, hi); }
+
+// Büsche: 0 rund/belaubt, 1 ausladend (Hasel/Weißdorn), 2 Dornbusch (arid), 3 Tamariske (arid)
+function bushGeometry2(winter, hi, variant) {
+  const b = new VegB(), rnd = mulberry32(700 + variant * 13 + (hi ? 1 : 0)), det = hi ? 1 : 0;
+  const lf = leafFn(0, 1.4, 1.0);
+  const L = variant === 0 ? [[0, 0.45, 0, 0.75, 0.6], [0.5, 0.35, 0.2, 0.55, 0.45], [-0.4, 0.3, -0.3, 0.5, 0.4]]
+    : variant === 1 ? [[0, 0.5, 0, 0.6, 0.5], [0.7, 0.35, 0.3, 0.5, 0.38], [-0.6, 0.4, 0.4, 0.5, 0.42], [0.2, 0.3, -0.7, 0.48, 0.36], [-0.3, 0.75, -0.2, 0.42, 0.35]]
+      : variant === 2 ? [[0, 0.3, 0, 0.45, 0.32], [0.45, 0.22, 0.25, 0.34, 0.25], [-0.4, 0.25, 0.3, 0.36, 0.26], [0.1, 0.2, -0.45, 0.33, 0.24], [-0.35, 0.18, -0.3, 0.3, 0.22]]
+        : [[0, 0.7, 0, 0.42, 0.75], [0.35, 0.55, 0.2, 0.36, 0.6], [-0.3, 0.6, -0.25, 0.36, 0.65]];
+  if (variant >= 1) for (let i = 0; i < (variant === 1 ? 4 : 3); i++) { const an = i * 1.9 + rnd(); b.tube([0, -0.1, 0], [Math.cos(an) * 0.5, 0.6 + rnd() * 0.3, Math.sin(an) * 0.5], 0.04, 0.015, 3, barkFn(C_TWIG), 0); }
+  L.forEach(([x, y, z, r, ry], i) => {
+    if (winter) b.blob([x, y, z], r * 0.85, ry * 0.85, r * 0.85, 0, 0.4, 7 + i * 3 + variant * 11, twigFn, 0.35, twigTint);
+    else b.blob([x, y, z], r, ry, r, variant === 2 ? 0 : det, variant === 2 ? 0.45 : 0.24, 7 + i * 3 + variant * 11, lf, 1, null, hi ? 0.3 : 0);
+  });
+  return b.build();
+}
+// Heckenabschnitt (~2,6 m lang entlang z, ~2,4 m hoch)
+function hedgeGeometry(winter, hi) {
+  const b = new VegB(), det = hi ? 1 : 0, lf = leafFn(0, 2.4, 1.0);
+  const L = hi ? [[0, 1.2, -0.9, 0.95, 1.0, 0.85], [0.1, 1.35, 0.1, 1.0, 1.05, 0.9], [-0.1, 1.15, 1.0, 0.95, 1.0, 0.85], [0.3, 0.5, -0.4, 1.05, 0.6, 1.0], [-0.3, 0.5, 0.6, 1.05, 0.6, 1.0]]
+    : [[0, 1.2, -0.6, 1.0, 1.05, 1.1], [0, 1.2, 0.7, 1.0, 1.05, 1.1]];
+  L.forEach(([x, y, z, rx, ry, rz], i) => {
+    if (winter) b.blob([x, y, z], rx, ry * 0.9, rz, det, 0.3, 300 + i * 5, twigFn, 0.35, twigTint);
+    else b.blob([x, y, z], rx, ry, rz, det, 0.26, 300 + i * 5, lf, 1, null, hi ? 0.35 : 0);
+  });
+  return b.build();
+}
+// Felsen: Findling (rund, gedrungen) und Felsnadeln (gebündelte Scherben)
+function boulderGeometry(winter) {
+  const g = nonIndexed(new THREE.IcosahedronGeometry(1, 1));
+  g.deleteAttribute('uv');
+  jitterGeo(g, 0.28, 31);
+  g.scale(1, 0.72, 0.9);
+  const base = linC([0.47, 0.46, 0.44]);
+  return colorFaces(g, (ny, yy, rn) => {
+    if (winter && ny > 0.35) return C_SNOW;
+    const v = (0.72 + rn * 0.4) * (ny < -0.2 ? 0.7 : 1);
+    return [base[0] * v, base[1] * v, base[2] * v];
+  });
+}
+function cragGeometry(winter) {
+  // Felsausbiss: gekippte, kantige Platten (geschichtet), wie aus dem Hang gebrochen
+  const base = linC([0.44, 0.43, 0.41]);
+  const parts = [[0, 0.55, 0, 1.25, 0.75, 0.95, 0.35, 0], [0.85, 0.35, 0.45, 0.85, 0.55, 0.7, -0.3, 0.7], [-0.75, 0.4, -0.35, 0.9, 0.6, 0.75, 0.25, 1.6], [0.2, 1.05, -0.3, 0.7, 0.45, 0.6, 0.45, 2.4]].map(([x, y, z, sx, sy, sz, tilt, rot], i) => {
+    const g = nonIndexed(new THREE.DodecahedronGeometry(1, 0));
+    g.deleteAttribute('uv');
+    jitterGeo(g, 0.22, 40 + i);
+    g.scale(sx, sy, sz); g.rotateZ(tilt); g.rotateY(rot); g.translate(x, y, z);
+    return colorFaces(g, (ny, yy, rn) => {
+      if (winter && ny > 0.4) return C_SNOW;
+      const strata = 0.88 + 0.18 * Math.sin(yy * 7 + rn * 2);
+      const v = (0.7 + rn * 0.35) * strata * (ny < -0.2 ? 0.68 : ny > 0.6 ? 1.08 : 1);
+      return [base[0] * v, base[1] * v, base[2] * v];
+    });
+  });
+  return mergeGeos(parts);
 }
