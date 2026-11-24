@@ -3,7 +3,7 @@
 //
 //   { type: 'settlement', x, z, r | poly, type: '<siehe SETTLEMENT_TYPES>', seed, density = 0.6,
 //     mainRoadAngle?, connectTo?: [[x,z],…], era?: 'modern'|'ww2', keepOut?: [{x,z,r}|{poly}], fields?: false,
-//     cemetery?: false, industry?: false, square?: false, flatten?: false }
+//     cemetery?: false, industry?: false, square?: false, flatten?: false, buildingSet?: '<Set aus buildingKinds>' }
 //   (Das Feld „type“ des Features ist 'settlement'; der Siedlungstyp steht in „kind“ – zur Bequemlichkeit wird auch
 //    „stype“ oder „settlement“ akzeptiert.)
 //
@@ -22,7 +22,7 @@
 // Wegfindung: Häuser halten zu jeder Straße (auch fremden road-Features) mindestens ROAD_MIN m Abstand von der
 // Fahrbahnkante; zwischen Häuserfronten bleiben so ≥ Straßenbreite + 2·Rücksprung (≥ 9 m) frei.
 import { mulberry32, distToPolyline, pointInPoly } from './util.js';
-import { pickBuilding } from '../game/buildingKinds.js';
+import { pickBuilding, BUILDING_SETS } from '../game/buildingKinds.js';
 
 export const SETTLEMENT_TYPES = ['ukr_village', 'ukr_town', 'soviet_city', 'afghan_village', 'afghan_town', 'normandy_village', 'eu_town', 'german_city', 'desert_village'];
 export const SETTLEMENT_LABELS = {
@@ -267,8 +267,18 @@ function makePicker(C, T, era) {
   const modern = era === 'modern';
   const ww2 = era === 'ww2';
   const ww2Map = { panel_high: 'townhouse_eu', khrushchyovka: 'townhouse_eu', kiosk: 'shop', cottage: 'izba' };
+  // Optionales Gebäudeset der Vorlage (Feld buildingSet am settlement-Feature oder an der Karte, z. B. 'berlin_1945'):
+  // ersetzt die Wohn-/Geschäftsbebauung, Sonderbauten (Kirche, Industrie, Lager …) bleiben beim Typ. Fehlt das Set → bisherige Sets.
+  const ovr = [C.f.buildingSet, C.def.buildingSet].find((n) => typeof n === 'string' && BUILDING_SETS[n]);
   return (setName, { urban = false, allow = null, deny = null, maxW = 99 } = {}) => {
     const rnd = C.rnd;
+    if (ovr && !(allow && allow.every((k) => SPECIAL.has(k)))) {
+      for (let tries = 0; tries < 8; tries++) {
+        const b = pickBuilding(rnd, ovr, { urban, modern: era === 'modern' ? undefined : false });
+        if ((SPECIAL.has(b.kind) && !(allow && allow.includes(b.kind))) || b.w > maxW) continue;
+        return b;
+      }
+    }
     let set = setName;
     if (ww2 && set === 'ukraine_village') set = 'east_ww2';
     for (let tries = 0; tries < 10; tries++) {
