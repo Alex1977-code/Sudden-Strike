@@ -2265,16 +2265,16 @@ class VegB {
       this.tri(a, b, d, nrm(f), nrm(f + 1), nrm(f + 2), col, col, col, tt, tt, tt);
       // Blattbüschel: kleine abstehende Dreiecke brechen die glatte Silhouette auf
       if (fluff && hash3(f, seed, 11) < fluff) {
-        const cx = (a[0] + b[0] + d[0]) / 3, cy = yy, cz = (a[2] + b[2] + d[2]) / 3, sz = 0.28 + rr * 0.22, o = 0.05 + rr * 0.15;
+        const ks = clamp(Math.min(rx, rz), 0.45, 1.6), cx = (a[0] + b[0] + d[0]) / 3, cy = yy, cz = (a[2] + b[2] + d[2]) / 3, sz = (0.2 + rr * 0.16) * ks, o = (0.03 + rr * 0.1) * ks;
         const q1 = hash3(f, 2, seed) * 6.283, q2 = hash3(f, 5, seed) * 6.283;
         const px = cx + rn[0] * o, py = cy + rn[1] * o, pz = cz + rn[2] * o;
         const p1 = [px + Math.cos(q1) * sz + rn[0] * sz * 0.6, py + Math.sin(q2) * sz * 0.5 + rn[1] * sz * 0.6, pz + Math.sin(q1) * sz + rn[2] * sz * 0.6];
         const p2 = [px + Math.cos(q1 + 2.2) * sz * 0.8, py - sz * 0.3, pz + Math.sin(q1 + 2.2) * sz * 0.8];
         const p3 = [px + Math.cos(q1 - 2.2) * sz * 0.8, py + sz * 0.2, pz + Math.sin(q1 - 2.2) * sz * 0.8];
-        const cl = scale3(col, 0.9 + rr * 0.25), nn = [rn[0], rn[1], rn[2]];
+        const cl = scale3(col, 0.98 + rr * 0.2), nn = [rn[0], rn[1], rn[2]];
         this.tri(p1, p2, p3, nn, nn, nn, cl, cl, cl, tt, tt, tt);
         const mm = [-rn[0] * 0.3, -rn[1] * 0.3 + 0.2, -rn[2] * 0.3];
-        this.tri(p1, p3, p2, mm, mm, mm, scale3(cl, 0.7), scale3(cl, 0.7), scale3(cl, 0.7), tt, tt, tt);
+        this.tri(p1, p3, p2, mm, mm, mm, scale3(cl, 0.85), scale3(cl, 0.85), scale3(cl, 0.85), tt, tt, tt);
       }
     }
     g.dispose();
@@ -2414,11 +2414,11 @@ function pineGeometry2(winter, hi) {
   b.tube([0, 3.0, 0], [0.06, 8.8, 0.03], 0.23, 0.05, seg, bf, 0, hi ? 4 : 1);
   const tiers = hi ? 6 : 3, cs = hi ? 10 : 7;
   const col = (ny, y, rr) => {
-    if (winter && ny > 0.25 && rr > 0.25) return [C_SNOW[0] * (0.92 + rr * 0.08), C_SNOW[1] * (0.92 + rr * 0.08), C_SNOW[2]];
+    if (winter && ny > 0.4 && rr > 0.45) return [C_SNOW[0] * (0.92 + rr * 0.08), C_SNOW[1] * (0.92 + rr * 0.08), C_SNOW[2]];
     const v = (ny < -0.3 ? 0.36 : 0.6 + 0.4 * clamp((y - 3) / 6, 0, 1)) * (0.85 + rr * 0.25);
     return [v, v, v];
   };
-  const tintFn = winter ? (ny, y, rr) => (ny > 0.25 && rr > 0.25 ? 0 : 1) : null;
+  const tintFn = winter ? (ny, y, rr) => (ny > 0.4 && rr > 0.45 ? 0 : 1) : null;
   for (let i = 0; i < tiers; i++) {
     const t = i / (tiers - 1), y = 3.1 + t * 5.3, r = 2.0 - t * 1.45, h = 1.75 - t * 0.55;
     b.cone([(hash3(i, 2, 1) - 0.5) * 0.3, y, (hash3(i, 3, 1) - 0.5) * 0.3], r, h, cs, 0.35 + 0.15 * (1 - t), i + 1, col, 1, tintFn);
@@ -2520,7 +2520,7 @@ function treeGeometry(sp, winter, hi) { return (TREE_GEO[sp] || oakGeometry)(win
 // Büsche: 0 rund/belaubt, 1 ausladend (Hasel/Weißdorn), 2 Dornbusch (arid), 3 Tamariske (arid)
 function bushGeometry2(winter, hi, variant) {
   const b = new VegB(), rnd = mulberry32(700 + variant * 13 + (hi ? 1 : 0)), det = hi ? 1 : 0;
-  const lf = leafFn(0, 1.4, 1.0);
+  const lf = leafFn(0, 1.4, 1.22);
   const L = variant === 0 ? [[0, 0.45, 0, 0.75, 0.6], [0.5, 0.35, 0.2, 0.55, 0.45], [-0.4, 0.3, -0.3, 0.5, 0.4]]
     : variant === 1 ? [[0, 0.5, 0, 0.6, 0.5], [0.7, 0.35, 0.3, 0.5, 0.38], [-0.6, 0.4, 0.4, 0.5, 0.42], [0.2, 0.3, -0.7, 0.48, 0.36], [-0.3, 0.75, -0.2, 0.42, 0.35]]
       : variant === 2 ? [[0, 0.3, 0, 0.45, 0.32], [0.45, 0.22, 0.25, 0.34, 0.25], [-0.4, 0.25, 0.3, 0.36, 0.26], [0.1, 0.2, -0.45, 0.33, 0.24], [-0.35, 0.18, -0.3, 0.3, 0.22]]
@@ -2528,18 +2528,18 @@ function bushGeometry2(winter, hi, variant) {
   if (variant >= 1) for (let i = 0; i < (variant === 1 ? 4 : 3); i++) { const an = i * 1.9 + rnd(); b.tube([0, -0.1, 0], [Math.cos(an) * 0.5, 0.6 + rnd() * 0.3, Math.sin(an) * 0.5], 0.04, 0.015, 3, barkFn(C_TWIG), 0); }
   L.forEach(([x, y, z, r, ry], i) => {
     if (winter) b.blob([x, y, z], r * 0.85, ry * 0.85, r * 0.85, 0, 0.4, 7 + i * 3 + variant * 11, twigFn, 0.35, twigTint);
-    else b.blob([x, y, z], r, ry, r, variant === 2 ? 0 : det, variant === 2 ? 0.45 : 0.24, 7 + i * 3 + variant * 11, lf, 1, null, hi ? 0.3 : 0);
+    else b.blob([x, y, z], r, ry, r, variant === 2 ? 0 : det, variant === 2 ? 0.45 : 0.24, 7 + i * 3 + variant * 11, lf, 1, null, hi && variant < 2 ? 0.15 : 0);
   });
   return b.build();
 }
 // Heckenabschnitt (~2,6 m lang entlang z, ~2,4 m hoch)
 function hedgeGeometry(winter, hi) {
-  const b = new VegB(), det = hi ? 1 : 0, lf = leafFn(0, 2.4, 1.0);
+  const b = new VegB(), det = hi ? 1 : 0, lf = leafFn(0, 2.4, 1.12);
   const L = hi ? [[0, 1.2, -0.9, 0.95, 1.0, 0.85], [0.1, 1.35, 0.1, 1.0, 1.05, 0.9], [-0.1, 1.15, 1.0, 0.95, 1.0, 0.85], [0.3, 0.5, -0.4, 1.05, 0.6, 1.0], [-0.3, 0.5, 0.6, 1.05, 0.6, 1.0]]
     : [[0, 1.2, -0.6, 1.0, 1.05, 1.1], [0, 1.2, 0.7, 1.0, 1.05, 1.1]];
   L.forEach(([x, y, z, rx, ry, rz], i) => {
     if (winter) b.blob([x, y, z], rx, ry * 0.9, rz, det, 0.3, 300 + i * 5, twigFn, 0.35, twigTint);
-    else b.blob([x, y, z], rx, ry, rz, det, 0.26, 300 + i * 5, lf, 1, null, hi ? 0.35 : 0);
+    else b.blob([x, y, z], rx, ry, rz, det, 0.26, 300 + i * 5, lf, 1, null, hi ? 0.2 : 0);
   });
   return b.build();
 }

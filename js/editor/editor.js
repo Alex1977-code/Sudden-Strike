@@ -211,8 +211,8 @@ export function createEditor(ctx) {
     E.keys.u = objKey();
   }
   // Nach jeder Änderung: Gelände neu bauen oder nur Objekte neu setzen
-  function commit({ immediate = false } = {}) {
-    E.doc.meta.modified = new Date().toISOString().slice(0, 19);
+  function commit({ immediate = false, touch = true } = {}) {
+    if (touch) E.doc.meta.modified = new Date().toISOString().slice(0, 19); // Laden/Import ändert den Zeitstempel nicht
     if (terrainKey() !== E.keys.t) rebuild(null, immediate);
     else if (objKey() !== E.keys.u) spawnObjects();
     scheduleAutosave();
@@ -1031,7 +1031,7 @@ export function createEditor(ctx) {
       p.querySelectorAll('[data-load]').forEach((b) => (b.onclick = () => {
         const doc = loadSlot(b.dataset.load);
         if (!doc) { msg('Speicherplatz konnte nicht gelesen werden.', false); return; }
-        pushUndo(); E.doc = doc; E.slotName = b.dataset.load; E.sel = null; E.lastPlaced = null; closeModal(); commit({ immediate: true });
+        pushUndo(); E.doc = doc; E.slotName = b.dataset.load; E.sel = null; E.lastPlaced = null; closeModal(); commit({ immediate: true, touch: false });
       }));
       p.querySelectorAll('[data-del]').forEach((b) => (b.onclick = () => {
         if (!b.dataset.armed) { b.dataset.armed = '1'; b.innerHTML = 'Sicher?'; setTimeout(() => { delete b.dataset.armed; b.innerHTML = icon('trash'); }, 3000); return; }
@@ -1067,7 +1067,7 @@ export function createEditor(ctx) {
     pushUndo();
     E.doc = r.map; E.sel = null; E.lastPlaced = null;
     E.opts.unit.era = E.doc.meta.era; E.opts.village.set = ERA_SET[E.doc.meta.era];
-    commit({ immediate: true });
+    commit({ immediate: true, touch: false });
     return r;
   }
   const fileName = (t) => (String(t).normalize('NFKD').replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'karte');

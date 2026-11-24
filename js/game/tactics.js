@@ -307,8 +307,7 @@ export class Tactics {
       if (!u.alive || u.garrison || (u.type.air && u.curAlt > 4)) continue;
       if (u.type.key === 'house') {
         // Wurf ins Fenster: Haus und alle Insassen (ohne Gebäudedeckung)
-        const hd = u.houseDef, inside = u === house || Math.hypot(u.pos.x - x, u.pos.z - z) < Math.max(hd.w, hd.d) / 2 + 1;
-        if (!inside) continue;
+        if (u !== house) continue; // nur das anvisierte Haus (Wurf durchs Fenster)
         const hm = w.houseMul || 1.4;
         if (u.occupants?.length) for (const o of [...u.occupants]) {
           if (o.side === side && o.owner === owner) continue;

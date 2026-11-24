@@ -178,6 +178,14 @@ Beispiel ([`mods/beispiel.json`](mods/beispiel.json), im Spiel auch über „Bei
 }
 ```
 
+## Siedlungen und reale Orte
+
+**Siedlungsgenerator** (`js/engine/settlement.js`): Ein Kartenfeature `{ type: 'settlement', kind, x, z, r, seed, density, mainRoadAngle?, connectTo?: [[x,z],…], era? }` wird beim Laden deterministisch in Straßen, Häuser (mit Gebäudeart), Gärten/Felder, Hecken, Friedhof, Platz mit Kirche/Rathaus, Industrie an der Ausfallstraße usw. umgewandelt. Typen (`kind`): `ukr_village`, `ukr_town`, `soviet_city`, `afghan_village`, `afghan_town`, `normandy_village`, `eu_town`, `german_city`, `desert_village`. Häuser stehen mit der Front (Tür) zur Straße; zwischen gegenüberliegenden Fronten bleiben ≥ 12 m frei (Wegfindung für Fahrzeuge bis ~3,8 m Breite). Vorhandene Straßen werden übernommen, `connectTo` schließt an. Alte `village`-Features bleiben unverändert, außer sie tragen `useGenerator: true`. Für den Gefechtsgenerator: `generateSettlementFeature(type, x, z, r, seed)`.
+
+**Reale Orte** (`js/maps/places/`, `PLACES` in `index.js`): 25 Kartenvorlagen „angelehnt an …“ (WK2: Stalingrad, Berlin, Königsberg, Remagen, Bastogne, Arnheim, Carentan, Dünkirchen, Tobruk, El Alamein, Pegasus Bridge, Omaha Beach, Seelower Höhen, Prochorowka, Festung Brest, Eben-Emael; Ukraine: Bachmut, Awdijiwka, Straße von Kertsch, Cherson, Pokrowsk; Afghanistan: Kunduz, Flughafen Kabul, Salang-Pass, Pandschir-Tal) – verdichtet auf 520–600 m, mit Landmarken (`landmarks`), optionalen Bauwerken (`structures`) und `placeMission(place)` zum Laden. Nachgebaut nach geografischem Wissen, nicht maßstabsgetreu.
+
+**OpenStreetMap**: `tools/osm2map.mjs` (Build-Zeit, Node) wandelt Overpass-Daten in statische Kartendaten `js/maps/places/osm/<id>.js` um; das Spiel lädt zur Laufzeit keine OSM-Daten. Daten aus OpenStreetMap stehen unter der ODbL: „© OpenStreetMap-Mitwirkende (ODbL)“ – Vorlagen mit OSM-Grundlage tragen dieses Feld `attribution`, das beim Ort angezeigt wird.
+
 ## Steuerung (Kurzfassung)
 
 | PC | Handy |
@@ -198,6 +206,8 @@ js/missions/                  Kampagne mit 5 Missionen
 js/skirmish/                  Gefecht 1v1–6v6: Kartengenerator, Eroberungspunkte, KI-Kommandeure
 js/net/                       Online-Multiplayer: Transport, Lobby, Codec, Sitzung (Host/Client), Online-Menüs
 js/editor/                    Karteneditor, Kartenformat, Mods (Validierung, Werte-Anpassung), eigene Karten
+js/maps/places/               Vorlagen realer Orte („angelehnt an …“), PLACES/placeMission
+tools/osm2map.mjs             Build-Werkzeug OSM → Kartendaten (ODbL)
 mods/                         Beispiel-Mod (beispiel.json)
 vendor/three/                 Three.js r170 (MIT)
 vendor/peerjs/                PeerJS (MIT) für WebRTC-Verbindungen
