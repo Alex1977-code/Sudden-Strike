@@ -626,7 +626,7 @@ function heliMod(side, type, ctx, v) { // 'ch53' | 'nh90' | 'tiger' | 'hind' | '
     const b = add(g, sphG(1.6, 14, 10), c, 0, 0, 0.8); b.scale.set(0.9, 0.95, 3.3);
     cyl(g, 0.5, 0.25, 6, c, 0, 0.6, -5.2, Math.PI / 2, 0, 0, 8); box(g, 0.2, 2.2, 1.3, c, 0, 1.6, -8.0, -0.2, 0, 0); box(g, 3.0, 0.1, 0.8, c, 0, 0.8, -7.8);
     box(g, 2.4, 0.9, 3.0, c, 0, 1.6, 0.4); for (const s of [-1, 1]) { box(g, 0.9, 0.5, 2.2, M.darkMetal, s * 0.8, 2.0, -0.4); box(g, 0.9, 0.8, 3.0, c, s * 1.7, -0.4, 0.3); cyl(g, 0.25, 0.25, 0.2, M.rubber, s * 1.8, -1.2, 0.3, 0, 0, Math.PI / 2, 8); }
-    box(g, 1.8, 0.8, 0.1, M.glass, 0, 0.7, 4.2, -0.5, 0, 0); cyl(g, 0.5, 0.5, 0.5, M.darkMetal, 0, 2.3, 0.4, 0, 0, 0, 8); box(g, 0.1, 0.1, 0.1, a.cross, 0, 0, 0);
+    box(g, 1.8, 0.8, 0.1, M.glass, 0, 0.7, 4.2, -0.5, 0, 0); cyl(g, 0.5, 0.5, 0.5, M.darkMetal, 0, 2.3, 0.4, 0, 0, 0, 8);
     rotors.push(rotorDisc(ctx, g, 9, 2.7, 0.4));
     bwCrossBoth(ctx, g, fac, 1.45, 0.4, 0.6);
   } else if (nh || mi8) {
@@ -683,7 +683,6 @@ function jet(side, type, ctx) {
     for (const s of [-1, 1]) { box(g, 4.0, 0.08, 3.0, c, s * 2.2, 0, -0.8, 0, s * 0.45, 0); box(g, 1.8, 0.08, 1.0, c, s * 1.2, 0, -3.2); cyl(g, 0.12, 0.12, 1.5, a.black, s * 3.3, -0.25, -0.3, Math.PI / 2, 0, 0, 6); }
     box(g, 0.1, 1.8, 1.8, c, 0, 1.0, -3.0, -0.3, 0, 0);
     add(g, sphG(0.3, 8, 6), M.engineGlow, 0, 0, -3.6, 0, 0, 0, false);
-    bwCross(ctx, g, 'BW', 0, 0.1, 0, '+x', 0); // (kein Signet auf Rumpf, siehe Tragflächen)
     for (const s of [-1, 1]) bwCross(ctx, g, 'BW', s * 3.2, 0.06, -0.8, '+y', 0.7);
   }
   const muzzle = new THREE.Object3D(); g.add(muzzle);
@@ -708,4 +707,120 @@ reg('af_heron', (side, type, ctx) => {
   const rot = add(g, ctx.cylG(0.4, 0.4, 0.02, 12), M.rotor, 0, 0.0, -1.7, Math.PI / 2, 0, 0, false); rot.userData.noWreck = true;
   const muzzle = new THREE.Object3D(); g.add(muzzle);
   return { root: g, muzzle, height: 0.8, rotors: [rot] };
+});
+
+// ====================== Strukturen: Feldlager, Befestigungen ======================
+const GEO = {};
+const torusG = (r, t) => { const k = `t${r},${t}`; return GEO[k] || (GEO[k] = Object.assign(new THREE.TorusGeometry(r, t, 5, 12), { userData: { shared: true } })); };
+const sbRow = (ctx, g, x, z, len, rows, ry = 0) => { // Sandsackreihe aus Einzelblöcken
+  const n = Math.max(1, Math.floor(len / 0.85));
+  for (let r = 0; r < rows; r++) for (let i = 0; i < n; i++) { const u = -len / 2 + (i + 0.5 + (r % 2) * 0.5) * (len / n); ctx.box(g, 0.85, 0.34, 0.55, ctx.M.sandbag, x + Math.cos(ry) * u, 0.18 + r * 0.33, z - Math.sin(ry) * u, 0, ry, 0); }
+};
+function gunMount(ctx, g, y, mat, len = 0.9) {
+  const { box, cyl, M } = ctx;
+  const turret = new THREE.Group(); turret.position.set(0, y, 0); g.add(turret);
+  cyl(turret, 0.07, 0.07, 0.6, M.darkMetal, 0, 0.3, 0, 0, 0, 0, 6);
+  const barrel = new THREE.Group(); barrel.position.set(0, 0.7, 0); turret.add(barrel);
+  box(barrel, 0.22, 0.25, 0.8, M.darkMetal, 0, 0, 0.15); cyl(barrel, 0.035, 0.045, len, M.gunMetal, 0, 0, 0.55 + len / 2, Math.PI / 2, 0, 0, 6);
+  box(barrel, 0.22, 0.2, 0.2, mat, 0.2, -0.1, 0.1);
+  const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, 0.6 + len); barrel.add(muzzle);
+  return { turret, barrel, muzzle };
+}
+reg('af_camp_sandbag', (side, type, ctx) => {
+  const g = new THREE.Group();
+  sbRow(ctx, g, 0, -1.2, 4.4, 3); sbRow(ctx, g, -2.0, 0, 2.4, 3, Math.PI / 2); sbRow(ctx, g, 2.0, 0, 2.4, 3, Math.PI / 2);
+  ctx.box(g, 3.6, 0.1, 2.4, mats(ctx).sDirt, 0, 0.05, 0);
+  const m = gunMount(ctx, g, 0.4, ctx.M.crate);
+  return { root: g, ...m, height: 2 };
+});
+reg('af_camp_tower', (side, type, ctx) => {
+  const { box, cyl, M } = ctx; const a = mats(ctx); const g = new THREE.Group();
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(g, 0.12, 0.16, 5.2, a.sSteel, sx * 1.3, 2.6, sz * 1.3, 0, 0, 0, 6);
+  for (const y of [1.4, 3.0, 4.4]) { for (const s of [-1, 1]) { box(g, 2.8, 0.1, 0.1, a.sSteel, 0, y, s * 1.3); box(g, 0.1, 0.1, 2.8, a.sSteel, s * 1.3, y, 0); } }
+  for (const s of [-1, 1]) { box(g, 0.08, 3.4, 0.08, a.sSteel, s * 1.3, 2.2, 0, 0, 0, 0.0).rotation.x = 0.5 * s; }
+  box(g, 3.4, 0.2, 3.4, a.sWood, 0, 5.3, 0);
+  for (const s of [-1, 1]) { box(g, 3.4, 0.9, 0.5, M.sandbag, 0, 5.85, s * 1.5); box(g, 0.5, 0.9, 2.6, M.sandbag, s * 1.5, 5.85, 0); }
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(g, 0.06, 0.06, 1.8, a.sSteel, sx * 1.55, 6.9, sz * 1.55, 0, 0, 0, 4);
+  box(g, 3.9, 0.12, 3.9, a.sFabric, 0, 7.85, 0); box(g, 0.4, 0.3, 0.3, M.darkMetal, 1.4, 7.6, 0);
+  box(g, 1.0, 0.1, 3.0, a.sWood, 0, 0.6, 2.6, 0.5, 0, 0); // Leiter
+  const m = gunMount(ctx, g, 5.6, M.crate);
+  return { root: g, ...m, height: 8 };
+});
+function tent(ctx, fabric, med) {
+  const { box } = ctx; const a = mats(ctx); const g = new THREE.Group();
+  box(g, 4.4, 1.5, 9, fabric, 0, 0.75, 0);
+  for (const s of [-1, 1]) box(g, 2.7, 0.12, 9.4, fabric, s * 1.05, 2.0, 0, 0, 0, s * -0.55);
+  box(g, 0.4, 0.1, 9.4, fabric, 0, 2.55, 0); box(g, 1.6, 1.4, 0.1, ctx.M.darkMetal, 0, 0.7, 4.52);
+  for (const s of [-1, 1]) for (let i = 0; i < 3; i++) box(g, 0.08, 1.4, 0.08, a.sWood, s * 2.6, 0.7, -3 + i * 3, 0, 0, s * 0.2);
+  if (med) { for (const s of [-1, 1]) { box(g, 0.04, 1.0, 1.0, ctx.M.frame, s * 2.22, 1.0, 0); box(g, 0.05, 0.9, 0.26, a.sRed, s * 2.24, 1.0, 0); box(g, 0.05, 0.26, 0.9, a.sRed, s * 2.24, 1.0, 0); } box(g, 2.2, 0.04, 2.2, ctx.M.frame, 0, 2.62, 0); box(g, 2.0, 0.05, 0.5, a.sRed, 0, 2.65, 0); box(g, 0.5, 0.05, 2.0, a.sRed, 0, 2.65, 0); }
+  else for (let i = 0; i < 4; i++) box(g, 0.9, 0.6, 0.6, ctx.M.crate, -1.5 + i * 1.0, 0.3, 5.1);
+  return { root: g, height: 3 };
+}
+reg('af_camp_tent', (s, t, c) => tent(c, mats(c).sFabric, false));
+reg('af_camp_medtent', (s, t, c) => tent(c, mats(c).sFabricW, true));
+
+reg('af_hesco', (side, type, ctx) => {
+  const { box } = ctx; const a = mats(ctx); const g = new THREE.Group();
+  for (let i = 0; i < 4; i++) {
+    const x = -1.9 + i * 1.27;
+    box(g, 1.2, 1.4, 1.5, a.sHesco, x, 0.7, 0); box(g, 1.0, 0.04, 1.3, a.sDirt, x, 1.42, 0);
+    for (const sz of [-1, 1]) for (const e of [-0.55, 0, 0.55]) box(g, 0.03, 1.4, 0.03, a.sWire, x + e, 0.7, sz * 0.76);
+    box(g, 1.22, 0.03, 0.03, a.sWire, x, 1.0, 0.76); box(g, 1.22, 0.03, 0.03, a.sWire, x, 0.4, 0.76);
+  }
+  return { root: g, height: 1.6 };
+});
+reg('af_concertina', (side, type, ctx) => {
+  const { add, box } = ctx; const a = mats(ctx); const g = new THREE.Group();
+  for (let i = 0; i < 12; i++) add(g, torusG(0.5, 0.03), a.sWire, -2.75 + i * 0.5, 0.52, 0, 0, Math.PI / 2, 0);
+  for (const s of [-1, 1]) for (const e of [-1, 0, 1]) box(g, 0.05, 0.8, 0.05, a.sWire, s * 2.9 * (e === 0 ? 0 : 1) * 0.9, 0.4, 0.0);
+  box(g, 5.6, 0.03, 0.03, a.sWire, 0, 0.9, 0); box(g, 5.6, 0.03, 0.03, a.sWire, 0, 0.12, 0);
+  return { root: g, height: 1.2 };
+});
+reg('af_trench', (side, type, ctx) => {
+  const { box } = ctx; const a = mats(ctx); const g = new THREE.Group();
+  box(g, 5.6, 0.06, 1.6, a.sDirt, 0, 0.03, 0); // Grabensohle (dunkel)
+  for (const s of [-1, 1]) { sbRow(ctx, g, 0, s * 1.05, 5.6, 2); box(g, 5.6, 0.3, 0.3, a.sDirt, 0, 0.15, s * 1.45); }
+  for (const s of [-1, 1]) box(g, 0.5, 0.8, 1.8, ctx.M.sandbag, s * 2.95, 0.4, 0);
+  for (let i = 0; i < 3; i++) box(g, 0.14, 0.08, 1.5, a.sWood, -1.6 + i * 1.6, 0.1, 0);
+  return { root: g, height: 1.2 };
+});
+reg('af_foxhole', (side, type, ctx) => {
+  const { cyl } = ctx; const a = mats(ctx); const g = new THREE.Group();
+  cyl(g, 0.95, 1.1, 0.3, a.sDirt, 0, 0.15, 0, 0, 0, 0, 10); cyl(g, 0.55, 0.55, 0.32, ctx.M.charred, 0, 0.16, 0, 0, 0, 0, 10);
+  return { root: g, height: 0.7 };
+});
+reg('af_sangar', (side, type, ctx) => {
+  const { box } = ctx; const a = mats(ctx); const g = new THREE.Group();
+  const stones = [a.sStone, a.sStone2];
+  const n = 14;
+  for (let i = 0; i < n; i++) {
+    const ang = -Math.PI * 0.85 + (i / (n - 1)) * Math.PI * 1.7, r = 1.9;
+    const x = Math.sin(ang) * r, z = -Math.cos(ang) * r * 0.8;
+    for (let k = 0; k < 3; k++) { if (k === 2 && (i === 5 || i === 8)) continue; box(g, 0.9, 0.42, 0.7, stones[(i + k) % 2], x, 0.22 + k * 0.4, z, 0, -ang, 0); }
+  }
+  box(g, 3.2, 0.06, 2.4, a.sDirt, 0, 0.03, 0.2);
+  return { root: g, height: 1.6 };
+});
+reg('af_dshk_nest', (side, type, ctx) => {
+  const { box, cyl } = ctx; const a = mats(ctx); const g = new THREE.Group();
+  const stones = [a.sStone, a.sStone2];
+  const n = 12;
+  for (let i = 0; i < n; i++) {
+    const ang = -Math.PI * 0.9 + (i / (n - 1)) * Math.PI * 1.8, r = 2.1;
+    const x = Math.sin(ang) * r, z = -Math.cos(ang) * r;
+    for (let k = 0; k < 2; k++) box(g, 0.9, 0.42, 0.7, stones[(i + k) % 2], x, 0.22 + k * 0.4, z, 0, -ang, 0);
+  }
+  box(g, 3.4, 0.06, 3.4, a.sDirt, 0, 0.03, 0); box(g, 0.5, 0.3, 0.4, ctx.M.crate, 0.9, 0.2, -0.6);
+  const turret = new THREE.Group(); turret.position.set(0, 0.5, 0); g.add(turret);
+  for (const [x, z] of [[0.4, -0.3], [-0.4, -0.3], [0, 0.4]]) cyl(turret, 0.04, 0.04, 0.7, ctx.M.darkMetal, x, 0.1, z, 0.0, 0, 0, 5);
+  const barrel = new THREE.Group(); barrel.position.set(0, 0.55, 0); turret.add(barrel);
+  box(barrel, 0.22, 0.25, 0.9, ctx.M.darkMetal, 0, 0, 0.2); cyl(barrel, 0.045, 0.05, 1.5, ctx.M.gunMetal, 0, 0, 1.2, Math.PI / 2, 0, 0, 6); cyl(barrel, 0.09, 0.09, 0.15, ctx.M.darkMetal, 0, 0.12, 0.4, 0, 0, 0, 8);
+  box(barrel, 0.8, 0.7, 0.05, ctx.M.darkMetal, 0, 0.15, 0.55); // Schutzschild
+  const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, 2.0); barrel.add(muzzle);
+  return { root: g, turret, barrel, muzzle, height: 1.8 };
+});
+reg('af_ied', (side, type, ctx) => {
+  const { cyl, box } = ctx; const a = mats(ctx); const g = new THREE.Group();
+  cyl(g, 0.7, 0.9, 0.1, a.sDirt, 0, 0.05, 0, 0, 0, 0, 8); box(g, 0.3, 0.12, 0.3, ctx.M.charred, 0.2, 0.12, 0.1); box(g, 0.02, 0.02, 1.2, a.sWire, -0.3, 0.1, 0.5, 0, 0.3, 0);
+  return { root: g, height: 0.3 };
 });
