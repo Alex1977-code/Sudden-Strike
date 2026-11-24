@@ -68,7 +68,7 @@ export class Terrain {
       }
       if (m < 1) { const b = d.baseHeight ?? 3; h = b + (h - b) * m; }
     }
-    for (const f of this.features) {
+    for (const f of this._ft('hill|flat')) {
       if (f.type === 'hill') {
         const dd = Math.hypot(x - f.x, z - f.z);
         h += f.h * (1 - smoothstep(0, f.r, dd)) * m;
@@ -89,7 +89,7 @@ export class Terrain {
     const relief = d.relief ?? 5;
     let h = this._reliefHeight(x, z);
     // Straßen glätten
-    for (const f of this.features) {
+    for (const f of this._ft('road')) {
       if (f.type === 'road') {
         const dd = distToPolyline(x, z, f.pts);
         const w = (f.width || 5) * 0.5;
@@ -120,7 +120,7 @@ export class Terrain {
   // Wasser, Inseln, Dämme
   _waterHeight(h, x, z) {
     // Wasser
-    for (const f of this.features) {
+    for (const f of this._ft('river|water')) {
       if (f.type === 'river') {
         const dd = distToPolyline(x, z, f.pts);
         const w = f.width * 0.5, bank = f.bank ?? 6;
@@ -144,7 +144,7 @@ export class Terrain {
       }
     }
     // Inseln und Dämme/Furten (nach dem Wasser)
-    for (const f of this.features) {
+    for (const f of this._ft('island|causeway')) {
       if (f.type === 'island') {
         const dd = Math.hypot(x - f.x, z - f.z);
         if (dd < f.r) h = Math.max(h, lerp(this.seaLevel - 2, this.seaLevel + (f.h ?? 1.5), 1 - smoothstep(f.r * 0.55, f.r, dd)));
@@ -439,17 +439,23 @@ export class Terrain {
   isWater(x, z) { return this.hasWater && this.height(x, z) < this.seaLevel + 0.15; }
   inBounds(x, z, m = 0) { return Math.abs(x) < this.half - m && Math.abs(z) < this.half - m; }
 
+  // Features nach Typ (Reihenfolge wie in features; 'a|b' = gemischte Liste in Originalreihenfolge), zwischengespeichert
+  _ft(key) {
+    const c = this._ftCache || (this._ftCache = {});
+    if (!c[key]) { const ts = key.split('|'); c[key] = this.features.filter((f) => ts.includes(f.type)); }
+    return c[key];
+  }
   roadDist(x, z) {
     let best = Infinity;
-    for (const f of this.features) if (f.type === 'road') best = Math.min(best, distToPolyline(x, z, f.pts) - (f.width || 5) * 0.5);
+    for (const f of this._ft('road')) best = Math.min(best, distToPolyline(x, z, f.pts) - (f.width || 5) * 0.5);
     return best;
   }
   fieldAt(x, z) {
-    for (const f of this.features) if (f.type === 'field' && pointInPoly(x, z, f.poly)) return f;
+    for (const f of this._ft('field')) if (pointInPoly(x, z, f.poly)) return f;
     return null;
   }
   forestAt(x, z) {
-    for (const f of this.features) {
+    for (const f of this._ft('forest')) {
       if (f.type !== 'forest') continue;
       if (f.poly ? pointInPoly(x, z, f.poly) : Math.hypot(x - f.x, z - f.z) < f.r) return f;
     }
@@ -2400,7 +2406,7 @@ function oakGeometry(winter, hi) {
     return b.build();
   }
   const ends = limbs(b, rnd, { n: hi ? 4 : 3, y0: 2.4, out: 1.6, up: 2.0, r0: 0.2, r1: 0.09, seg: hi ? 5 : 4, col: bark, sub: hi ? 1 : 0 });
-  const lf = leafFn(3, 7.6), det = hi ? 1 : 0, fl = hi ? 0.45 : 0;
+  const lf = leafFn(3, 7.6), det = hi ? 1 : 0, fl = hi ? 0.3 : 0;
   b.blob([0, 5.5, 0], 1.9, 1.4, 1.9, det, 0.22, 11, lf, 1, null, fl);
   ends.slice(0, hi ? 6 : 3).forEach((e, i) => b.blob([e[0] * 1.1, e[1] + 0.45, e[2] * 1.1], 1.35 + rnd() * 0.35, 1.05 + rnd() * 0.3, 1.35 + rnd() * 0.35, det, 0.24, 20 + i * 7, lf, 1, null, fl));
   if (hi) { b.blob([0.9, 4.2, -0.6], 1.2, 0.9, 1.2, det, 0.25, 61, lf, 1, null, fl); b.blob([-0.8, 6.4, 0.5], 1.15, 0.95, 1.15, det, 0.25, 67, lf, 1, null, fl); }
@@ -2443,7 +2449,7 @@ function birchGeometry(winter, hi) {
     return b.build();
   }
   limbs(b, rnd, { n: hi ? 5 : 3, y0: 4.2, out: 1.1, up: 2.4, r0: 0.06, r1: 0.025, seg: 3, col: barkFn(C_TWIG), sub: 0 });
-  const lf = leafFn(3.5, 8.6, 1.08), det = hi ? 1 : 0, fl = hi ? 0.5 : 0;
+  const lf = leafFn(3.5, 8.6, 1.08), det = hi ? 1 : 0, fl = hi ? 0.35 : 0;
   const cl = hi ? [[0.3, 7.6, 0.1, 0.9], [0.9, 6.3, 0.5, 1.0], [-0.6, 6.0, -0.4, 1.0], [0.4, 5.0, -0.8, 0.95], [-0.3, 4.6, 0.8, 0.9], [0.9, 4.4, 0.2, 0.8]] : [[0.3, 7.0, 0.1, 1.1], [0.2, 5.0, 0, 1.25]];
   cl.forEach(([x, y, z, r], i) => b.blob([x, y, z], r, r * 1.35, r, det, 0.3, 30 + i * 5, lf, 1, null, fl));
   return b.build();
@@ -2458,7 +2464,7 @@ function poplarGeometry(winter, hi) {
     bareCrown(b, rnd, [0, 0, 0], [0, 1, 0], 10.5, 0.2, { depth: 2, n0: hi ? 10 : 6, n1: 2, t0: 0.28, spread0: 0.32, spread: 0.3, up: 0.4, len0: 3.6, lenK: 0.55, r0: 0.07 });
     return b.build();
   }
-  const lf = leafFn(3, 12, 1.0), det = hi ? 1 : 0, fl = hi ? 0.4 : 0;
+  const lf = leafFn(3, 12, 1.0), det = hi ? 1 : 0, fl = hi ? 0.3 : 0;
   const st = hi ? [[0, 3.8, 0, 0.95, 1.5], [0.1, 5.7, 0, 1.2, 1.9], [-0.1, 7.9, 0.1, 1.08, 1.9], [0, 10.0, 0, 0.75, 1.5], [0, 11.4, 0, 0.38, 0.8]] : [[0, 5.2, 0, 1.15, 2.6], [0, 9.2, 0, 0.85, 2.3]];
   st.forEach(([x, y, z, r, ry], i) => b.blob([x, y, z], r, ry, r, det, 0.2, 40 + i * 3, lf, 1, null, fl));
   return b.build();
@@ -2494,7 +2500,7 @@ function fruitGeometry(winter, hi) {
     return b.build();
   }
   const ends = limbs(b, rnd, { n: hi ? 4 : 3, y0: 1.2, out: 1.4, up: 1.1, r0: 0.13, r1: 0.06, seg: hi ? 4 : 3, col: bark, sub: 0 });
-  const lf = leafFn(1.8, 4.2, 1.02), det = hi ? 1 : 0, fl = hi ? 0.5 : 0;
+  const lf = leafFn(1.8, 4.2, 1.02), det = hi ? 1 : 0, fl = hi ? 0.35 : 0;
   b.blob([0, 3.0, 0], 1.9, 1.0, 1.9, det, 0.22, 51, lf, 1, null, fl);
   ends.slice(0, hi ? 4 : 2).forEach((e, i) => b.blob([e[0] * 1.05, e[1] + 0.35, e[2] * 1.05], 1.2 + rnd() * 0.25, 0.85, 1.2 + rnd() * 0.25, det, 0.26, 55 + i * 3, lf, 1, null, fl));
   return b.build();
@@ -2534,12 +2540,13 @@ function bushGeometry2(winter, hi, variant) {
 }
 // Heckenabschnitt (~2,6 m lang entlang z, ~2,4 m hoch)
 function hedgeGeometry(winter, hi) {
-  const b = new VegB(), det = hi ? 1 : 0, lf = leafFn(0, 2.4, 1.12);
-  const L = hi ? [[0, 1.2, -0.9, 0.95, 1.0, 0.85], [0.1, 1.35, 0.1, 1.0, 1.05, 0.9], [-0.1, 1.15, 1.0, 0.95, 1.0, 0.85], [0.3, 0.5, -0.4, 1.05, 0.6, 1.0], [-0.3, 0.5, 0.6, 1.05, 0.6, 1.0]]
+  // bewusst sparsam (viele Instanzen): Ikosaeder Stufe 0, Blattbüschel nur in hoher Qualität
+  const b = new VegB(), lf = leafFn(0, 2.4, 1.12);
+  const L = hi ? [[0, 1.25, -0.75, 1.0, 1.05, 0.95], [0.05, 1.35, 0.55, 1.0, 1.1, 0.95], [0.25, 0.55, -0.1, 1.1, 0.62, 1.25], [-0.3, 0.6, 0.9, 1.0, 0.6, 0.8]]
     : [[0, 1.2, -0.6, 1.0, 1.05, 1.1], [0, 1.2, 0.7, 1.0, 1.05, 1.1]];
   L.forEach(([x, y, z, rx, ry, rz], i) => {
-    if (winter) b.blob([x, y, z], rx, ry * 0.9, rz, det, 0.3, 300 + i * 5, twigFn, 0.35, twigTint);
-    else b.blob([x, y, z], rx, ry, rz, det, 0.26, 300 + i * 5, lf, 1, null, hi ? 0.2 : 0);
+    if (winter) b.blob([x, y, z], rx, ry * 0.9, rz, 0, 0.3, 300 + i * 5, twigFn, 0.35, twigTint);
+    else b.blob([x, y, z], rx, ry, rz, 0, 0.26, 300 + i * 5, lf, 1, null, hi ? 0.7 : 0);
   });
   return b.build();
 }

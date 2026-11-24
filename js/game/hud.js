@@ -697,7 +697,7 @@ export class HUD {
     }
     $('sk-teamlist').innerHTML = rows.join('');
   }
-  _beep(f) { const a = this.game.audio; if (!a.ctx) return; a._tone({ freq: f, dur: 0.12, type: 'square', gain: 0.06 }); }
+  _beep(f) { const a = this.game.audio; if (!a.ctx) return; if (typeof a._tone === 'function') a._tone({ freq: f, dur: 0.12, type: 'square', gain: 0.06 }); else a.ui?.('click'); } // neues Audio ohne _tone
 }
 const SK_COL = { UA: '#2f7de1', RU: '#e5484d', N: '#8c9096' };
 const SK_ROLE = { armor: 'role_armor', infantry: 'role_infantry', support: 'role_support', logistics: 'role_logistics' };

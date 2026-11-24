@@ -6,7 +6,7 @@ const feats = [
   // Spree: von Osten am Reichstagufer entlang, im Spreebogen nach Norden
   river([[280, -70], [150, -80], [60, -100], [-30, -106], [-110, -112], [-158, -140], [-174, -200], [-170, -280]], 30, { depth: 4, bank: 4 }),
   // Humboldthafen
-  water([[-62, -128], [-22, -128], [-22, -196], [-62, -196]], { depth: 4, bank: 4 }),
+  water([[-62, -110], [-22, -110], [-22, -196], [-62, -196]], { depth: 4, bank: 4 }),
   // Moltkebrücke
   ...bridge([[-200, -168], [-136, -176]], 11, 'Moltkebrücke'),
   // Straßen: Charlottenburger Chaussee / Unter den Linden (Ost–West), Königsplatz – Moltkebrücke, Ufer
