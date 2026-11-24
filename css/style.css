@@ -490,3 +490,9 @@ i.ic-slot .ic { width: 1.15em; height: 1.15em; }
   #orders button .ic, #abilities button .ic, #buildbar button .ic { width: 22px; height: 22px; }
   .sel-unit .ic { width: 26px; height: 26px; }
 }
+
+/* Hauptmenü mit Symbolen: Symbol links, Text mittig */
+#screen-title .menu button { display: grid; grid-template-columns: 28px 1fr 28px; align-items: center; gap: 8px; }
+#screen-title .menu button i.ic-slot { justify-self: start; opacity: 0.9; }
+#screen-title .menu button i.ic-slot .ic { width: 20px; height: 20px; }
+#screen-title .menu button span { text-align: center; }

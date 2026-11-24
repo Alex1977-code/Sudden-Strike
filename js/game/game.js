@@ -46,7 +46,7 @@ import { Unit, resetUnitIds } from './unit.js';
 import { Combat, Missile } from './combat.js';
 import { ABILITIES } from './abilities.js';
 import { UNIT_TYPES } from './unitTypes.js';
-import { bridgeDecor } from './models.js';
+import { bridgeDecor, setBuildingDamage, buildingFxPoint, buildingClass } from './models.js';
 import { rand, clamp } from '../engine/util.js';
 
 export const TEAMS = ['UA', 'RU'];
@@ -307,6 +307,7 @@ export class Game {
     if (amount <= 0) return;
     target.hp -= amount;
     target.lastHit = this.time;
+    if (target.type.key === 'house' && target.hp > 0) this._houseDamageFx(target, w);
     if (this.logistics && target.hp > 0 && target.type.vehicle && !target.type.structure) this.logi.onVehicleHit(target, amount, src);
     if (amount > 5 && !target.type.structure) { if (this.isOwn(target)) this.emit('underAttack', target); else if (this.net?.isHost) this.net.attacked?.(target); }
     // KI reagiert auf Beschuss (teamneutral)
@@ -315,6 +316,47 @@ export class Game {
       else if (src.visibleTo?.(target.side) || Math.random() < 0.3) target.attack(src);
     }
     if (target.hp <= 0) this.killUnit(target, src && src.side ? src : null);
+  }
+  // ---- Gebäudeschaden: Stufen 0-3 (Optik in models.js) + Rauch/Feuer ----
+  _houseDamageFx(u, w) {
+    const r = Math.max(0, u.hp) / u.maxHp;
+    let st = r <= 0.15 ? 3 : r <= 0.4 ? 2 : r <= 0.7 ? 1 : 0;
+    const inc = !!(w && w.incendiary);
+    if (inc) st = Math.max(st, 2);
+    if (st > (u.damageStage || 0)) this.setHouseDamage(u, st, inc);
+    else if (inc && !(u.fireUntil > this.time)) this._houseFire(u, 45, 0.7);
+  }
+  // Auch für Netzwerk-Clients nutzbar: setHouseDamage(u, stage) stellt dieselbe Optik her
+  setHouseDamage(u, st, ignite = false) {
+    if (!u.root || !u.root.userData.setDamage) return;
+    u.damageStage = st;
+    setBuildingDamage(u.root, st);
+    const flam = { wood: 0.9, brick: 0.5, concrete: 0.25, mud: 0.15 }[buildingClass(u.root)] ?? 0.4;
+    u.smokeUntil = this.time + (st === 1 ? 25 : st === 2 ? 60 : 120);
+    if (st >= 2 && (ignite || Math.random() < flam * (st === 3 ? 1.2 : 0.7))) this._houseFire(u, st === 3 ? 70 : 30, st === 3 ? 1.0 : 0.6);
+    if (u._fxLoop) return;
+    u._fxLoop = true;
+    const tick = () => {
+      if (!u.alive || !u.root.parent) { u._fxLoop = false; return; }
+      if (this.time < u.smokeUntil && this.effects.smoke) {
+        const s2 = u.damageStage || 1, m = this.effects.mul ?? 1;
+        for (let i = 0; i < s2; i++) {
+          if (Math.random() > 0.7 * m) continue;
+          const p = buildingFxPoint(u.root, s2 >= 2 && Math.random() < 0.5 ? 'roof' : 'win'), g = s2 >= 2 ? 0.1 : 0.32;
+          this.effects.smoke.emit(p.x + rand(-0.3, 0.3), p.y, p.z + rand(-0.3, 0.3), rand(-0.2, 0.2), rand(1.6, 3), rand(-0.2, 0.2), rand(1.2, 2.0) * (0.6 + 0.3 * s2), rand(3.5, 6), g, g, g, s2 >= 2 ? 0.7 : 0.5, { grow: 1.4, drag: 0.4, fadeIn: 0.1 });
+        }
+      }
+      this.later(0.2, tick);
+    };
+    this.later(0.2, tick);
+  }
+  _houseFire(u, dur, intensity) {
+    const list = this._fireHouses || (this._fireHouses = []);
+    for (let i = list.length - 1; i >= 0; i--) if (!list[i].alive || list[i].fireUntil <= this.time) list.splice(i, 1);
+    if (list.length >= (this.settings.quality === 'low' ? 3 : 6) && !list.includes(u)) return; // Feuer begrenzen, Rest nur Rauch
+    if (!list.includes(u)) list.push(u);
+    u.fireUntil = this.time + dur;
+    this.effects.addEmitter(buildingFxPoint(u.root, (u.damageStage || 0) >= 2 ? 'roof' : 'win'), 0, dur, intensity);
   }
   splashDamage(x, z, r, dmg, w, side, exclude, hitAll = false, owner = null) {
     for (const u of [...this.units]) {
