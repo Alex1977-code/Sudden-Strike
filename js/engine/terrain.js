@@ -1111,7 +1111,7 @@ export class Terrain {
           if (hg > 0.01) { mx(TP.hedgeSoil, hg * (0.65 + 0.25 * nh)); bare *= 1 - hg; }
         }
         // Fels an steilen Hängen
-        const rk = smoothstep(0.08, 0.26, 1 - ny + (nh - 0.5) * 0.05);
+        const rk = dunes ? smoothstep(0.3, 0.5, 1 - ny + (nh - 0.5) * 0.05) : smoothstep(0.08, 0.26, 1 - ny + (nh - 0.5) * 0.05); // Dünenhänge bleiben Sand
         if (rk > 0) {
           const st = modern ? 0.76 + 0.26 * vn(x * 0.23 + h * 0.9, z * 0.23 - h * 0.6) + 0.12 * vn(x * 0.9 + 7, z * 0.9) : 0.82 + 0.3 * vn(x * 0.15 + z * 0.15, h * 2.6);
           mxs(TP.rock[0] * st, TP.rock[1] * st, TP.rock[2] * st, rk * (winter ? 0.7 : 0.9));
