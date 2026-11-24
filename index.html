@@ -7,7 +7,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Steppensturm – Front Ukraine</title>
+  <title>Steppensturm – Echtzeit-Taktik 1939–2026</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/style.css">
@@ -60,202 +60,322 @@
   </div>
   <div id="selbox" class="hidden"></div>
 
-  <!-- ============ Screens ============ -->
+  <!-- ============ Screens (V3-MENU) ============ -->
   <div id="screen-title" class="screen">
-    <div class="title-bg"></div>
-    <div class="title-inner">
-      <h1>STEPPEN<span>STURM</span></h1>
-      <h2>FRONT UKRAINE</h2>
-      <p class="tag">Echtzeit-Taktik · Drohnenkrieg · Hyperschall</p>
-      <div class="menu">
-        <button id="btn-campaign" class="big"><i data-icon="flag"></i><span>Kampagne</span></button>
-        <button id="btn-skirmish" class="big"><i data-icon="tank"></i><span>Gefecht</span></button>
-        <button id="btn-online" class="big"><i data-icon="globe"></i><span>Online-Gefecht</span></button>
-        <div class="menu-pair"><button id="btn-editor"><i data-icon="editor"></i><span>Editor</span></button><button id="btn-mods"><i data-icon="mods"></i><span>Mods &amp; Karten</span></button></div>
-        <p id="online-artifact-note" class="art-note hidden">Online-Spiel nur in der Web-Version (z. B. GitHub Pages) – hier nur der lokale Test.</p>
-        <button id="btn-settings"><i data-icon="repair"></i><span>Grafik &amp; Einstellungen</span></button>
-        <button id="btn-help"><i data-icon="move"></i><span>Steuerung</span></button>
-        <button id="btn-fullscreen"><i data-icon="box"></i><span>Vollbild</span></button>
-      </div>
-      <p class="disclaimer">Fiktive Handlung, inspiriert von realen Ereignissen. Alle Personen und Einheiten der Story sind erfunden.</p>
+    <div class="title-vignette" aria-hidden="true"></div>
+    <div class="title-layout">
+      <header class="title-brand">
+        <div class="brand-over"><span class="brand-tick" aria-hidden="true"></span><span data-i18n="title.over">Taktik-Simulation</span></div>
+        <h1 class="brand-title" aria-label="Steppensturm">STEPPEN<span>STURM</span></h1>
+        <p class="brand-sub" data-i18n="title.sub">Echtzeit-Taktik · 1939–2026</p>
+        <p class="brand-eras"><span data-i18n="title.era.ua">Ukraine</span><i aria-hidden="true"></i><span data-i18n="title.era.af">Afghanistan</span><i aria-hidden="true"></i><span data-i18n="title.era.ww2">Zweiter Weltkrieg</span></p>
+      </header>
+      <nav class="main-menu menu" aria-label="Hauptmenü">
+        <button id="btn-campaign" class="mm-item"><i data-icon="flag"></i><span class="mm-text"><span class="mm-label" data-i18n="menu.campaign">Kampagne</span><span class="mm-desc" data-i18n="menu.campaign.desc">Story-Missionen aus drei Epochen</span></span><i data-icon="chevron" class="mm-arrow"></i></button>
+        <button id="btn-skirmish" class="mm-item"><i data-icon="tank"></i><span class="mm-text"><span class="mm-label" data-i18n="menu.skirmish">Gefecht</span><span class="mm-desc" data-i18n="menu.skirmish.desc">Gegen und mit KI, frei einstellbar</span></span><i data-icon="chevron" class="mm-arrow"></i></button>
+        <button id="btn-online" class="mm-item"><i data-icon="globe"></i><span class="mm-text"><span class="mm-label" data-i18n="menu.online">Online-Gefecht</span><span class="mm-desc" data-i18n="menu.online.desc">Bis 6 gegen 6, mit KI-Plätzen</span></span><i data-icon="chevron" class="mm-arrow"></i></button>
+        <button id="btn-editor" class="mm-item"><i data-icon="editor"></i><span class="mm-text"><span class="mm-label" data-i18n="menu.editor">Karteneditor</span><span class="mm-desc" data-i18n="menu.editor.desc">Eigene Schlachtfelder und Missionen</span></span><i data-icon="chevron" class="mm-arrow"></i></button>
+        <button id="btn-mods" class="mm-item"><i data-icon="mods"></i><span class="mm-text"><span class="mm-label" data-i18n="menu.mods">Mods &amp; Karten</span><span class="mm-desc" data-i18n="menu.mods.desc">Eigene Karten spielen, Mods verwalten</span></span><i data-icon="chevron" class="mm-arrow"></i></button>
+        <p id="online-artifact-note" class="art-note hidden" data-i18n="menu.artifactNote">Online-Spiel nur in der Web-Version (z. B. GitHub Pages) – hier nur der lokale Test.</p>
+        <div class="mm-sub">
+          <button id="btn-settings" class="mm-small" title="Einstellungen"><i data-icon="gear"></i><span data-i18n="menu.settings">Einstellungen</span></button>
+          <button id="btn-help" class="mm-small" title="Hilfe und Steuerung"><i data-icon="help"></i><span data-i18n="menu.help">Steuerung</span></button>
+          <button id="btn-fullscreen" class="mm-small" title="Vollbild"><i data-icon="fullscreen"></i><span data-i18n="menu.fullscreen">Vollbild</span></button>
+        </div>
+      </nav>
+      <aside id="title-continue" class="title-continue hidden" aria-label="Kampagne fortsetzen">
+        <div class="tc-art" id="tc-art" aria-hidden="true"></div>
+        <div class="tc-body">
+          <div class="tc-over" data-i18n="title.continue">Weiter in der Kampagne</div>
+          <div class="tc-title" id="tc-title"></div>
+          <div class="tc-sub" id="tc-sub"></div>
+          <button id="btn-continue" class="tc-btn"><span data-i18n="title.continue.btn">Fortsetzen</span><i data-icon="play"></i></button>
+        </div>
+      </aside>
+      <footer class="title-foot">
+        <span id="app-version">Steppensturm · Version 3</span>
+        <span data-i18n="title.osm">Kartendaten realer Orte: © OpenStreetMap-Mitwirkende (ODbL)</span>
+        <span data-i18n="title.fiction">Fiktive Handlung nach realen Ereignissen – Personen erfunden, Inhalte nach Mitte 2026 fiktiv.</span>
+      </footer>
     </div>
   </div>
 
   <div id="screen-campaign" class="screen hidden">
-    <div class="panel wide">
-      <h2>Kampagne: „Stahl und Sonnenblumen"</h2>
-      <div id="mission-list"></div>
-      <div class="row"><button class="back">Zurück</button><button id="btn-reset-progress" class="ghost">Fortschritt zurücksetzen</button></div>
+    <div class="panel mpanel xwide camp-panel">
+      <header class="scr-head">
+        <div class="scr-over" id="camp-over" data-i18n="camp.over">Kampagnen</div>
+        <h2 id="camp-title" data-i18n="camp.title">Feldzug wählen</h2>
+        <p class="scr-sub" id="camp-sub" data-i18n="camp.sub">Drei Epochen, sechs Perspektiven – und eine Grundausbildung für den Einstieg.</p>
+        <div id="camp-progress" class="camp-progress hidden"><div class="bar"><i></i></div><span></span></div>
+      </header>
+      <div class="scr-body">
+        <div id="camp-select" class="camp-select"><div id="camp-grid" class="camp-grid"></div></div>
+        <div id="camp-detail" class="camp-detail hidden">
+          <div class="camp-missions"><div id="mission-list" role="list"></div></div>
+          <aside id="camp-info" class="camp-info">
+            <div class="camp-mapbox"><canvas id="camp-map" width="320" height="320"></canvas></div>
+            <div id="camp-info-text" class="camp-info-text"></div>
+          </aside>
+        </div>
+      </div>
+      <footer class="scr-foot">
+        <button class="back"><i data-icon="back"></i><span data-i18n="common.back">Zurück</span></button>
+        <button id="btn-reset-progress" class="ghost hidden">Fortschritt zurücksetzen</button>
+        <span class="grow"></span>
+        <button id="btn-camp-start" class="big hidden"><span data-i18n="camp.toBriefing">Zum Briefing</span><i data-icon="play"></i></button>
+      </footer>
     </div>
   </div>
 
   <div id="screen-skirmish" class="screen hidden">
-    <div class="panel wide sk-setup">
-      <h2>Gefecht <span class="sub">gegen und mit KI</span></h2>
-      <div class="sk-grid">
-        <div class="sk-form">
-          <div class="sk-field"><span>Modus</span><div class="seg" id="sk-mode"></div></div>
-          <div class="sk-field"><span>Team</span><div class="seg" id="sk-team"><button data-v="UA">Ukraine</button><button data-v="RU">Russland</button></div></div>
-          <label>Deine Rolle <select id="sk-role"></select></label>
-          <div id="sk-role-desc" class="role-desc"></div>
-          <label>Karte <select id="sk-custom"></select></label>
-          <label>Kartenthema <select id="sk-preset"></select></label>
-          <label>Größe <select id="sk-size"></select></label>
-          <label>Jahreszeit <select id="sk-season"><option value="summer">Sommer</option><option value="autumn">Herbst</option><option value="winter">Winter</option></select></label>
-          <label class="check"><input id="sk-night" type="checkbox"> Nachtgefecht</label>
-          <label>KI-Stärke <select id="sk-diff"></select></label>
-          <label>Verstärkung alle <select id="sk-reinforce"><option value="120">2 min</option><option value="180">3 min</option><option value="300">5 min</option></select></label>
-          <label>Siegbedingung <select id="sk-victory"></select></label>
-          <label>Seed <span class="seedrow"><input id="sk-seed" type="number" min="1" max="999999" inputmode="numeric"><button id="sk-reroll" title="Neuer Zufallsseed" aria-label="Neuer Zufallsseed"><i data-icon="dice"></i></button></span></label>
-        </div>
-        <div class="sk-preview">
-          <canvas id="sk-map" width="240" height="240"></canvas>
-          <div id="sk-info"></div>
+    <div class="panel mpanel xwide sk-setup">
+      <header class="scr-head">
+        <div class="scr-over" data-i18n="sk.over">Einzelspieler</div>
+        <h2><span data-i18n="sk.title">Gefecht</span> <span class="sub" data-i18n="sk.sub">gegen und mit KI</span></h2>
+      </header>
+      <div class="scr-body">
+        <div class="sk-grid">
+          <div class="sk-form">
+            <section class="fs">
+              <h3 data-i18n="sk.sec.forces">Aufstellung</h3>
+              <div class="sk-field"><span data-i18n="sk.mode">Modus</span><div class="seg" id="sk-mode"></div></div>
+              <div class="sk-field"><span data-i18n="sk.team">Team</span><div class="seg seg-team" id="sk-team"><button data-v="UA">Ukraine</button><button data-v="RU">Russland</button></div></div>
+              <label><span data-i18n="sk.role">Deine Rolle</span> <select id="sk-role"></select></label>
+              <div id="sk-role-desc" class="role-desc"></div>
+            </section>
+            <section class="fs">
+              <h3 data-i18n="sk.sec.map">Schlachtfeld</h3>
+              <label><span data-i18n="sk.map">Karte</span> <select id="sk-custom"></select></label>
+              <label><span data-i18n="sk.preset">Kartenthema</span> <select id="sk-preset"></select></label>
+              <label><span data-i18n="sk.size">Größe</span> <select id="sk-size"></select></label>
+              <label><span data-i18n="sk.season">Jahreszeit</span> <select id="sk-season"><option value="summer">Sommer</option><option value="autumn">Herbst</option><option value="winter">Winter</option></select></label>
+              <label class="check"><span data-i18n="sk.night">Nachtgefecht</span> <input id="sk-night" type="checkbox" class="switch"></label>
+            </section>
+            <section class="fs">
+              <h3 data-i18n="sk.sec.rules">Regeln</h3>
+              <label><span data-i18n="sk.diff">KI-Stärke</span> <select id="sk-diff"></select></label>
+              <label><span data-i18n="sk.reinforce">Verstärkung alle</span> <select id="sk-reinforce"><option value="120">2 min</option><option value="180">3 min</option><option value="300">5 min</option></select></label>
+              <label><span data-i18n="sk.victory">Siegbedingung</span> <select id="sk-victory"></select></label>
+              <label class="check" title="Zufällige kurze Ausfälle des Satellitennetzes (15–40 s, selten)"><span>Satellitennetz-Ausfälle</span> <input id="skirmish-satoutage" type="checkbox" class="switch" checked></label>
+              <label><span data-i18n="sk.seed">Seed</span> <span class="seedrow"><input id="sk-seed" type="number" min="1" max="999999" inputmode="numeric"><button id="sk-reroll" title="Neuer Zufallsseed" aria-label="Neuer Zufallsseed"><i data-icon="dice"></i></button></span></label>
+            </section>
+          </div>
+          <div class="sk-preview">
+            <div class="map-frame"><canvas id="sk-map" width="240" height="240"></canvas></div>
+            <div id="sk-info"></div>
+          </div>
         </div>
       </div>
-      <div class="row"><button class="back">Zurück</button><button id="btn-sk-start" class="big">Gefecht starten <i data-icon="play"></i></button></div>
+      <footer class="scr-foot">
+        <button class="back"><i data-icon="back"></i><span data-i18n="common.back">Zurück</span></button>
+        <span class="grow"></span>
+        <button id="btn-sk-start" class="big"><span data-i18n="sk.start">Gefecht starten</span> <i data-icon="play"></i></button>
+      </footer>
     </div>
   </div>
 
   <div id="screen-online" class="screen hidden">
-    <div class="panel net-panel">
-      <h2>Online-Gefecht <span class="sub">bis 6 gegen 6, mit KI-Plätzen</span></h2>
-      <label>Dein Name <input id="net-name" maxlength="20" autocomplete="nickname" spellcheck="false"></label>
-      <div class="sk-field"><span>Verbindung</span><div class="seg" id="net-conn"><button data-v="peer"><i data-icon="globe"></i> Internet (PeerJS)</button><button data-v="local"><i data-icon="flask"></i> Lokal (gleicher Browser, Test)</button></div></div>
-      <p id="net-conn-note" class="note"></p>
-      <div class="net-actions">
-        <button id="btn-net-host" class="big">Raum erstellen</button>
-        <div class="net-or">oder</div>
-        <div class="net-join"><input id="net-code" placeholder="Raumcode, z. B. stst-K7PXM" autocomplete="off" autocapitalize="characters" spellcheck="false"><button id="btn-net-join" class="big">Raum beitreten</button></div>
+    <div class="panel mpanel net-panel">
+      <header class="scr-head">
+        <div class="scr-over" data-i18n="net.over">Mehrspieler</div>
+        <h2><span data-i18n="net.title">Online-Gefecht</span> <span class="sub" data-i18n="net.sub">bis 6 gegen 6, mit KI-Plätzen</span></h2>
+      </header>
+      <div class="scr-body">
+        <label class="set-row"><span class="set-l"><b data-i18n="net.name">Dein Name</b></span><input id="net-name" maxlength="20" autocomplete="nickname" spellcheck="false"></label>
+        <div class="sk-field"><span data-i18n="net.conn">Verbindung</span><div class="seg" id="net-conn"><button data-v="peer"><i data-icon="globe"></i> Internet (PeerJS)</button><button data-v="local"><i data-icon="flask"></i> Lokal (gleicher Browser, Test)</button></div></div>
+        <p id="net-conn-note" class="note"></p>
+        <div class="net-actions">
+          <div class="net-card">
+            <div class="net-card-h"><i data-icon="star"></i><span data-i18n="net.host.h">Als Gastgeber</span></div>
+            <p class="muted" data-i18n="net.host.p">Raum erstellen, Code teilen, Plätze mit Spielern oder KI belegen.</p>
+            <button id="btn-net-host" class="big" data-i18n="net.host">Raum erstellen</button>
+          </div>
+          <div class="net-or" data-i18n="common.or">oder</div>
+          <div class="net-card">
+            <div class="net-card-h"><i data-icon="player"></i><span data-i18n="net.join.h">Einem Raum beitreten</span></div>
+            <div class="net-join"><input id="net-code" placeholder="Raumcode, z. B. stst-K7PXM" autocomplete="off" autocapitalize="characters" spellcheck="false"><button id="btn-net-join" class="big" data-i18n="net.join">Raum beitreten</button></div>
+          </div>
+        </div>
+        <p id="net-status" class="net-status"></p>
       </div>
-      <p id="net-status" class="net-status"></p>
-      <div class="row"><button class="back">Zurück</button></div>
+      <footer class="scr-foot"><button class="back"><i data-icon="back"></i><span data-i18n="common.back">Zurück</span></button></footer>
     </div>
   </div>
 
   <div id="screen-lobby" class="screen hidden">
-    <div class="panel wide net-lobby">
-      <div class="lobby-head">
-        <div class="lobby-codebox"><span class="muted">Raumcode</span><span id="lobby-code" class="room-code"></span></div>
+    <div class="panel mpanel xwide net-lobby">
+      <header class="scr-head lobby-head">
+        <div class="lobby-codebox"><span class="muted" data-i18n="lobby.code">Raumcode</span><span id="lobby-code" class="room-code"></span></div>
         <button id="btn-lobby-copy" title="Raumcode kopieren"><i data-icon="copy"></i> Kopieren</button>
         <span id="lobby-me" class="muted"></span>
-      </div>
-      <div class="lobby-grid">
-        <div class="lobby-left">
-          <div id="lobby-team-UA" class="lobby-team"></div>
-          <div id="lobby-team-RU" class="lobby-team"></div>
-          <div class="lobby-tools"><button id="btn-lobby-team"><i data-icon="swap"></i> Team wechseln</button></div>
-          <div id="lobby-role-desc" class="role-desc"></div>
-          <div class="lobby-chat">
-            <div id="lobby-chat-log"></div>
-            <form id="lobby-chat-form"><input id="lobby-chat-input" maxlength="300" autocomplete="off" placeholder="Nachricht an alle …"><button type="submit">Senden</button></form>
+      </header>
+      <div class="scr-body">
+        <div class="lobby-grid">
+          <div class="lobby-left">
+            <div id="lobby-team-UA" class="lobby-team team-UA"></div>
+            <div id="lobby-team-RU" class="lobby-team team-RU"></div>
+            <div class="lobby-tools"><button id="btn-lobby-team"><i data-icon="swap"></i> Team wechseln</button></div>
+            <div id="lobby-role-desc" class="role-desc"></div>
+            <div class="lobby-chat">
+              <div id="lobby-chat-log"></div>
+              <form id="lobby-chat-form"><input id="lobby-chat-input" maxlength="300" autocomplete="off" placeholder="Nachricht an alle …"><button type="submit">Senden</button></form>
+            </div>
+          </div>
+          <div class="lobby-settings sk-form">
+            <h3 data-i18n="lobby.settings">Spieleinstellungen</h3>
+            <div class="sk-field"><span>Modus</span><div class="seg" id="ls-mode"></div></div>
+            <label>Kartenthema <select id="ls-preset"></select></label>
+            <label>Größe <select id="ls-size"></select></label>
+            <label>Jahreszeit <select id="ls-season"><option value="summer">Sommer</option><option value="autumn">Herbst</option><option value="winter">Winter</option></select></label>
+            <label class="check">Nachtgefecht <input id="ls-night" type="checkbox" class="switch"></label>
+            <label>Verstärkung alle <select id="ls-reinforce"><option value="120">2 min</option><option value="180">3 min</option><option value="300">5 min</option></select></label>
+            <label>Siegbedingung <select id="ls-victory"></select></label>
+            <label>KI-Stärke <select id="ls-diff"></select></label>
+            <label>Seed <span class="seedrow"><input id="ls-seed" type="number" min="1" inputmode="numeric"><button id="ls-reroll" title="Neuer Zufallsseed" aria-label="Neuer Zufallsseed"><i data-icon="dice"></i></button></span></label>
+            <div class="ls-preview"><canvas id="ls-map" width="200" height="200"></canvas><div id="ls-info"></div></div>
           </div>
         </div>
-        <div class="lobby-settings sk-form">
-          <div class="sk-field"><span>Modus</span><div class="seg" id="ls-mode"></div></div>
-          <label>Kartenthema <select id="ls-preset"></select></label>
-          <label>Größe <select id="ls-size"></select></label>
-          <label>Jahreszeit <select id="ls-season"><option value="summer">Sommer</option><option value="autumn">Herbst</option><option value="winter">Winter</option></select></label>
-          <label class="check"><input id="ls-night" type="checkbox"> Nachtgefecht</label>
-          <label>Verstärkung alle <select id="ls-reinforce"><option value="120">2 min</option><option value="180">3 min</option><option value="300">5 min</option></select></label>
-          <label>Siegbedingung <select id="ls-victory"></select></label>
-          <label>KI-Stärke <select id="ls-diff"></select></label>
-          <label>Seed <span class="seedrow"><input id="ls-seed" type="number" min="1" inputmode="numeric"><button id="ls-reroll" title="Neuer Zufallsseed" aria-label="Neuer Zufallsseed"><i data-icon="dice"></i></button></span></label>
-          <div class="ls-preview"><canvas id="ls-map" width="200" height="200"></canvas><div id="ls-info"></div></div>
-        </div>
+        <p id="lobby-status" class="net-status"></p>
       </div>
-      <p id="lobby-status" class="net-status"></p>
-      <div class="row"><button id="btn-lobby-leave">Verlassen</button><span class="grow"></span><button id="btn-lobby-ready" class="big">Bereit</button><button id="btn-lobby-start" class="big">Spiel starten <i data-icon="play"></i></button></div>
+      <footer class="scr-foot row"><button id="btn-lobby-leave"><i data-icon="exit"></i> Verlassen</button><span class="grow"></span><button id="btn-lobby-ready" class="big">Bereit</button><button id="btn-lobby-start" class="big">Spiel starten <i data-icon="play"></i></button></footer>
     </div>
   </div>
 
   <div id="net-msg" class="screen hidden">
-    <div class="panel">
-      <h2 id="net-msg-title">Verbindung</h2>
-      <p id="net-msg-text"></p>
-      <div class="row"><span></span><button id="net-msg-ok" class="big">Zum Hauptmenü</button></div>
+    <div class="panel mpanel narrow">
+      <header class="scr-head"><div class="scr-over" data-i18n="net.over">Mehrspieler</div><h2 id="net-msg-title">Verbindung</h2></header>
+      <div class="scr-body"><p id="net-msg-text"></p></div>
+      <footer class="scr-foot"><span class="grow"></span><button id="net-msg-ok" class="big">Zum Hauptmenü</button></footer>
     </div>
   </div>
 
   <div id="screen-mods" class="screen hidden">
-    <div class="panel wide mods-panel">
-      <h2>Mods &amp; eigene Karten</h2>
-      <h3>Eigene Karten</h3>
-      <div id="mods-maps" class="mod-list"></div>
-      <h3>Installierte Mods</h3>
-      <div id="mods-list" class="mod-list"></div>
-      <h3>Mod laden</h3>
-      <label>Datei <input type="file" id="mods-file" accept=".json,application/json,text/plain"></label>
-      <textarea id="mods-paste" rows="4" spellcheck="false" placeholder="… oder Mod-JSON (bzw. eine exportierte Karte) hier einfügen"></textarea>
-      <div class="row"><button id="mods-example">Beispiel-Mod laden</button><button id="mods-load" class="big"><i data-icon="upload"></i> Mod laden</button></div>
-      <div id="mods-msg" class="ed-msg"></div>
-      <p class="note">Mods sind reine Daten (JSON, Format „steppensturm-mod"): Karten sowie Einheitenwerte. Erlaubte Felder – <span id="mods-fields"></span>. Ausführbarer Code wird abgewiesen, Werte werden geklemmt. Format und Beispiel: README, Abschnitt „Mods".</p>
-      <div class="row"><button class="back">Zurück</button><button id="mods-editor"><i data-icon="editor"></i> Editor öffnen</button></div>
+    <div class="panel mpanel wide mods-panel">
+      <header class="scr-head">
+        <div class="scr-over" data-i18n="mods.over">Inhalte</div>
+        <h2 data-i18n="mods.title">Mods &amp; eigene Karten</h2>
+      </header>
+      <div class="scr-body">
+        <h3 data-i18n="mods.maps">Eigene Karten</h3>
+        <div id="mods-maps" class="mod-list"></div>
+        <h3 data-i18n="mods.installed">Installierte Mods</h3>
+        <div id="mods-list" class="mod-list"></div>
+        <h3 data-i18n="mods.load">Mod laden</h3>
+        <label class="set-row"><span class="set-l"><b>Datei</b></span><input type="file" id="mods-file" accept=".json,application/json,text/plain"></label>
+        <textarea id="mods-paste" rows="4" spellcheck="false" placeholder="… oder Mod-JSON (bzw. eine exportierte Karte) hier einfügen"></textarea>
+        <div class="row"><button id="mods-example">Beispiel-Mod laden</button><button id="mods-load" class="big"><i data-icon="upload"></i> Mod laden</button></div>
+        <div id="mods-msg" class="ed-msg"></div>
+        <p class="note">Mods sind reine Daten (JSON, Format „steppensturm-mod"): Karten sowie Einheitenwerte. Erlaubte Felder – <span id="mods-fields"></span>. Ausführbarer Code wird abgewiesen, Werte werden geklemmt. Format und Beispiel: README, Abschnitt „Mods".</p>
+      </div>
+      <footer class="scr-foot"><button class="back"><i data-icon="back"></i><span data-i18n="common.back">Zurück</span></button><span class="grow"></span><button id="mods-editor"><i data-icon="editor"></i> Editor öffnen</button></footer>
     </div>
   </div>
 
   <div id="screen-briefing" class="screen hidden">
-    <div class="panel wide briefing">
-      <div class="brief-head">
-        <div>
-          <div id="brief-place" class="place"></div>
-          <h2 id="brief-title"></h2>
+    <div class="panel mpanel xwide briefing">
+      <header class="scr-head brief-head">
+        <div class="scr-over" id="brief-over" data-i18n="brief.over">Einsatzbefehl</div>
+        <h2 id="brief-title"></h2>
+        <div id="brief-place" class="brief-meta"></div>
+      </header>
+      <div class="scr-body">
+        <div class="brief-grid">
+          <div class="brief-left">
+            <div class="map-frame brief-mapbox"><canvas id="brief-map" width="360" height="360"></canvas></div>
+            <div class="map-legend"><span><i class="lg lg-start"></i><span data-i18n="brief.legend.start">Ausgangsstellung</span></span><span><i class="lg lg-mark"></i><span data-i18n="brief.legend.mark">Markierung</span></span><span><i class="lg lg-road"></i><span data-i18n="brief.legend.road">Straße</span></span><span><i class="lg lg-forest"></i><span data-i18n="brief.legend.forest">Wald</span></span></div>
+          </div>
+          <div class="brief-right">
+            <section class="brief-sec"><h3><i data-icon="radio"></i><span data-i18n="brief.situation">Lage</span></h3><div id="brief-text" class="radio-log"></div></section>
+            <section class="brief-sec"><h3><i data-icon="crosshair"></i><span data-i18n="brief.objectives">Auftrag</span></h3><ul id="brief-objectives" class="obj-list"></ul></section>
+            <section class="brief-sec"><h3><i data-icon="team"></i><span data-i18n="brief.forces">Verfügbare Kräfte</span></h3><div id="brief-forces"></div></section>
+          </div>
         </div>
-        <canvas id="brief-map" width="220" height="220"></canvas>
       </div>
-      <div id="brief-text"></div>
-      <h3>Einsatzziele</h3>
-      <ul id="brief-objectives"></ul>
-      <h3>Verfügbare Kräfte</h3>
-      <div id="brief-forces"></div>
-      <div class="row"><button class="back-campaign">Zurück</button><button id="btn-start-mission" class="big">Einsatz beginnen</button></div>
+      <footer class="scr-foot"><button class="back-campaign"><i data-icon="back"></i><span data-i18n="common.back">Zurück</span></button><span class="grow"></span><button id="btn-start-mission" class="big"><span data-i18n="brief.start">Einsatz beginnen</span> <i data-icon="play"></i></button></footer>
     </div>
   </div>
 
   <div id="screen-settings" class="screen hidden">
-    <div class="panel">
-      <h2>Grafik &amp; Einstellungen</h2>
-      <label>Qualitätsstufe
-        <select id="set-quality">
-          <option value="low">Niedrig (ältere Handys)</option>
-          <option value="medium">Mittel</option>
-          <option value="high">Hoch</option>
-          <option value="ultra">Ultra</option>
-        </select>
-      </label>
-      <label>Upscaling (SSU – DLSS-ähnlich)
-        <select id="set-upscale">
-          <option value="native">Nativ (100 %)</option>
-          <option value="quality">Qualität (67 %)</option>
-          <option value="balanced">Ausgewogen (58 %)</option>
-          <option value="performance">Leistung (50 %)</option>
-          <option value="ultraperf">Ultra-Leistung (33 %)</option>
-          <option value="auto">Dynamisch (Ziel-FPS)</option>
-        </select>
-      </label>
-      <label>Ziel-FPS (dynamisch)
-        <select id="set-targetfps">
-          <option value="30">30</option>
-          <option value="60">60</option>
-          <option value="90">90</option>
-          <option value="120">120</option>
-        </select>
-      </label>
-      <label>Schärfe <input id="set-sharpness" type="range" min="0" max="1" step="0.05"></label>
-      <label class="check"><input id="set-bloom" type="checkbox"> Bloom / Leuchteffekte</label>
-      <label class="check"><input id="set-shadows" type="checkbox"> Echtzeit-Schatten</label>
-      <label class="check"><input id="set-fps" type="checkbox"> FPS-Anzeige</label>
-      <label>Lautstärke <input id="set-volume" type="range" min="0" max="1" step="0.05"></label>
-      <p class="note">Hinweis: Echtes NVIDIA DLSS benötigt native Treiber-Schnittstellen und ist in Browsern nicht verfügbar.
-        <b>SSU</b> rendert intern mit geringerer Auflösung und skaliert mit einem kantenbewussten Bikubik-Filter plus
-        adaptivem Nachschärfen (ähnlich AMD FSR 1) auf Bildschirmauflösung hoch – das läuft auf jeder GPU, auch auf Handys.</p>
-      <div class="row"><button class="back">Fertig</button></div>
+    <div class="panel mpanel settings-panel">
+      <header class="scr-head">
+        <div class="scr-over" data-i18n="set.over">Optionen</div>
+        <h2 data-i18n="set.title">Einstellungen</h2>
+        <nav class="tabs" id="set-tabs" role="tablist" aria-label="Einstellungsbereiche">
+          <button role="tab" data-tab="gfx" class="active" aria-selected="true"><i data-icon="monitor"></i><span data-i18n="set.tab.gfx">Grafik</span></button>
+          <button role="tab" data-tab="audio" aria-selected="false"><i data-icon="speaker"></i><span data-i18n="set.tab.audio">Audio</span></button>
+          <button role="tab" data-tab="controls" aria-selected="false"><i data-icon="gamepad"></i><span data-i18n="set.tab.controls">Steuerung</span></button>
+          <button role="tab" data-tab="game" aria-selected="false"><i data-icon="gear"></i><span data-i18n="set.tab.game">Spiel</span></button>
+        </nav>
+      </header>
+      <div class="scr-body">
+        <section class="tab-pane" data-pane="gfx" role="tabpanel">
+          <label class="set-row"><span class="set-l"><b data-i18n="set.quality">Qualitätsstufe</b><small data-i18n="set.quality.d">Sichtweite, Vegetation, Effekte</small></span>
+            <select id="set-quality">
+              <option value="low">Niedrig (ältere Handys)</option>
+              <option value="medium">Mittel</option>
+              <option value="high">Hoch</option>
+              <option value="ultra">Ultra</option>
+            </select>
+          </label>
+          <label class="set-row"><span class="set-l"><b data-i18n="set.upscale">Upscaling (SSU)</b><small data-i18n="set.upscale.d">Interne Auflösung, DLSS-ähnlich</small></span>
+            <select id="set-upscale">
+              <option value="native">Nativ (100 %)</option>
+              <option value="quality">Qualität (67 %)</option>
+              <option value="balanced">Ausgewogen (58 %)</option>
+              <option value="performance">Leistung (50 %)</option>
+              <option value="ultraperf">Ultra-Leistung (33 %)</option>
+              <option value="auto">Dynamisch (Ziel-FPS)</option>
+            </select>
+          </label>
+          <label class="set-row"><span class="set-l"><b data-i18n="set.targetfps">Ziel-FPS</b><small data-i18n="set.targetfps.d">für dynamisches Upscaling</small></span>
+            <select id="set-targetfps">
+              <option value="30">30</option>
+              <option value="60">60</option>
+              <option value="90">90</option>
+              <option value="120">120</option>
+            </select>
+          </label>
+          <label class="set-row"><span class="set-l"><b data-i18n="set.sharpness">Schärfe</b></span><span class="range"><input id="set-sharpness" type="range" min="0" max="1" step="0.05"><output for="set-sharpness"></output></span></label>
+          <label class="set-row"><span class="set-l"><b data-i18n="set.bloom">Bloom / Leuchteffekte</b></span><input id="set-bloom" type="checkbox" class="switch"></label>
+          <label class="set-row"><span class="set-l"><b data-i18n="set.shadows">Echtzeit-Schatten</b></span><input id="set-shadows" type="checkbox" class="switch"></label>
+          <label class="set-row"><span class="set-l"><b data-i18n="set.fps">FPS-Anzeige</b></span><input id="set-fps" type="checkbox" class="switch"></label>
+          <p class="note">Echtes NVIDIA DLSS benötigt native Treiber-Schnittstellen und ist in Browsern nicht verfügbar.
+            <b>SSU</b> rendert intern mit geringerer Auflösung und skaliert mit einem kantenbewussten Bikubik-Filter plus
+            adaptivem Nachschärfen (ähnlich AMD FSR 1) auf Bildschirmauflösung hoch – das läuft auf jeder GPU, auch auf Handys.</p>
+        </section>
+        <section class="tab-pane hidden" data-pane="audio" role="tabpanel">
+          <label class="set-row"><span class="set-l"><b data-i18n="set.volume">Effektlautstärke</b><small data-i18n="set.volume.d">Waffen, Funk, Oberfläche</small></span><span class="range"><input id="set-volume" type="range" min="0" max="1" step="0.05"><output for="set-volume"></output></span></label>
+          <label class="set-row"><span class="set-l"><b data-i18n="set.music">Musik</b><small data-i18n="set.music.d">Thema passend zur Epoche, steigert sich im Gefecht</small></span><input id="set-music" type="checkbox" class="switch"></label>
+          <label class="set-row"><span class="set-l"><b data-i18n="set.musicvol">Musiklautstärke</b></span><span class="range"><input id="set-musicvol" type="range" min="0" max="1" step="0.05"><output for="set-musicvol"></output></span></label>
+        </section>
+        <section class="tab-pane hidden" data-pane="controls" role="tabpanel">
+          <div class="ctl-grid">
+            <div class="ctl-card"><h3><i data-icon="keyboard"></i><span data-i18n="set.ctl.pc">Maus &amp; Tastatur</span></h3>
+              <dl class="keys"><dt>Linksklick / Ziehen</dt><dd>Wählen / Auswahlrahmen</dd><dt>Rechtsklick</dt><dd>Bewegen / Angreifen</dd><dt>WASD · Rand · Rad</dt><dd>Kamera, Zoom</dd><dt>Q / E</dt><dd>Drehen</dd><dt>Strg+1…9 / 1…9</dt><dd>Gruppen</dd><dt>Leertaste · Esc</dt><dd>Pause · Menü</dd><dt>F1–F4</dt><dd>Fähigkeiten</dd></dl></div>
+            <div class="ctl-card"><h3><i data-icon="gamepad"></i><span data-i18n="set.ctl.pad">Gamepad</span></h3>
+              <dl class="keys"><dt>Linker Stick</dt><dd>Cursor · im Menü: Fokus</dd><dt>A</dt><dd>Wählen / Bestätigen</dd><dt>B</dt><dd>Befehl / Zurück</dd><dt>X · Y</dt><dd>Angriffsbewegung · Halt</dd><dt>RB</dt><dd>Fähigkeiten</dd><dt>Steuerkreuz</dt><dd>Gruppen 1–4 · Menü-Navigation</dd><dt>Start · Back lang</dt><dd>Pause · Belegung</dd></dl>
+              <p class="muted small" data-i18n="set.ctl.pad.d">Xbox- und PlayStation-Controller werden automatisch erkannt. Im Menü bewegt das Steuerkreuz den Fokus, links/rechts ändert Regler und Auswahllisten.</p></div>
+            <div class="ctl-card"><h3><i data-icon="player"></i><span data-i18n="set.ctl.touch">Touch</span></h3>
+              <dl class="keys"><dt>Tippen</dt><dd>Wählen / Ziel</dd><dt>Ein Finger ziehen</dt><dd>Kamera schieben</dd><dt>Zwei Finger</dt><dd>Zoomen &amp; Drehen</dd><dt>„Rahmen“</dt><dd>Auswahlrahmen ziehen</dd></dl></div>
+          </div>
+          <div class="row"><button id="btn-set-help"><i data-icon="help"></i> <span data-i18n="set.ctl.full">Vollständige Steuerung &amp; Taktik-Tipps</span></button></div>
+        </section>
+        <section class="tab-pane hidden" data-pane="game" role="tabpanel">
+          <div class="set-row"><span class="set-l"><b data-i18n="set.lang">Sprache</b><small data-i18n="set.lang.d">Englische Fassung folgt</small></span>
+            <div class="seg" id="set-lang"><button data-v="de" class="active">Deutsch</button><button data-v="en" disabled title="folgt">English <small>(folgt)</small></button></div></div>
+          <label class="set-row"><span class="set-l"><b data-i18n="set.motion">Menü-Animationen reduzieren</b><small data-i18n="set.motion.d">Übergänge und Bewegungen im Menü abschalten</small></span><input id="set-reducemotion" type="checkbox" class="switch"></label>
+          <div class="set-row"><span class="set-l"><b data-i18n="set.reset">Kampagnenfortschritt</b><small data-i18n="set.reset.d">Freigeschaltete Missionen und Bestzeiten aller Kampagnen</small></span><button id="btn-reset-all" class="ghost danger" data-i18n="set.reset.btn">Alles zurücksetzen</button></div>
+          <p class="note" data-i18n="set.about">Steppensturm ist ein Fan-Projekt im Stil klassischer Echtzeit-Taktikspiele. Kartendaten realer Orte: © OpenStreetMap-Mitwirkende (ODbL). Handlung und Personen sind fiktiv.</p>
+        </section>
+      </div>
+      <footer class="scr-foot"><span class="grow"></span><button class="back"><i data-icon="check"></i><span data-i18n="common.done">Fertig</span></button></footer>
     </div>
   </div>
 
   <div id="screen-help" class="screen hidden">
-    <div class="panel">
-      <h2>Steuerung</h2>
+    <div class="panel mpanel wide help-panel">
+      <header class="scr-head"><div class="scr-over" data-i18n="help.over">Handbuch</div><h2 data-i18n="help.title">Steuerung</h2></header>
+      <div class="scr-body">
       <div class="cols">
         <div>
           <h3>PC</h3>
@@ -305,29 +425,45 @@
         <li>Hügelkämme, Wald und Häuser blockieren die Sicht. Verlassene Fahrzeuge kann Infanterie per Rechtsklick/Antippen übernehmen.</li>
       </ul>
       <p class="muted"><b>Gamepad</b> (Xbox/PlayStation): Linker Stick Cursor, A wählen, B Befehl, X Angriffsbewegung, Y Halt, RB Fähigkeiten, Steuerkreuz Gruppen 1–4, Start Pause. Im Spiel Back (Share) lang halten zeigt die vollständige Belegung.</p>
-      <div class="row"><button class="back">Zurück</button></div>
+      
+      </div>
+      <footer class="scr-foot"><button class="back"><i data-icon="back"></i><span data-i18n="common.back">Zurück</span></button></footer>
     </div>
   </div>
 
   <div id="screen-pause" class="screen hidden">
-    <div class="panel">
-      <h2>Pause</h2>
-      <p id="pause-info" class="note hidden"></p>
-      <div class="menu">
-        <button id="btn-resume" class="big">Weiter</button>
-        <button id="btn-pause-settings">Einstellungen</button>
-        <button id="btn-restart">Mission neu starten</button>
-        <button id="btn-quit">Zur Kampagne</button>
+    <div class="panel mpanel pause-panel">
+      <header class="scr-head">
+        <div class="scr-over" id="pause-over" data-i18n="pause.over">Einsatz unterbrochen</div>
+        <h2 data-i18n="pause.title">Pause</h2>
+        <p id="pause-info" class="note hidden"></p>
+      </header>
+      <div class="scr-body">
+        <div class="menu pause-menu">
+          <button id="btn-resume" class="pm-item big"><i data-icon="play"></i><span class="lbl">Weiter</span></button>
+          <button id="btn-pause-settings" class="pm-item"><i data-icon="gear"></i><span class="lbl" data-i18n="pause.settings">Einstellungen</span></button>
+          <button id="btn-pause-help" class="pm-item"><i data-icon="help"></i><span class="lbl" data-i18n="pause.help">Hilfe &amp; Steuerung</span></button>
+          <button id="btn-restart" class="pm-item"><i data-icon="retry"></i><span class="lbl">Mission neu starten</span></button>
+          <button id="btn-surrender" class="pm-item danger"><i data-icon="surrender"></i><span class="lbl" data-i18n="pause.surrender">Aufgeben</span></button>
+          <button id="btn-quit" class="pm-item"><i data-icon="exit"></i><span class="lbl">Zur Kampagne</span></button>
+        </div>
       </div>
     </div>
   </div>
 
   <div id="screen-end" class="screen hidden">
-    <div class="panel">
-      <h2 id="end-title"></h2>
-      <div id="end-text"></div>
-      <div id="end-stats"></div>
-      <div class="row"><button id="btn-end-retry">Erneut versuchen</button><button id="btn-end-next" class="big">Weiter</button></div>
+    <div class="panel mpanel end-panel">
+      <header class="end-banner" id="end-banner">
+        <div class="end-over" id="end-over" data-i18n="end.over">Einsatzbericht</div>
+        <div class="end-word" id="end-word"></div>
+        <h2 id="end-title"></h2>
+      </header>
+      <div class="scr-body">
+        <div id="end-medals" class="end-medals hidden" aria-label="Medaillen"></div>
+        <div id="end-stats"></div>
+        <div id="end-text"></div>
+      </div>
+      <footer class="scr-foot"><button id="btn-end-menu"><i data-icon="home"></i><span data-i18n="end.menu">Hauptmenü</span></button><span class="grow"></span><button id="btn-end-retry">Erneut versuchen</button><button id="btn-end-next" class="big">Weiter</button></footer>
     </div>
   </div>
 

@@ -644,6 +644,11 @@ export class AICommander {
           const c = this.sk.points.filter((q) => q.owner === other(team) && !fow.isVisible(q.x, q.z)).sort((x, y) => d2(x.x, x.z, this.home[0], this.home[1]) - d2(y.x, y.z, this.home[0], this.home[1]))[0];
           if (c && Math.random() < 0.5) target = [c.x, c.z];
         }
+      } else if ((a.id === 'ew' || a.id === 'm_tobol') && g.satnet?.enemyTerminalsSeen?.(team).some((t) => !t._satJam)) {
+        // V3-SL: sichtbare, noch nicht gestörte feindliche Satellitenterminals stören (Tobol 60 m, EloKa-Störsender 38 m)
+        const terms = g.satnet.enemyTerminalsSeen(team).filter((t) => !t._satJam);
+        const c = this.bestCluster(terms, a.id === 'm_tobol' ? 45 : 30);
+        if (c) target = [c.x, c.z];
       } else if (a.id === 'ew') {
         const drones = enemies.filter((e) => e.type.air && e.type.key !== 'ka52' && ground.some((u) => d2(u.pos.x, u.pos.z, e.pos.x, e.pos.z) < 70 * 70));
         if (drones.length >= (L === AI_LEVELS.hard ? 1 : 2)) target = [drones[0].pos.x, drones[0].pos.z];

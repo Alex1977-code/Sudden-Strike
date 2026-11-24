@@ -286,6 +286,7 @@ export class HostSession {
     this.snapN++;
     const withPlayers = this.snapN % NET.playersEvery === 1 || NET.playersEvery <= 1;
     const common = { t: r1(g.time) };
+    if (g.weather && (withPlayers || g.weather.flares.length)) common.wx = g.weather.pack(); // V3-W: Wetter, Uhrzeit, Leuchtraketen
     if (sk) {
       common.sk = { p: netPointState(sk), s: [sk.scores.UA, sk.scores.RU], r: r1(sk.reinfT), c: sk.reinfCycle, i: sk.interval };
       if (sk.result) common.res = sk.result;
@@ -306,7 +307,9 @@ export class HostSession {
     for (const id of this.connected) {
       const p = g.playerById(id); if (!p) continue;
       const ex = extra[p.team] || {};
+      if (g.satnet?.anyActive?.()) ex.sn ||= g.satnet.pack(p.team); // V3-SL: Netzstatus/gestörte Terminals des eigenen Teams
       const msg = { ...common, ...(withPlayers ? { pl: plFor[p.team] } : {}), u: enc[p.team], ...(ex.cg ? { cg: ex.cg } : {}), ...(ex.wp?.[p.id] ? { wp: ex.wp[p.id] } : {}), me: { ab: p.abilities.map((a) => [Math.round(a.cd * 10), a.charges === Infinity ? -1 : a.charges]) } };
+      if (ex.sn) msg.sn = ex.sn;
       this._count('bytes', id, msg);
       this.lobby.sendSnap(msg, id);
     }
@@ -504,6 +507,7 @@ export class ClientSession {
     if (this.offset === null || Math.abs(off - this.offset) > 1.5) { this.offset = off; this.renderT = s.t - NET.interpDelay; }
     else this.offset += (off - this.offset) * 0.08;
     if (Math.abs(g.time - s.t) > 1) g.time = s.t;
+    if (s.wx && g.weather) g.weather.apply(s.wx); // V3-W
     // Einheiten
     const seen = new Set();
     if (typeof s.u === 'string') {
@@ -523,6 +527,7 @@ export class ClientSession {
       if (s.wp?.[u.id]) g.orders.unpackWaypoints(u, s.wp[u.id]); else u.netWp = null;
     }
     if (Array.isArray(s.br)) s.br.forEach((c, i) => { const b = g.bridges[i]; if (b) g.mapobj.applyState(b.id, c); });
+    if (s.sn) g.satnet?.applyNet?.(s.sn); // V3-SL: Satellitennetz (Status, Ausfall-Countdown, gestörte Terminals)
     // Eigene Fähigkeiten
     const lp = g.localPlayer;
     if (s.me?.ab && lp) {

@@ -765,3 +765,24 @@ function railCar(kind) {
   };
 }
 for (const k of ['loco', 'wagon', 'tank', 'armor', 'flak']) registerModel('m_rail_' + k, railCar(k));
+
+// ======================= V3-SL: Satellitenterminal =======================
+// Flache, rechteckige Phased-Array-Antenne auf Mast mit Dreibein, Router-Kiste und Kabel – neutral, ohne Markenzeichen.
+registerModel('m_satterm', (side) => {
+  const M = K.M, g = new THREE.Group();
+  const H = 1.15, foot = 0.62, tilt = -Math.atan2(foot, H);
+  for (let i = 0; i < 3; i++) {
+    const leg = grp(g, 0, 0, 0); leg.rotation.y = i * 2.094 + 0.5;
+    cyl(leg, 0.03, 0.045, Math.hypot(H, foot), M.darkMetal, 0, H / 2, foot / 2, tilt, 0, 0, 5);
+  }
+  cyl(g, 0.05, 0.05, 0.6, M.grey, 0, H + 0.25, 0, 0, 0, 0, 6);            // Mast
+  const head = grp(g, 0, H + 0.6, 0); head.rotation.x = -0.75;           // Antenne zum Himmel geneigt
+  box(head, 1.05, 0.07, 0.66, M.white, 0, 0.04, 0);
+  box(head, 0.95, 0.02, 0.56, X().pale, 0, 0.085, 0);
+  box(head, 0.16, 0.12, 0.16, M.grey, 0, -0.06, 0);
+  box(g, 0.42, 0.26, 0.14, M.darkMetal, 0.75, 0.13, -0.35, 0, 0.4, 0);    // Router/Netzteil
+  box(g, 0.05, 0.03, 0.85, M.rubber, 0.36, 0.02, -0.18, 0, 0.9, 0);       // Kabel
+  if (side === 'UA') box(g, 0.2, 0.05, 0.04, M.iffUA, 0.75, 0.29, -0.35, 0, 0.4, 0);
+  g.scale.setScalar(1.35);
+  return { root: g, height: 2.6 };
+});

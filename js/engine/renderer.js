@@ -317,7 +317,7 @@ export class GameRenderer {
     if (this.envRT) this.envRT.dispose();
     const envScene = new THREE.Scene();
     if (night) { envScene.background = new THREE.Color(0x0a0f1c); }
-    else { const s2 = new Sky(); s2.scale.setScalar(100); Object.keys(u).forEach((k) => (s2.material.uniforms[k].value = u[k].value)); envScene.add(s2); }
+    else { const s2 = new Sky(); s2.scale.setScalar(100); Object.keys(u).forEach((k) => { if (s2.material.uniforms[k]) s2.material.uniforms[k].value = u[k].value; }); // V3-W: Wetter-Uniforms nur im Haupthimmel envScene.add(s2); }
     this.envRT = this.pmrem.fromScene(envScene, 0.04);
     this.scene.environment = this.envRT.texture;
     this.scene.environmentIntensity = P.envI;

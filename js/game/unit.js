@@ -448,6 +448,7 @@ export class Unit {
     if (type.naval && Math.abs(diff) > 1.2) spd *= 0.3;
     if (this.hp < this.maxHp * 0.3 && type.vehicle) spd *= 0.6;
     if (!type.air && game.tac) spd *= game.tac.speedMul(this); // Niederhalten, Verwundung, Motorschaden
+    if (game.weather && !game.weather.idle) spd *= game.weather.moveMul(this); // V3-W: Rasputiza/Matsch, Flugwetter
     // Kamikaze-Anflug
     if (type.air) {
       let targetAlt = this.alt;

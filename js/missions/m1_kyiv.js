@@ -33,6 +33,7 @@ export default {
     ],
   },
   env: { season: 'winter', sunElev: 22, sunAzim: 200, fogDensity: 0.004 },
+  weather: { type: 'snow', intensity: 0.35 }, time: { start: '07:10', speed: 4 }, // V3-W: leichter Schneefall, Morgengrauen
   camera: { x: 0, z: 66, dist: 85 },
   abilities: ['scan', { id: 'artillery', charges: 2 }],
   markers: [{ x: 0, z: 112, r: 14, label: 'Durchbruchslinie', color: '#ff6b6b' }],

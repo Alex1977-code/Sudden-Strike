@@ -11,11 +11,21 @@ const ARTY_W = { name: '155-mm', dmg: 200, splash: 6, vs: { soft: 1, light: 0.8,
 const STORM_W = { name: 'Storm Shadow', dmg: 2600, splash: 9, vs: { soft: 1, light: 1, heavy: 1, air: 0, struct: 1 } };
 const enemyOf = (team) => (team === 'UA' ? 'RU' : 'UA');
 const isLocal = (game, p) => p.id === game.localPlayerId;
+// V3-SL: Satellitennetz (js/game/satnet.js) – Fähigkeiten mit needsNet: Streuung/Vorlauf/Reichweite je Netzstufe
+const NO_NET = { level: null, spread: 1, delay: 0, range: Infinity };
+export const netMod = (game, p, id) => game.satnet?.mod(p, id) || NO_NET;
+export const netNote = (nm) => (nm.level === 'on' ? ' Zieldaten über Satellitennetz.' : nm.level === 'off' ? ' Kein Netz – Lagebild veraltet, Vorlauf länger!' : '');
+export function netRange(game, p, id, op, x, z, who) {
+  const nm = netMod(game, p, id);
+  if (nm.level !== 'off' || Math.hypot(op.pos.x - x, op.pos.z - z) <= nm.range) return true;
+  game.sayTo(p.id, who, `Kein Netz – Ziel außerhalb der Funkreichweite (${nm.range} m). Pilot näher heranführen!`, 3);
+  return false;
+}
 
 export const ABILITIES = {
   scan: {
-    name: 'Aufklärung', icon: '🛰️', cooldown: 35, radius: 32,
-    desc: 'Satellitenbild & Drohnenaufklärung: deckt ein Gebiet 15 s lang auf.',
+    name: 'Aufklärung', icon: '🛰️', cooldown: 35, radius: 32, needsNet: true, netLock: true, // V3-SL: ohne Satellitennetz gesperrt
+    desc: 'Satellitenbild & Drohnenaufklärung: deckt ein Gebiet 15 s lang auf. Nutzt das Team ein Satellitennetz, nur mit Verbindung.',
     exec(game, x, z, p) {
       game.addReveal(x, z, 32, 15, p.team);
       game.markerTo(p.team, x, z, 0x6ab0ff, 15, 32);
@@ -23,18 +33,21 @@ export const ABILITIES = {
     },
   },
   fpv: {
-    name: 'FPV-Schwarm', icon: '🐝', cooldown: 22, charges: 6, requires: 'dronepilot', radius: 14,
-    desc: 'Drohnenpilot startet 3 FPV-Kamikazedrohnen auf das Zielgebiet.',
+    name: 'FPV-Schwarm', icon: '🐝', cooldown: 22, charges: 6, requires: 'dronepilot', radius: 14, needsNet: true,
+    desc: 'Drohnenpilot startet 3 FPV-Kamikazedrohnen auf das Zielgebiet. Satellitennetz: volle Reichweite; ohne Netz nur 70 m vom Piloten.',
     exec(game, x, z, p) {
       const pilots = game.units.filter((u) => u.owner === p.id && u.alive && u.type.key === 'dronepilot');
       if (!pilots.length) return false;
       pilots.sort((a, b) => Math.hypot(a.pos.x - x, a.pos.z - z) - Math.hypot(b.pos.x - x, b.pos.z - z));
       const pl = pilots[0];
+      if (!netRange(game, p, 'fpv', pl, x, z, 'Drohnenpilot')) return false; // V3-SL
+      const linked = !!game.satnet?.isConnected(pl);
       for (let i = 0; i < 3; i++) {
         game.later(i * 0.4, () => {
           const d = game.spawn('fpv', p.team, pl.pos.x + rand(-2, 2), pl.pos.z + rand(-2, 2), { startAlt: 1, owner: p.id });
           d.moveTo(x + rand(-6, 6), z + rand(-6, 6), { attackMove: true });
           d.ai = null;
+          d.netOp = pl.id; d.netLinked = linked; // V3-SL: Führung über das Satellitennetz
           game.audio.drone(pl.pos.x, pl.pos.z);
         });
       }
@@ -43,18 +56,21 @@ export const ABILITIES = {
   },
   // Gefechtsmodus: russisches Gegenstück zum FPV-Schwarm (Orlan-/Lancet-Operator)
   lancet: {
-    name: 'Lancet-Schlag', icon: '✈️', cooldown: 24, charges: 6, requires: 'e_recon', radius: 14,
+    name: 'Lancet-Schlag', icon: '✈️', cooldown: 24, charges: 6, requires: 'e_recon', radius: 14, needsNet: true,
     desc: 'Operator startet 3 Lancet-Kamikazedrohnen auf das Zielgebiet.',
     exec(game, x, z, p) {
       const ops = game.units.filter((u) => u.owner === p.id && u.alive && u.type.key === 'e_recon');
       if (!ops.length) return false;
       ops.sort((a, b) => Math.hypot(a.pos.x - x, a.pos.z - z) - Math.hypot(b.pos.x - x, b.pos.z - z));
       const op = ops[0];
+      if (!netRange(game, p, 'lancet', op, x, z, 'Operator')) return false; // V3-SL
+      const linked = !!game.satnet?.isConnected(op);
       for (let i = 0; i < 3; i++) {
         game.later(i * 0.45, () => {
           const d = game.spawn('lancet', p.team, op.pos.x + rand(-2, 2), op.pos.z + rand(-2, 2), { startAlt: 2, owner: p.id });
           d.moveTo(x + rand(-6, 6), z + rand(-6, 6), { attackMove: true });
           d.ai = null;
+          d.netOp = op.id; d.netLinked = linked;
           game.audio.drone(op.pos.x, op.pos.z);
         });
       }
@@ -62,17 +78,18 @@ export const ABILITIES = {
     },
   },
   himars: {
-    name: 'HIMARS-Schlag', icon: '🎆', cooldown: 50, requires: 'himars', radius: 12,
-    desc: '6 GMLRS-Präzisionsraketen. Ohne Sicht auf das Ziel deutlich ungenauer.',
+    name: 'HIMARS-Schlag', icon: '🎆', cooldown: 50, requires: 'himars', radius: 12, needsNet: true,
+    desc: '6 GMLRS-Präzisionsraketen. Ohne Sicht auf das Ziel deutlich ungenauer. Mit Satellitennetz Streuung −40 %, ohne Netz ungenauer und später.',
     exec(game, x, z, p) {
       const launchers = game.units.filter((u) => u.owner === p.id && u.alive && u.type.key === 'himars');
       if (!launchers.length) return false;
       const l = launchers[0];
       const visible = game.fowFor(p.team).isVisible(x, z);
-      const spread = visible ? 6 : 16;
-      game.sayTo(p.id, 'HIMARS', visible ? 'Ziel erfasst. Sechs Raketen unterwegs!' : 'Kein Sichtkontakt – feuern nach Koordinaten. Streuung erhöht!', 3);
+      const nm = netMod(game, p, 'himars'); // V3-SL: Satellitennetz (Streuung/Vorlauf)
+      const spread = (visible ? 6 : 16) * nm.spread;
+      game.sayTo(p.id, 'HIMARS', (visible ? 'Ziel erfasst. Sechs Raketen unterwegs!' : 'Kein Sichtkontakt – feuern nach Koordinaten. Streuung erhöht!') + netNote(nm), 3);
       for (let i = 0; i < 6; i++) {
-        game.later(i * 0.45, () => {
+        game.later(i * 0.45 + nm.delay, () => {
           const from = l.muzzleWorld().add(new THREE.Vector3(0, 1, 0));
           const tx = x + rand(-spread, spread), tz = z + rand(-spread, spread);
           game.effects.muzzle(from.x, from.y, from.z, true);
@@ -89,17 +106,18 @@ export const ABILITIES = {
   // Gefechtsmodus (MP-T7): russisches Gegenstück zum HIMARS-Schlag – Salve einer rückwärtigen Tornado-S-Batterie,
   // vom Msta-Zug geleitet (ohne Msta keine Feuerleitung). 6 Raketen, etwas mehr Streuung als GMLRS.
   tornado: {
-    name: 'Tornado-S-Salve', icon: '🎆', cooldown: 60, requires: 'msta', radius: 13,
+    name: 'Tornado-S-Salve', icon: '🎆', cooldown: 60, requires: 'msta', radius: 13, needsNet: true,
     desc: '6 Raketen einer rückwärtigen Tornado-S-Batterie (Feuerleitung über die Msta). Ohne Sicht auf das Ziel deutlich ungenauer.',
     exec(game, x, z, p) {
       const fdc = game.units.find((u) => u.owner === p.id && u.alive && u.type.key === 'msta');
       if (!fdc) return false;
       const visible = game.fowFor(p.team).isVisible(x, z);
-      const spread = visible ? 8 : 18;
+      const nm = netMod(game, p, 'tornado'); // V3-SL
+      const spread = (visible ? 8 : 18) * nm.spread;
       const edge = game.mission.friendlyEdges?.[p.team] || [0, (p.team === 'UA' ? 1 : -1) * (game.terrain.half + 40)];
-      game.sayTo(p.id, 'Tornado-S', visible ? 'Ziel erfasst. Salve unterwegs!' : 'Kein Sichtkontakt – Salve nach Koordinaten. Streuung erhöht!', 3);
+      game.sayTo(p.id, 'Tornado-S', (visible ? 'Ziel erfasst. Salve unterwegs!' : 'Kein Sichtkontakt – Salve nach Koordinaten. Streuung erhöht!') + netNote(nm), 3);
       for (let i = 0; i < 6; i++) {
-        game.later(i * 0.4, () => {
+        game.later(i * 0.4 + nm.delay, () => {
           const from = new THREE.Vector3(fdc.pos.x + rand(-6, 6), 40, edge[1]);
           const tx = x + rand(-spread, spread), tz = z + rand(-spread, spread);
           const dist = Math.hypot(tx - from.x, tz - from.z);
@@ -112,13 +130,14 @@ export const ABILITIES = {
     },
   },
   artillery: {
-    name: 'Artillerie', icon: '💥', cooldown: 40, radius: 14,
-    desc: 'M777-Batterie: 8 Granaten auf das Zielgebiet (Flugzeit ~5 s).',
+    name: 'Artillerie', icon: '💥', cooldown: 40, radius: 14, needsNet: true,
+    desc: 'M777-Batterie: 8 Granaten auf das Zielgebiet (Flugzeit ~5 s). Mit Satellitennetz Streuung −40 %, ohne Netz ungenauer und später.',
     exec(game, x, z, p) {
       const visible = game.fowFor(p.team).isVisible(x, z);
-      const spread = visible ? 9 : 18;
-      game.sayTo(p.id, 'Artillerie', 'Feuer frei, Lage folgt … Granaten im Anflug!', 3);
-      for (let i = 0; i < 8; i++) game.combat.incomingShell(x + rand(-spread, spread), z + rand(-spread, spread), ARTY_W, p.team, 4.5 + i * 0.35, null, 1.3, p.id);
+      const nm = netMod(game, p, 'artillery'); // V3-SL: Zielzuweisung über das Satellitennetz
+      const spread = (visible ? 9 : 18) * nm.spread;
+      game.sayTo(p.id, 'Artillerie', 'Feuer frei, Lage folgt … Granaten im Anflug!' + netNote(nm), 3);
+      for (let i = 0; i < 8; i++) game.combat.incomingShell(x + rand(-spread, spread), z + rand(-spread, spread), ARTY_W, p.team, 4.5 + i * 0.35 + nm.delay, null, 1.3, p.id);
       game.markerTo(p.team, x, z, 0xff8030, 6, 14);
     },
   },

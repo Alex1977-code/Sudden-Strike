@@ -2670,3 +2670,20 @@ export function wreckify(root) {
 }
 export const Materials = M;
 export { initMats };
+
+// ---- V3-LM: Erweiterungsschnittstelle für Gebäudearten (Wahrzeichen, epochentypische Bauten; js/game/landmarks.js) ----
+// registerBuildingKind(name, fn, rubbleClass): fn(c) baut wie die KINDS-Funktionen oben in c.g (Kontext aus bCtx: w, d, floors,
+// style, rnd, faces, lit, snow, modern) und liefert { height, body }. Schadensstufen, Kontaktschatten, Draw-Call-Reduktion
+// (optimize) und Schutt übernimmt house() wie bei allen Arten. rubbleClass: 'brick' | 'concrete' | 'mud' | 'wood'.
+export function registerBuildingKind(name, fn, rubbleClass = 'brick') {
+  KINDS[name] = fn;
+  RUBBLE_CLASS[name] = rubbleClass;
+  if (!HOUSE_KINDS.includes(name)) HOUSE_KINDS.push(name);
+}
+// Bauhilfen der vorhandenen Gebäudearten (unverändert, nur weitergereicht)
+export const BUILDING_KIT = {
+  THREE, M, mkRand, add, box, cyl, boxG, cylG, sphG, tiledBoxG, planeG, comp, cachedGeo: _bgk, Merger, mat4, beam,
+  triG, rtriG, triG2, gableG, onionG, archPlaneG, gothG, winG, WIN_Z, shutG, barsG, doorFrameG, doorLeafG, stoopG,
+  fput, wput, glassFor, facade, door, gableRoof, roof, chimney, tvAnt, dish, baseWall, plinth, flatRoof, sub, ventPipe, acUnit,
+  hallWalls, cross, dome, dormer, wmat, pm, rmat, pick, TRIM, wood2, sandbags, latticeMast,
+};

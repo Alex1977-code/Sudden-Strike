@@ -92,6 +92,17 @@ export const ICONS = {
   airfield: [PLANE],
   radio: [S(C(12, 7, 1.3)), 'M12 8.4L7.2 21M12 8.4L16.8 21M9.1 16.2h5.8M10.6 12.2h2.8', 'M7.4 3.6a6 6 0 0 0 0 6.8M16.6 3.6a6 6 0 0 1 0 6.8'],
   railway: [T(R(6, 3.5, 12, 13, 2.6)), R(8.4, 6.2, 7.2, 4.2, 1), S(C(9.2, 13.4, 1)), S(C(14.8, 13.4, 1)), 'M7.6 16.5L5.2 21.5M16.4 16.5l2.4 5M4 19.5h16'],
+  // ---------- Wetter & Tageszeit (V3-W) ----------
+  wx_clear: [T(C(12, 12, 4.2)), 'M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.9 1.9M16.8 16.8l1.9 1.9M18.7 5.3l-1.9 1.9M7.2 16.8l-1.9 1.9'],
+  wx_moon: [T('M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5z')],
+  wx_dawn: ['M3 18.5h18', T('M7.5 18.5a4.5 4.5 0 0 1 9 0'), 'M12 8v2.4M5.2 11.4l1.7 1.7M18.8 11.4l-1.7 1.7M2.8 15.2h2M19.2 15.2h2', 'M9.6 5.6L12 3.4l2.4 2.2'],
+  wx_dusk: ['M3 18.5h18', T('M7.5 18.5a4.5 4.5 0 0 1 9 0'), 'M12 8v2.4M5.2 11.4l1.7 1.7M18.8 11.4l-1.7 1.7M2.8 15.2h2M19.2 15.2h2', 'M9.6 3.4L12 5.6l2.4-2.2'],
+  wx_overcast: [T('M7 18.5h10.2a3.8 3.8 0 0 0 .5-7.57A5.4 5.4 0 0 0 7.3 10.2 4.2 4.2 0 0 0 7 18.5z')],
+  wx_rain: [T('M7 14.5h10.2a3.8 3.8 0 0 0 .5-7.57A5.4 5.4 0 0 0 7.3 6.2 4.2 4.2 0 0 0 7 14.5z'), 'M8 17.5l-1 2.8M12 17.5l-1 2.8M16 17.5l-1 2.8'],
+  wx_storm: [T('M7 14.5h10.2a3.8 3.8 0 0 0 .5-7.57A5.4 5.4 0 0 0 7.3 6.2 4.2 4.2 0 0 0 7 14.5z'), 'M12.8 14l-2.6 3.8h3.4l-2.2 3.7'],
+  wx_snow: [T('M7 14.5h10.2a3.8 3.8 0 0 0 .5-7.57A5.4 5.4 0 0 0 7.3 6.2 4.2 4.2 0 0 0 7 14.5z'), S(C(8, 18, 1.1)), S(C(12, 20.4, 1.1)), S(C(16, 18, 1.1))],
+  wx_fog: ['M4 7.5h16M3 11.5h18M5 15.5h14M8 19.5h8'],
+  wx_mud: [T('M7 12.5h10.2a3.8 3.8 0 0 0 .5-7.57A5.4 5.4 0 0 0 7.3 4.2 4.2 4.2 0 0 0 7 12.5z'), 'M8.5 15l-.8 1.8M12.5 15l-.8 1.8M16.5 15l-.8 1.8', 'M3 21c2-1.6 3.2-1.6 5 0s3 1.6 5 0 3.2-1.6 5 0 2 1.2 3 0'],
   // ---------- Befehle ----------
   stop: [S(R(6, 6, 12, 12, 2))],
   holdfire: [C(12, 12, 5.6), 'M12 3.5v3.6M12 16.9v3.6M3.5 12h3.6M16.9 12h3.6', 'M4.8 19.2L19.2 4.8'],
@@ -197,6 +208,39 @@ export const ICONS = {
   airdrop: [T('M4 9a8 6 0 0 1 16 0z'), 'M4 9l8 8M20 9l-8 8M12 9v8', S(C(12, 18.5, 1.6))],
   train: [T(R(5, 3.5, 14, 13, 2.5)), 'M5 10.5h14M9.5 3.5v7', C(8.5, 13.5, 1), C(15.5, 13.5, 1), 'M8 16.5L5 21M16 16.5l3 4.5M6.5 19h11'],
   waypoint: [S(C(5, 18, 1.5)), '=M6.5 17l5-6 6-2', 'M17.5 9l-.2-5.5L21 7.6z'],
+  // ---------- Satellitennetz (V3-SL): Netzstatus, Terminal, gestört ----------
+  satnet: [T(R(9.5, 3.5, 5, 6, 0.8)), T('M2.5 4.5h5v4h-5z'), T('M16.5 4.5h5v4h-5z'), 'M7.5 6.5h2M14.5 6.5h2', 'M8 14.5a5.6 5.6 0 0 0 8 0M5.2 17.2a9.6 9.6 0 0 0 13.6 0', S(C(12, 12.2, 1.1))],
+  satdish: [T('M4 5.5L18 3l1.6 6.4-14 2.6z'), 'M12 10.2V15', 'M12 15l-5 6M12 15l5 6M12 15v6'],
+  satjam: [T(R(9.5, 3.5, 5, 6, 0.8)), T('M2.5 4.5h5v4h-5z'), T('M16.5 4.5h5v4h-5z'), 'M7.5 6.5h2M14.5 6.5h2', '=M8 14.5a5.6 5.6 0 0 0 8 0', 'M4 21L20.5 12'],
+  // ---------- Menü (V3-MENU) ----------
+  gear: [T(C(12, 12, 3)), 'M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M5.5 18.5l1.8-1.8M16.7 7.3l1.8-1.8', C(12, 12, 6.6)],
+  help: [C(12, 12, 9), 'M9.4 9.4a2.7 2.7 0 1 1 3.7 2.5c-.7.3-1.1.9-1.1 1.6v.8', S(C(12, 17.2, 1.1))],
+  fullscreen: ['M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5', T(R(8.5, 8.5, 7, 7, 1))],
+  back: ['M19 12H5.5M11 6l-6 6 6 6'],
+  chevron: ['M9.5 5.5L16 12l-6.5 6.5'],
+  calendar: [T(R(3.5, 5, 17, 15, 2)), 'M3.5 10h17M8 3v4M16 3v4', S(C(8, 14, 1)), S(C(12, 14, 1)), S(C(16, 14, 1))],
+  pin: [T('M12 21.5s-6.5-6.4-6.5-11.2a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11.2-6.5 11.2z'), C(12, 10.3, 2.3)],
+  sun: [T(C(12, 12, 4)), 'M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5.3 5.3L7 7M17 17l1.7 1.7M5.3 18.7L7 17M17 7l1.7-1.7'],
+  moon: [T('M19.5 14.6A8 8 0 0 1 9.4 4.5a8 8 0 1 0 10.1 10.1z')],
+  snow: ['M12 2.5v19M3.8 7.2l16.4 9.6M3.8 16.8l16.4-9.6', 'M9.6 4.2L12 6.4l2.4-2.2M9.6 19.8l2.4-2.2 2.4 2.2'],
+  cloud: [T('M6.5 18.5a4 4 0 0 1-.4-8 6 6 0 0 1 11.6-1.2 4.6 4.6 0 0 1-.2 9.2z')],
+  rain: [T('M6.5 14.5a3.8 3.8 0 0 1-.4-7.6 5.8 5.8 0 0 1 11.2-1.1 4.4 4.4 0 0 1-.2 8.7z'), 'M8 17.5l-1 3M12.5 17.5l-1 3M17 17.5l-1 3'],
+  fog: ['M3 9h18M5 13h14M3 17h18', T('M7 6.5a5 5 0 0 1 10 0z')],
+  trophy: [T('M7 3.5h10v5a5 5 0 0 1-10 0z'), 'M7 5.5H3.8c0 3 1.4 4.8 3.6 5.2M17 5.5h3.2c0 3-1.4 4.8-3.6 5.2', 'M12 13.5v4M8 20.5h8M9.5 17.5h5'],
+  retry: ['M4.5 12a7.5 7.5 0 1 0 2.3-5.4', 'M4.5 3.5v4.2h4.2'],
+  home: [T('M4 10.5L12 4l8 6.5V20h-5.5v-5.5h-5V20H4z')],
+  exit: ['M10 4H5v16h5', 'M14.5 8l4 4-4 4M18.5 12H9'],
+  surrender: ['M5 21V3.5', T('M5 4.5c3-1.6 5.5 1.4 8.5 0s4.5-.6 5.5 0v8c-1-.6-2.5-1.4-5.5 0s-5.5-1.6-8.5 0')],
+  speaker: [T('M4 9.5h3.5L12 5.5v13l-4.5-4H4z'), 'M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a7.6 7.6 0 0 1 0 11'],
+  music: [S(C(7.5, 17.5, 2.5)), S(C(17, 15.5, 2.5)), 'M10 17.5V5.5l9.5-2v12'],
+  monitor: [T(R(3, 4.5, 18, 12, 1.5)), 'M9 20.5h6M12 16.5v4'],
+  gamepad: [T('M7 7.5h10a4.5 4.5 0 0 1 4.4 5.5l-.9 4a2.6 2.6 0 0 1-4.6 1L14 16H10l-1.9 2a2.6 2.6 0 0 1-4.6-1l-.9-4A4.5 4.5 0 0 1 7 7.5z'), 'M8 10.5v3.5M6.25 12.25h3.5', S(C(15.5, 11, 1)), S(C(17.5, 13, 1))],
+  keyboard: [T(R(2.5, 6, 19, 12, 1.8)), 'M6 10h.01M9.3 10h.01M12.6 10h.01M15.9 10h.01M18 10h.01M6 13.5h.01M18 13.5h.01M8.5 14.5h7'],
+  language: [C(12, 12, 9), 'M3 12h18M12 3c2.6 2.6 3.8 5.6 3.8 9s-1.2 6.4-3.8 9c-2.6-2.6-3.8-5.6-3.8-9S9.4 5.6 12 3z'],
+  book: [T('M4 5.5c2.8-1.2 5.4-1.2 8 .8v14c-2.6-2-5.2-2-8-.8z'), T('M20 5.5c-2.8-1.2-5.4-1.2-8 .8v14c2.6-2 5.2-2 8-.8z')],
+  crosshair: [C(12, 12, 7), 'M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5', S(C(12, 12, 1.2))],
+  info: [C(12, 12, 9), 'M12 11v6', S(C(12, 7.6, 1.1))],
+  difficulty: ['M5 19V14M10 19V10M15 19V6.5M20 19V3.5'],
 };
 // Rollen (Gefecht) und Fähigkeits-IDs verweisen auf vorhandene Symbole
 const ALIAS = {
@@ -207,6 +251,7 @@ const ALIAS = {
   bridge_road: 'bridge', bridge_rail: 'bridge', hold: 'holdfire', all: 'selectall', build: 'tanktrap',
   clear: 'clearmines', objective_done: 'obj_done', ok: 'obj_done', fail: 'obj_failed', sweep: 'clearmines',
   kills: 'attack', lost: 'close', intercept: 'obj_protect', kamikaze: 'delta', user: 'player',
+  m_tobol: 'satjam', m_starlink: 'satdish', m_starlink_ru: 'satdish', // V3-SL
 };
 
 // Deutsche Namen (Tooltip / aria-label), wenn kein label übergeben wird
@@ -225,6 +270,7 @@ export const ICON_LABELS = {
   download: 'Exportieren', trash: 'Löschen', cursor: 'Auswahl', ed_hill: 'Hügel', ed_dip: 'Senke', ed_flat: 'Ebnen', water: 'Wasser',
   river: 'Fluss', road: 'Straße', track: 'Feldweg', rail: 'Bahnlinie', forest: 'Wald', treeline: 'Baumreihe', field: 'Feld',
   ford: 'Furt', zone: 'Startzone',
+  satnet: 'Satellitennetz', satdish: 'Satellitenterminal', satjam: 'Satellitennetz gestört', // V3-SL
   stop: 'Halt', holdfire: 'Feuer halten', selectall: 'Alle wählen', box: 'Auswahlrahmen', move: 'Bewegen', attack: 'Angreifen',
   clearmines: 'Minen räumen', demolish: 'Sprengen', bailout: 'Aussteigen', takeover: 'Übernehmen', garrison: 'Besetzen',
   ungarrison: 'Verlassen', binoculars: 'Fernglas', pause: 'Pause', menu: 'Menü', team: 'Team', player: 'Spieler', chat: 'Chat',
@@ -242,6 +288,13 @@ export const ICON_LABELS = {
   unload_at: 'Absitzen am Ziel', hitch: 'Aufprotzen', unhitch: 'Abprotzen', pickmines: 'Minen aufnehmen',
   blowbridge: 'Brücke sprengen', buildbridge: 'Brücke bauen', counterbattery: 'Gegenbatteriefeuer', airdrop: 'Luftlandung',
   train: 'Zug', waypoint: 'Befehlskette',
+  wx_clear: 'Klar', wx_moon: 'Nacht', wx_dawn: 'Morgengrauen', wx_dusk: 'Abenddämmerung', wx_overcast: 'Bewölkt', wx_rain: 'Regen',
+  wx_storm: 'Gewitter', wx_snow: 'Schneefall', wx_fog: 'Nebel', wx_mud: 'Rasputiza',
+  gear: 'Einstellungen', help: 'Hilfe', fullscreen: 'Vollbild', back: 'Zurück', chevron: 'Weiter', calendar: 'Datum', pin: 'Ort',
+  sun: 'Klar', moon: 'Nacht', snow: 'Winter', cloud: 'Bewölkt', rain: 'Regen', fog: 'Nebel', trophy: 'Sieg', retry: 'Wiederholen',
+  home: 'Hauptmenü', exit: 'Verlassen', surrender: 'Aufgeben', speaker: 'Lautstärke', music: 'Musik', monitor: 'Grafik',
+  gamepad: 'Gamepad', keyboard: 'Tastatur', language: 'Sprache', book: 'Ausbildung', crosshair: 'Ziel', info: 'Information',
+  difficulty: 'Schwierigkeit',
 };
 
 // Einheitentyp-Schlüssel → Icon (explizit; neue Epochen können iconKey setzen oder hier erweitern)

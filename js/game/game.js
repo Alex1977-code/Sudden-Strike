@@ -58,6 +58,7 @@ import { Logistics } from './logistics.js';
 import { Vision, VIS } from './vision.js';
 import { Garrison, GAR } from './garrison.js';
 import { Effects } from '../engine/effects.js';
+import { Weather } from '../engine/weather.js';
 import { Unit, resetUnitIds } from './unit.js';
 import { Combat, Missile } from './combat.js';
 import { Tactics } from './tactics.js';
@@ -182,6 +183,7 @@ export class Game {
     this.scene.add(this.world);
     this.gr.setEnvironment(mission.env || {});
     this.effects = new Effects(this.scene, this.terrain, q, this.audio);
+    this.weather = new Weather(this); // V3-W: Wetter & Tageszeit (mission.weather / mission.time)
     this.combat = new Combat(this);
     this.logi = new Logistics(this);
     this.tac = new Tactics(this);
@@ -251,6 +253,7 @@ export class Game {
   addBridge(pts, o = {}) { return this.mapobj.addBridge(pts, o); }
   get bridges() { return this.mapobj?.bridges || []; }
   dispose() {
+    this.weather?.dispose();
     if (this.world) {
       this.gr.clearScene([this.gr.hemi, this.gr.sun, this.gr.sun.target, this.gr.sky]);
       // Effekt-Lichter wurden entfernt; neue werden in Effects erzeugt
@@ -633,8 +636,11 @@ export class Game {
     if (!p || p.defeated) return false;
     const a = p.abilities.find((a) => a === abilityId || a.id === abilityId);
     if (!a || !this.abilityAvailable(a)) return false;
+    const wx = this.weather && !this.weather.idle ? this.weather.abilityGate(a.def) : null; // V3-W: Flugwetter
+    if (wx?.abort) { this.sayTo(playerId, 'Flugleitung', wx.msg, 4); a.cd = Math.max(a.cd, (a.baseCd ?? a.cooldown) * 0.35); this.emit('abilities'); return false; }
     const r = a.def.exec(this, x, z, p);
     if (r === false) return false;
+    if (wx && wx.cdMul > 1.001) { a.baseCd = a.baseCd ?? a.cooldown; a.cooldown = a.baseCd * wx.cdMul; } else if (a.baseCd) a.cooldown = a.baseCd;
     a.cd = a.cooldown;
     if (a.charges !== Infinity) a.charges--;
     this.emit('abilities');
@@ -746,6 +752,7 @@ export class Game {
   sightOf(o) {
     let s = o.type.sight * (o.sightMul || 1) * (o.vet ? 1 + 0.05 * o.vet : 1); // sightMul: Gefechts-Fraktionsausgleich (MP-T7); Veteranen +5 %/Stufe
     if (o.garrison) s *= Math.min(1.5, 1 + 0.1 * (o.garrison.houseDef?.floors || 1)) * (o.type.key.includes('sniper') ? 1.15 : 1);
+    if (this.weather && !this.weather.idle) s *= this.weather.sightMul(o); // V3-W: Regen/Schnee/Nebel/Nacht
     return s;
   }
   // Sektor-Sichtradien (Nebeltextur) je Beobachter, gecacht
@@ -887,6 +894,7 @@ export class Game {
     if (!this.paused) {
       const sdt = Math.min(dt, 0.05) * (this.speedMul || 1);
       this.time += sdt;
+      this.weather?.update(sdt);
       this.stepSim(sdt);
     }
     fowUniforms.uTime.value = performance.now() / 1000;

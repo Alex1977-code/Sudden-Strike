@@ -54,7 +54,7 @@ function mats() {
   if (_m) return _m;
   const S = (c, r = 0.9, m = 0) => { const x = new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m }); x.userData.shared = true; return x; };
   _m = {
-    stone: S(0x9b907c), stoneDark: S(0x7a705f), concrete: S(0x9a9a94), concreteDark: S(0x76766f), asphalt: S(0x3a3c3f, 0.95), marking: S(0xe6e3d6, 0.7),
+    stone: S(0x857a68), stoneDark: S(0x6b6253), concrete: S(0x9a9a94), concreteDark: S(0x76766f), asphalt: S(0x3a3c3f, 0.95), marking: S(0xe6e3d6, 0.7),
     steel: S(0x4f5b58, 0.55, 0.55), steelLight: S(0x8a9396, 0.45, 0.6), rust: S(0x6a4a36, 0.8, 0.3), wood: S(0x6a4e33), plank: S(0x8a6a44), pontoon: S(0x3f4a34, 0.7, 0.3),
     ballast: S(0x5c5852), rubble: S(0x77736a), rope: S(0x2c2a26),
   };
@@ -292,7 +292,8 @@ export class BridgeSystem {
       const m = new THREE.Mesh(geo, M.stone); m.position.set(p.x, 0, p.z); m.rotation.y = ry - Math.PI / 2; m.castShadow = true; m.receiveShadow = true;
       grp.add(m);
       // Bogenstirn (Keilsteine) als dunkler Saum
-      for (let k = 0; k <= 8; k++) { const ang = Math.PI * (1 - k / 8), u = Math.cos(ang) * rx, v = spring + Math.sin(ang) * rh; for (const sd of [-1, 1]) { const [x, z] = this._off(p, ry, sd * (hw + 0.27), u); B.box(M.stoneDark, 0.1, 0.5, 0.9, x, v + 0.2, z, ry, -ang + Math.PI / 2); } }
+      const nk = 16, kl = (Math.PI * (rx + rh) / 2) / nk * 1.1;
+      for (let k = 0; k <= nk; k++) { const ang = Math.PI * (1 - k / nk), u = Math.cos(ang) * (rx + 0.25), v = spring + Math.sin(ang) * (rh + 0.25); for (const sd of [-1, 1]) { const [x, z] = this._off(p, ry, sd * (hw + 0.27), u); B.box(M.stoneDark, 0.1, 0.55, kl, x, v, z, ry, -ang + Math.PI / 2); } }
     } else if (st === 'concrete_beam' || st === 'cable_arch') {
       B.box(M.concreteDark, b.width * 0.55, 1.3, len, p.x, D - 0.9 - 0.65, p.z, ry);
     } else if (st === 'steel_truss') {

@@ -2,7 +2,7 @@
 // Gleiche Konventionen wie dort: exec(game, x, z, player) · false = nicht ausgeführt (kein Abklingen, keine Ladung verbraucht).
 // Ladungen/Abklingzeit stehen je Eintrag (charges/cooldown), Gefechts-Rollen können sie in ABIL überschreiben ({id, charges}).
 import * as THREE from 'three';
-import { ABILITIES } from '../../game/abilities.js';
+import { ABILITIES, netMod, netNote, netRange } from '../../game/abilities.js';
 import { Missile } from '../../game/combat.js';
 import { rand } from '../../engine/util.js';
 import { airMission, bombRun, bombLead, getAirShow } from '../../engine/aircraft.js';
@@ -61,11 +61,14 @@ function swarm(game, p, x, z, o) {
     game.sayTo(p.id, o.who, `Ziel außerhalb der Kabelreichweite (${o.tether} m) – Operator näher heranführen!`, 3);
     return false;
   }
+  if (o.net && !netRange(game, p, o.net, op, x, z, o.who)) return false; // V3-SL: Funkdrohnen ohne Satellitennetz nur 70 m
+  const linked = !!(o.net && game.satnet?.isConnected(op));
   for (let i = 0; i < o.n; i++) {
     game.later(i * 0.4, () => {
       const d = game.spawn(o.drone, p.team, op.pos.x + rand(-2, 2), op.pos.z + rand(-2, 2), { startAlt: 1, owner: p.id });
       d.moveTo(x + rand(-6, 6), z + rand(-6, 6), { attackMove: true });
       d.ai = null;
+      if (linked && !d.type.ewImmune) { d.netOp = op.id; d.netLinked = true; }
       game.audio.drone(op.pos.x, op.pos.z);
     });
   }
@@ -74,7 +77,7 @@ function swarm(game, p, x, z, o) {
 
 // ======================= Ukraine =======================
 ABILITIES.m_atacms = {
-  name: 'ATACMS-Schlag', icon: '🚀', cooldown: 80, charges: 3, requires: 'himars', radius: 15,
+  name: 'ATACMS-Schlag', icon: '🚀', cooldown: 80, charges: 3, requires: 'himars', radius: 15, needsNet: true,
   desc: 'Ballistische Langstreckenrakete (MGM-140) vom HIMARS: ein Gefechtskopf mit Streumunition. Abfangbar durch Patriot/S-400.',
   exec(game, x, z, p) {
     const l = own(game, p, 'himars')[0];
@@ -82,8 +85,9 @@ ABILITIES.m_atacms = {
     const W = { name: 'ATACMS', dmg: 1100, splash: 13, vs: { soft: 1, light: 1, heavy: 0.8, air: 0, struct: 1 } };
     const BW = { name: 'Streumunition', dmg: 110, splash: 4, vs: { soft: 1, light: 0.8, heavy: 0.3, air: 0, struct: 0.4 } };
     const visible = game.fowFor(p.team).isVisible(x, z);
-    const spread = visible ? 3 : 10;
-    game.sayTo(p.id, 'HIMARS', visible ? 'ATACMS gestartet – Einschlag in Kürze.' : 'Kein Sichtkontakt – ATACMS nach Koordinaten, Streuung erhöht.', 3);
+    const nm = netMod(game, p, 'm_atacms'); // V3-SL: Zieldaten über Satellitennetz
+    const spread = (visible ? 3 : 10) * nm.spread;
+    game.sayTo(p.id, 'HIMARS', (visible ? 'ATACMS gestartet – Einschlag in Kürze.' : 'Kein Sichtkontakt – ATACMS nach Koordinaten, Streuung erhöht.') + netNote(nm), 3);
     const from = l.muzzleWorld().add(new THREE.Vector3(0, 1, 0));
     game.effects.muzzle(from.x, from.y, from.z, true);
     game.audio.shot('missile', l.pos.x, l.pos.z);
@@ -176,9 +180,9 @@ ABILITIES.m_kvn = {
   exec(game, x, z, p) { return swarm(game, p, x, z, { requires: 'm_rubikon', drone: 'm_kvn', n: 3, tether: 55, who: 'KVN', color: 0xff8030, radius: 12 }); },
 };
 ABILITIES.m_molniya = {
-  name: 'Molniya-Schwarm', icon: '⚡', cooldown: 26, charges: 5, requires: 'm_rubikon', radius: 16,
+  name: 'Molniya-Schwarm', icon: '⚡', cooldown: 26, charges: 5, requires: 'm_rubikon', radius: 16, needsNet: true,
   desc: '4 billige Molniya-Flächen-Kamikazedrohnen (funkgesteuert, störbar) auf das Zielgebiet.',
-  exec(game, x, z, p) { return swarm(game, p, x, z, { requires: 'm_rubikon', drone: 'm_molniya', n: 4, who: 'Molniya', color: 0xff8030, radius: 16 }); },
+  exec(game, x, z, p) { return swarm(game, p, x, z, { requires: 'm_rubikon', drone: 'm_molniya', n: 4, who: 'Molniya', color: 0xff8030, radius: 16, net: 'm_molniya' }); },
 };
 ABILITIES.m_iskander = {
   name: 'Iskander-M-Schlag', icon: '🚀', cooldown: 70, charges: 3, requires: 'm_iskander_tel', radius: 14,
@@ -261,6 +265,20 @@ ABILITIES.m_kinzhal = {
       }).register();
     }, { k: 0.35 });
     game.markerTo(p.team, x, z, 0xff3030, 8, 15);
+  },
+};
+
+// V3-SL: Störsystem gegen Satelliten-Datenterminals (js/game/satnet.js). Stört 25 s lang alle feindlichen Terminals
+// (fest und mobil) im Umkreis von 60 m: keine Netzabdeckung dort, funkgesteuerte Drohnen der betroffenen Piloten verlieren die
+// Führung. Glasfaser-Drohnen bleiben unberührt. Ohne game.satnet nicht ausführbar.
+ABILITIES.m_tobol = {
+  name: 'EloKa-Störung Satellitennetz (Tobol)', icon: '📡', cooldown: 60, charges: 3, radius: 60,
+  desc: 'Störsystem „Tobol“: stört 25 s lang feindliche Satelliten-Datenterminals im Umkreis von 60 m (Terminal rot, Verbindung weg, Funkdrohnen verlieren die Führung). Glasfaser-Drohnen bleiben unberührt.',
+  exec(game, x, z, p) {
+    if (!game.satnet) return false;
+    game.satnet.jam(x, z, 60, 25, p.team);
+    game.markerTo(p.team, x, z, 0xb070ff, 4, 60);
+    game.sayTo(p.id, 'EloKa', 'Tobol aktiv – Satellitenband im Zielgebiet 25 s gestört.', 3);
   },
 };
 

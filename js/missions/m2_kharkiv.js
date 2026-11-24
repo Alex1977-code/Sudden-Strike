@@ -33,6 +33,7 @@ export default {
     ],
   },
   env: { season: 'autumn', sunElev: 26, sunAzim: 240, fogDensity: 0.0036 },
+  weather: { type: 'rasputiza', intensity: 0.6 }, time: { start: '10:30', speed: 0 }, // V3-W: Schlammperiode, Tageslicht
   camera: { x: 5, z: 80, dist: 90 },
   abilities: [{ id: 'fpv', charges: 8 }, 'scan', 'ew'],
   markers: [{ x: 22, z: 42, r: 26, label: 'Sosnivka', color: '#5db8ff' }],

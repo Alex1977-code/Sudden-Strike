@@ -22,7 +22,7 @@ export const ROSTERS_MODERN = {
 };
 export const ABIL_MODERN = {
   UA: ['m_atacms', 'm_neptun', { id: 'm_flamingo', charges: 2 }, { id: 'm_lyutyi', charges: 3 }, { id: 'm_f16cas', charges: 3 }, { id: 'm_mirage', charges: 2 }, { id: 'm_fiberfpv', charges: 6 }],
-  RU: ['m_iskander', { id: 'm_kh101', charges: 3 }, { id: 'm_kab', charges: 4 }, { id: 'm_su57', charges: 3 }, { id: 'm_kinzhal', charges: 2 }, { id: 'm_kvn', charges: 6 }, { id: 'm_molniya', charges: 5 }],
+  RU: ['m_iskander', { id: 'm_kh101', charges: 3 }, { id: 'm_kab', charges: 4 }, { id: 'm_su57', charges: 3 }, { id: 'm_kinzhal', charges: 2 }, { id: 'm_kvn', charges: 6 }, { id: 'm_molniya', charges: 5 }, { id: 'm_tobol', charges: 3 }], // V3-SL: Tobol gegen Satellitenterminals
 };
 export const REQUIRES_MODERN = {
   m_atacms: 'himars', m_neptun: 'm_neptun_tel', m_fiberfpv: 'm_fibreop', m_iskander: 'm_iskander_tel', m_kvn: 'm_rubikon', m_molniya: 'm_rubikon',

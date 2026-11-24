@@ -18,6 +18,7 @@ import { generateSkirmishMap, MAP_PRESETS, MAP_SIZES } from './maps.js';
 import { AICommander, TeamIntel } from './ai.js';
 import { UNIT_TYPES, W } from '../game/unitTypes.js';
 import { ABILITIES } from '../game/abilities.js';
+import { SK_WEATHER, SK_DAYTIME, skirmishWeatherDef, skirmishTimeDef } from '../engine/weather.js';
 
 export const TEAM_NAME = { UA: 'Ukraine', RU: 'Russland' };
 export const TEAM_COLOR = { UA: '#2f7de1', RU: '#e5484d', N: '#8c9096' };
@@ -55,7 +56,7 @@ export const ARMIES = {
 export const ABIL = {
   armor: { UA: ['scan', { id: 'artillery', charges: 3 }, { id: 'smoke', charges: 3 }], RU: ['scan', { id: 'artillery', charges: 3 }, { id: 'smoke', charges: 3 }] },
   infantry: { UA: [{ id: 'fpv', charges: 6 }, 'scan', { id: 'airdrop', charges: 1 }], RU: [{ id: 'lancet', charges: 6 }, 'scan', { id: 'airdrop', charges: 1 }] },
-  support: { UA: ['himars', 'artillery', 'scan', 'ew', { id: 'smoke', charges: 4 }], RU: ['tornado', 'artillery', 'scan', 'ew', { id: 'smoke', charges: 4 }] }, // MP-T7: RU-Gegenstück zum HIMARS
+  support: { UA: ['himars', 'artillery', 'scan', 'ew', { id: 'smoke', charges: 4 }], RU: ['tornado', 'artillery', 'scan', 'ew', { id: 'smoke', charges: 4 }, { id: 'm_tobol', charges: 3 }] }, // MP-T7: RU-Gegenstück zum HIMARS; V3-SL: Tobol gegen Satellitenterminals
   logistics: { UA: ['scan', { id: 'artillery', charges: 3 }], RU: ['scan', { id: 'artillery', charges: 3 }] },
 };
 // Verstärkungs-Reihenfolge je Rolle (wird zyklisch abgearbeitet)
@@ -182,6 +183,21 @@ export function normalizeSetup(s = {}) {
     // V3-E: eigene Karte (Editor/Mod) statt Generator – Objekt aus compileSkirmishGen() (js/editor/compile.js)
     customMap: s.customMap && typeof s.customMap === 'object' && s.customMap.map ? s.customMap : null,
   };
+  // V3-W: Wetter/Tageszeit (Auswahlfelder #skirmish-weather / #skirmish-daytime im Setup; Zufall deterministisch aus dem Seed)
+  const domVal = (id) => (typeof document !== 'undefined' ? document.getElementById(id)?.value : undefined);
+  if (s.weatherDef !== undefined || s.timeDef !== undefined) { // bereits aufgelöst (Online-Client, erneutes Normalisieren)
+    o.weather = s.weather; o.daytime = s.daytime; o.weatherDef = s.weatherDef ?? null; o.timeDef = s.timeDef ?? null;
+  } else {
+    o.weather = SK_WEATHER[s.weather ?? domVal('skirmish-weather')] ? (s.weather ?? domVal('skirmish-weather')) : 'clear';
+    o.daytime = SK_DAYTIME[s.daytime ?? domVal('skirmish-daytime')] ? (s.daytime ?? domVal('skirmish-daytime')) : 'day';
+    const wd = skirmishWeatherDef(o.weather, o.seed, o.season);
+    o.weatherDef = wd.def; o.timeDef = skirmishTimeDef(o.daytime);
+    if (o.daytime === 'night') o.night = true; // Nachtkarte (beleuchtete Fenster etc.)
+  }
+  // V3-SL: Satellitennetz – zufällige kurze Netzausfälle (Checkbox #skirmish-satoutage, ohne Setup-Feld/Checkbox an);
+  // satCaptured (fiktiv): russische Spieler erhalten ein erbeutetes Terminal
+  { const el = typeof document !== 'undefined' ? document.getElementById('skirmish-satoutage') : null; o.satOutage = s.satOutage !== undefined ? !!s.satOutage : (el ? !!el.checked : true); }
+  o.satCaptured = !!s.satCaptured;
   if (o.customMap) { o.presetResolved = 'custom'; o.sizeResolved = o.customMap.recommendedSize || 'medium'; o.sizeAdjusted = false; return o; }
   // Preset/Größe auflösen (Auto = Empfehlung des Generators; zu kleine Karten werden vergrößert)
   const probe = generateSkirmishMap({ size: 'large', seed: o.seed, playersPerTeam: o.mode, preset: o.preset });
@@ -238,6 +254,7 @@ export function createSkirmish(setup) {
     title: `Gefecht ${S.mode}v${S.mode} – ${gen.title}`,
     place: gen.place, description: gen.description,
     map: gen.map, env: gen.env,
+    weather: S.weatherDef || undefined, time: S.timeDef || undefined, // V3-W
     camera: { x: mySpawn.x, z: mySpawn.z + (myTeam === 'UA' ? -16 : 16), dist: camBase.dist, yaw: camBase.yaw },
     players: players.map((p) => ({ ...p })),
     noDefaultDefeat: true,
@@ -443,6 +460,7 @@ function spawnArmy(g, p, S, sk) {
     ...g.spawnGroup(inf, team, sp.x, sp.z + dir * 11, { ...opts, spacing: 3.2, cols: 6 }),
   ];
   for (const [t, n] of air) for (let i = 0; i < n; i++) out.push(g.spawn(t, team, sp.x + (i - 0.5) * 4, sp.z + dir * 4, opts));
+  g.satnet?.onSkirmishArmy?.(p, out, S); // V3-SL: Satellitenterminal am Aufmarschraum, Zugführer mit mobilem Uplink
   // V3-M2: KI-Spieler fahren einen Teil der Schützen in den Schützenpanzern/Lkw mit (setzen bei Feindkontakt ab)
   if (p.ai && g.trans) {
     const carriers = out.filter((u) => g.trans.canCarry(u) && !u.type.air);

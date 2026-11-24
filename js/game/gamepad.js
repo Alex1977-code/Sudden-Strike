@@ -269,7 +269,7 @@ export class GamepadControl {
     let f = this.focus;
     if (!f || !scr.contains(f) || !this._visible(f)) {
       const items = this._items(scr);
-      f = items.find((e) => e.classList.contains('big')) || items[0] || null;
+      f = items.find((e) => e.dataset.gpDefault !== undefined) || items.find((e) => e.classList.contains('big')) || items[0] || null; // V3-MENU: data-gp-default
       this._setFocus(f);
     }
     if (!this.active) return;

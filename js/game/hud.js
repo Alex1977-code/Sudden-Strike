@@ -181,6 +181,7 @@ export class HUD {
       const cd = a.btn.querySelector('.cd');
       cd.style.height = a.cd > 0 ? `${(a.cd / a.cooldown) * 100}%` : '0%';
       a.btn.style.opacity = avail ? 1 : 0.55;
+      this.game.satnet?.decorateAbility?.(a); // V3-SL: „Kein Netz“
     }
   }
   showTargetHint(text, onCancel) {
@@ -436,6 +437,7 @@ export class HUD {
     this.mmT -= dt;
     if (this.mmT <= 0) { this.mmT = 0.15; this.drawMinimap(); this._updateAbilityState(); this._refreshSelHp(); }
     this.drawOverlay();
+    g.satnet?.hudUpdate?.(this, dt); // V3-SL: Netzstatus oben, Terminal-Symbole, Netzradius-Ring
     this.timerEl.textContent = g.countdown ? `${g.countdown.label} ${fmtTime(g.countdown.t)}` : '';
     if (g.mission?.skirmish) this.updateSkirmish(dt);
     if (this.settings.showFps) {

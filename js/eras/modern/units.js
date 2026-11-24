@@ -7,7 +7,9 @@
 //   unmanned:true    – Bodenroboter: keine Besatzung, steigt im Gefecht nicht aus (Logistics.canBail/bailOut).
 //   tether:m         – Kabellänge Glasfaser-Drohne (Meter): maximale Entfernung zum Operator, begrenzt in abilities.js.
 //   role             – Zuordnung zu den Gefechts-Rollen (infantry|armor|support|logistics|drones), siehe rosters.js.
-import { registerUnitTypes } from '../../game/unitTypes.js';
+// V3-SL Satellitennetz (js/game/satnet.js): satTerminal:true + satRadius (fester Terminal), satlink:true|'UA'|'RU'
+//   (mobiler Uplink, optional nur für dieses Team; je Einheit auch u.satlink), satJam:m (stört feindliche Terminals im Umkreis).
+import { registerUnitTypes, UNIT_TYPES } from '../../game/unitTypes.js';
 import './weapons.js';
 
 const T = {};
@@ -95,5 +97,14 @@ rail('m_rail_tank', { name: 'Kesselwagen (Treibstoff)', model: 'm_rail_tank', hp
 rail('m_rail_armor', { name: 'Panzerwagen', model: 'm_rail_armor', hp: 1100, armor: 'heavy', weapons: ['ac30', 'coaxRU'], train: 'armor', desc: 'Improvisierter Panzerwaggon mit 30-mm-Turm.' });
 rail('m_rail_flak', { name: 'Flak-Waggon (ZU-23-2)', model: 'm_rail_flak', hp: 560, weapons: ['m_zu23'], airSight: 60, train: 'flak', desc: 'Offener Waggon mit Zwillingsflak.' });
 
+// ======================= V3-SL: Satellitennetz („Starlink“ als Systembezeichnung, neutrales Modell ohne Markenzeichen) =======================
+def('UA', 'm_starlink', { cls: 'struct', armor: 'struct', name: 'Starlink-Terminal', icon: '📡', iconKey: 'satdish', model: 'm_satterm', role: 'support', hp: 160, sight: 16, radius: 1.2, weapons: [], satTerminal: true, satRadius: 45, desc: 'Satelliten-Datenterminal (Antenne auf Dreibein): Netzabdeckung 45 m für das ganze Team. Mit Netz: Drohnen- und Artilleriefähigkeiten präziser (Streuung −40 %), kürzere Abklingzeit. Störbar durch EloKa (Terminal rot).' });
+def('RU', 'm_starlink_ru', { cls: 'struct', armor: 'struct', name: 'Erbeutetes Satellitenterminal (fiktiv)', icon: '📡', iconKey: 'satdish', model: 'm_satterm', role: 'support', hp: 140, sight: 16, radius: 1.2, weapons: [], satTerminal: true, satRadius: 45, fictional: true, desc: 'Fiktives Szenario: erbeutetes bzw. auf dem Schwarzmarkt beschafftes Terminal. Gleiche Wirkung wie auf ukrainischer Seite.' });
+
 registerUnitTypes(T);
 export const MODERN_TYPES = T;
+
+// V3-SL: mobile Uplinks (Drohnenpiloten, Gefechtsstand, Offizier, Raketen-/Rohrartillerie mit Feuerleit-Software) – nur UA
+for (const k of ['dronepilot', 'hq', 'ua_officer', 'himars', 'm_pzh2000', 'm_caesar', 'm_archer', 'm_bohdana', 'm_krab', 'm_interceptor', 'm_tpq36']) if (UNIT_TYPES[k] && UNIT_TYPES[k].satlink === undefined) UNIT_TYPES[k].satlink = 'UA';
+// EloKa-Trupp (RU): stört feindliche Satellitenterminals im Umkreis von 18 m dauerhaft
+if (UNIT_TYPES.m_dronehunter_ru) UNIT_TYPES.m_dronehunter_ru.satJam = 18;

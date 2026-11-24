@@ -34,6 +34,7 @@ export default {
     ],
   },
   env: { season: 'summer', sunElev: 42, sunAzim: 160, fogDensity: 0.0028 },
+  weather: { type: 'clear' }, time: { start: '16:30', speed: 12 }, // V3-W: klar, Tag -> Abend
   camera: { x: 0, z: 90, dist: 95 },
   abilities: ['scan', 'himars', { id: 'fpv', charges: 4 }, 'artillery'],
 

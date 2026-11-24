@@ -6,6 +6,7 @@ import { Audio } from './engine/audio.js';
 import { Music } from './engine/music.js';
 import { Terrain } from './engine/terrain.js';
 import { Game } from './game/game.js';
+import { SatNet } from './game/satnet.js'; // V3-SL: Satellitennetz
 import { RTSCamera, Input } from './game/input.js';
 import { getAirShow } from './engine/aircraft.js';
 import { HUD } from './game/hud.js';
@@ -14,17 +15,19 @@ import { CAMPAIGN, DEMO } from './missions/index.js';
 import { isMobile, isTouchDevice, fmtTime } from './engine/util.js';
 import { createOnline } from './net/onlineui.js';
 import { startSkirmish, createSkirmish, normalizeSetup, roleSummary, roleSummaryText, ROLES, DIFFICULTIES, VICTORY, TEAM_NAME, TEAM_COLOR, MAP_PRESETS, MAP_SIZES } from './skirmish/skirmish.js';
+import { describeSetting } from './engine/weather.js';
 import { generateSkirmishMap } from './skirmish/maps.js';
 import { createEditor } from './editor/editor.js';
 import { createModsUI } from './editor/modsui.js';
 import { initMods, listCustomMaps, getCustomMap } from './editor/mods.js';
 import { compileMission, compileSkirmishGen } from './editor/compile.js';
 import { escapeHtml } from './editor/format.js';
+import { t, applyI18n, setLang, getLang, isLangAvailable } from './i18n.js'; // V3-MENU
+import { getCampaigns, getCampaign, findMission, getProgress, isUnlocked, completeMission, resetProgress, setUnlockAll, nextMission, lastPlayed, setLastPlayed, drawMapSketch, campaignArtSVG, DIFFICULTY, ERAS } from './missions/campaigns.js'; // V3-MENU
 initMods(); // V3-E: aktive Mods (Einheitenwerte) vor dem ersten Spielstart anwenden
 
 const $ = (id) => document.getElementById(id);
 const SETTINGS_KEY = 'steppensturm.settings.v2'; // v2: neue Grafik-Voreinstellungen
-const PROGRESS_KEY = 'steppensturm.progress.v1';
 const SKIRMISH_KEY = 'steppensturm.skirmish.v1';
 
 // ---------- Einstellungen ----------
@@ -36,9 +39,7 @@ let settings = { ...defaults };
 try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (e) { /* ignorieren */ }
 const saveSettings = () => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* ignorieren */ } };
 
-let progress = { unlocked: 1, done: {} };
-try { Object.assign(progress, JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}')); } catch (e) { /* ignorieren */ }
-const saveProgress = () => { try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)); } catch (e) { /* ignorieren */ } };
+// Kampagnenfortschritt: js/missions/campaigns.js (je Kampagne, inkl. Übernahme des alten Ukraine-Fortschritts)
 
 if (isTouchDevice()) document.body.classList.add('touch');
 
@@ -49,6 +50,7 @@ const audio = new Audio();
 audio.setVolume(settings.volume);
 const game = new Game(gr, audio, settings);
 game.camera = new RTSCamera(game, gr.camera);
+game.satnet = new SatNet(game); // V3-SL: Satellitennetz (Update über game.stepSim-Wrapper, API game.satnet.*)
 const hud = new HUD(game, settings);
 const input = new Input(game, canvas, hud);
 hud.input = input;
@@ -149,7 +151,7 @@ function openBriefing(m) {
   $('brief-title').textContent = m.title;
   $('brief-text').innerHTML = m.briefing.map((b) => `<p><span class="speaker">${b.s}:</span> ${b.t}</p>`).join('');
   $('brief-objectives').innerHTML = m.objectivesPreview.map((o) => `<li>${o}</li>`).join('');
-  $('brief-forces').innerHTML = m.forces.map((f) => `<span class="chip">${f}</span>`).join('');
+  $('brief-forces').innerHTML = m.forces.map((f) => `<span class="chip">${f}</span>`).join('') + (describeSetting(m) ? `<span class="chip">${describeSetting(m)}</span>` : ''); // V3-W
   show('briefing');
   // Lagekarte
   const c = $('brief-map'), ctx = c.getContext('2d');

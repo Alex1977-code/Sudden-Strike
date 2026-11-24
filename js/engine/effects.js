@@ -662,6 +662,7 @@ export class Effects {
     m.visible = !this.terrain.isWater(x, z);
   }
   flash(x, y, z, intensity, dur) {
+    intensity *= this.flashMul || 1; // V3-W: Mündungsfeuer/Explosionen leuchten nachts stärker
     const free = this.lights.filter((l) => !l.userData.owner);
     if (!free.length) return;
     const l = free.find((l) => l.userData.t <= 0) || free.reduce((a, b) => (a.userData.t < b.userData.t ? a : b));

@@ -694,13 +694,28 @@ export class Audio {
     if (o.intensity !== undefined) A.intensity = clamp(+o.intensity || 0, 0, 1); if (o.rain !== undefined) A.rain = clamp(+o.rain || 0, 0, 1);
     this._applyAmb();
   }
+  // V3-W: Wetter-Ton (rain/wind 0..1) und Donner (dist in m, bestimmt Verzögerung/Dumpfheit)
+  setWeather(o = {}) {
+    const A = this.amb;
+    if (o.rain !== undefined) A.wxRain = clamp(+o.rain || 0, 0, 1);
+    if (o.wind !== undefined) A.wxWind = clamp(+o.wind || 0, 0, 1);
+    this._applyAmb();
+  }
+  thunder(dist = 600, power = 1) {
+    try {
+      if (!this.ctx) return;
+      const d = clamp(dist, 80, 2500), delay = d / 343 * 0.35, far = clamp(d / 1500, 0, 1);
+      this._play(this._get('expl', '1g', 3), { cat: 'f', bus: 'amb', g: (0.9 - 0.4 * far) * power, cut: 520 - 260 * far, pan: Math.random() * 1.2 - 0.6, wet: 0.9, delay, rate: 0.55 + 0.1 * Math.random() });
+    } catch (e) { this._err(e); }
+  }
   _applyAmb(now) {
     if (!this._amb || !this.ctx) return;
     const A = this.amb, t = this._now(), tc = now ? 0.01 : 1.5, winter = A.season === 'winter', B = this._amb;
-    B.w.g.gain.setTargetAtTime(0.05 + 0.03 * A.intensity + (winter ? 0.04 : 0) + A.rain * 0.03, t, tc);
+    const rainW = Math.max(A.rain, A.wxRain || 0); // V3-W: Wetter-Regen additiv zur Missions-Ambience
+    B.w.g.gain.setTargetAtTime(0.05 + 0.03 * A.intensity + (winter ? 0.04 : 0) + rainW * 0.03 + (A.wxWind || 0) * 0.09, t, tc);
     B.lp.frequency.setTargetAtTime(winter ? 520 : 380, t, tc);
     B.cr.g.gain.setTargetAtTime((A.night && !winter ? 0.11 : !A.night && A.season === 'summer' ? 0.02 : 0) * (1 - 0.6 * A.intensity), t, tc);
-    B.rn.g.gain.setTargetAtTime(A.rain * 0.12, t, tc);
+    B.rn.g.gain.setTargetAtTime(rainW * 0.12, t, tc);
   }
   _tick() {
     const c = this.ctx; if (!c || c.state !== 'running' || (typeof document !== 'undefined' && document.hidden)) return;
