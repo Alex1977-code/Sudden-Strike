@@ -83,7 +83,7 @@ export class Tactics {
     }
     if (s.vet) m *= 1 + TAC.vet.acc * s.vet;
     if (s.mods?.crw) m *= 1 - 0.15 * s.mods.crw;
-    if (target && target.type.infantry && w && w.kind === 'bullet') { if (target.supp >= TAC.supp.pinned) m *= 0.7; else if (target.supp >= TAC.supp.crouch) m *= 0.88; }
+    if (target && target.type.infantry && w && w.kind === 'bullet') { if (target.supp >= TAC.supp.pinned || target.prone) m *= 0.7; else if (target.supp >= TAC.supp.crouch) m *= 0.88; } // V3-M2: kriechend schwerer zu treffen
     return m;
   }
   reloadMul(u) {
@@ -94,11 +94,19 @@ export class Tactics {
     return m;
   }
   speedMul(u) {
+    // V3-M2: Rückzug ignoriert Niederhalten/Verwundung; Walzen bremst kurz; Geschütz am Haken bremst
+    if (u.retreat) return u.type.infantry ? 1.3 : 1.15;
+    if (u.type.vehicle) {
+      let k = u.crushT > this.g.time ? 0.6 : 1;
+      if (u.towing) k *= 0.8;
+      if (k < 1) return k * (u.mods ? (u.mods.eng === 2 ? 0.3 : u.mods.eng === 1 ? 0.5 : 1) : 1);
+    }
     if (u.type.infantry) {
       if (u.panicT > 0) return 1.15;
       let m = 1;
       if (u.supp >= TAC.supp.pinned) m *= 0.4; else if (u.supp >= TAC.supp.crouch) m *= 0.8;
       if (u.hp < u.maxHp * TAC.wounded) m *= 0.5; // Verwundete kriechen
+      if (u.prone && u.supp < TAC.supp.pinned) m *= 0.45; // V3-M2: Haltung kriechend
       return m;
     }
     if (u.mods) return u.mods.eng === 2 ? 0.3 : u.mods.eng === 1 ? 0.5 : 1;
@@ -558,7 +566,7 @@ export class Tactics {
     if (u.panicT > 0) {
       u.panicT -= dt;
       if (u.panicT <= 0) { u.panicT = 0; u.stop(); u.supp = Math.min(u.supp, 55); }
-    } else if (u.type.infantry && u.supp >= (this.isLed(u) ? TAC.supp.panicLed : TAC.supp.panic) && g.time > u.panicCd && !u.garrison && !u.garrisonGoal && !g.logi?.coverOf(u) && u.speed > 0) {
+    } else if (u.type.infantry && !u.retreat && u.supp >= (this.isLed(u) ? TAC.supp.panicLed : TAC.supp.panic) && g.time > u.panicCd && !u.garrison && !u.garrisonGoal && !g.logi?.coverOf(u) && u.speed > 0) {
       this._startPanic(u);
     }
     if (u.throwOrder && u.panicT <= 0) this._stepThrow(u, dt);
@@ -657,7 +665,7 @@ export class Tactics {
     if (!b || !u.type.infantry || u.garrison) return;
     let tgt = 0;
     if (u.panicT > 0) tgt = 0;
-    else if (u.supp >= TAC.supp.pinned || (u.moving && u.hp < u.maxHp * TAC.wounded)) tgt = 2;
+    else if (u.supp >= TAC.supp.pinned || (u.moving && u.hp < u.maxHp * TAC.wounded) || u.prone) tgt = 2; // V3-M2: Haltung kriechend
     else if (u.supp >= TAC.supp.crouch || (u.job?.dig && !u.moving)) tgt = 1;
     const cur = u._pose || 0;
     if (Math.abs(cur - tgt) < 0.01 && !u._poseDirty) return;

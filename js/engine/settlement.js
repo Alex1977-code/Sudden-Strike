@@ -35,6 +35,7 @@ const ROAD_MIN = 1.5; // Mindestabstand Hauswand – Fahrbahnkante (m)
 // Mindestbreite zwischen gegenüberliegenden Häuserfronten (m). Das 2-m-Wegfindungsraster verliert je Seite bis zu
 // ~2 m (Zellrundung + Sperrrand 0,6 m); 12 m nominal lassen ≥ 7–8 m freie Zellen für Fahrzeuge bis ~3,8 m Breite.
 const FREE_MIN = 12;
+const JUNCTION_EXTRA = 2.5; // zusätzlicher Abstand von Straßenknoten (Kreuzung, Knick, Ende)
 const edgeMin = (width, roadMin = ROAD_MIN) => Math.max(roadMin, (FREE_MIN - width) / 2);
 const r1 = (v) => Math.round(v * 10) / 10;
 const TAU = Math.PI * 2;
@@ -218,9 +219,33 @@ class Ctx {
     const R = Math.hypot(h.w, h.d) / 2;
     for (const rd of this.roads) {
       const b = rd.box; if (h.x + R < b[0] || h.x - R > b[2] || h.z + R < b[1] || h.z - R > b[3]) continue;
-      if (houseRoadDist(h, rd.pts) < rd.width / 2 + edgeMin(rd.width, roadMin) - 0.05) return false;
+      const need = rd.width / 2 + edgeMin(rd.width, roadMin);
+      if (houseRoadDist(h, rd.pts) < need - 0.05) return false;
+
+    }
+    // Kreuzungen und Straßenenden: zusätzlicher Freiraum zum Abbiegen und Wenden von Fahrzeugen
+    for (const [jx, jz, need] of this.junctions()) {
+      if (Math.abs(jx - h.x) > R + need || Math.abs(jz - h.z) > R + need) continue;
+      const [lx, lz] = toLocal(h, jx, jz);
+      if (Math.hypot(Math.max(0, Math.abs(lx) - h.w / 2), Math.max(0, Math.abs(lz) - h.d / 2)) < need) return false;
     }
     return true;
+  }
+  // Knotenpunkte: Enden jeder Straße und Stützpunkte, die auf einer anderen Straße liegen; [x, z, Mindestabstand]
+  junctions() {
+    if (this._jn && this._jnN === this.roads.length) return this._jn;
+    const J = [];
+    for (const a of this.roads) {
+      if (a.ref.square || a.ref.causeway) continue;
+      const need = a.width / 2 + edgeMin(a.width) + JUNCTION_EXTRA;
+      a.pts.forEach(([x, z], i) => {
+        let node = i === 0 || i === a.pts.length - 1;
+        if (!node) for (const b of this.roads) { if (b !== a && !b.ref.square && distToPolyline(x, z, b.pts) < b.width / 2 + 1) { node = true; break; } }
+        if (node) J.push([x, z, need]);
+      });
+    }
+    this._jn = J; this._jnN = this.roads.length;
+    return J;
   }
   add(h, opts) {
     if (!this.fits(h, opts)) return null;

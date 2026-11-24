@@ -27,6 +27,15 @@
  *   game.command(playerId, cmd) → bool: validiert (nur eigene lebende Einheiten, sichtbares feindl./neutrales Ziel,
  *   eigene Fähigkeit) und führt aus; emit('command', playerId, cmd).
  *   game.issueCommand(cmd): Einstieg für Input/HUD – Client → game.net.sendCommand(cmd), sonst command(localPlayerId, cmd).
+ * Befehle & Welt (V3-M2): jedes Einheiten-Kommando mit queue:true hängt an die Befehlskette (u.queue, orders.js);
+ *   {t:'stance', ids, fire:'free'|'return'|'hold', move:'free'|'hold'|'pursue', pose:'stand'|'prone', cb:bool} ·
+ *   {t:'retreat', ids} · {t:'formation', value:'block'|'line'|'wedge'|'column'} (move darf formation tragen) ·
+ *   {t:'embark', ids, target} · {t:'unload', ids, x?, z?} · {t:'hitch', ids, target} · {t:'unhitch', ids} (transport.js) ·
+ *   {t:'pickmines', ids, x, z} (Minen aufnehmen, logistics.js) · {t:'blowbridge'|'buildbridge', ids, target: Brücken-id}.
+ *   Missions-API: game.addRailway(points, o), game.addStation(x, z, o), game.spawnTrain({side, kind, cars, route, …}) (rail.js),
+ *   game.addBridge(pts, {width, kind, hp}), game.bridges (mapobjects.js), spawn(…, {cargo:[[typ, n]]}); Ereignisse
+ *   'bridgeDestroyed', 'bridgeBuilt', 'embark', 'disembark', 'hitched', 'unhitched', 'trainArrived', 'trainDelivered',
+ *   'counterBattery', 'crushed'. Fähigkeit 'airdrop' (Luftlandung, support.js).
  * Fähigkeiten: player.abilities; game.abilities = Fähigkeiten des lokalen Spielers. useAbility(playerId, abilityId, x, z);
  *   abilityAvailable(a) prüft requires gegen Einheiten von a.owner. setAbilities(list, playerId = lokal),
  *   addAbilityCharges(id, n, playerId = lokal). ABILITIES[id].exec(game, x, z, player).
@@ -52,6 +61,11 @@ import { Effects } from '../engine/effects.js';
 import { Unit, resetUnitIds } from './unit.js';
 import { Combat, Missile } from './combat.js';
 import { Tactics } from './tactics.js';
+import { Orders, ORD } from './orders.js';
+import { Transport } from './transport.js';
+import { MapObjects } from './mapobjects.js';
+import { Rail } from './rail.js';
+import { Support } from './support.js';
 import { ABILITIES } from './abilities.js';
 import { UNIT_TYPES } from './unitTypes.js';
 import { bridgeDecor, setBuildingDamage, buildingFxPoint, buildingClass } from './models.js';
@@ -173,6 +187,12 @@ export class Game {
     this.tac = new Tactics(this);
     this.vision = new Vision(this);
     this.gar = new Garrison(this);
+    // V3-M2: Befehle & Welt
+    this.orders = new Orders(this);
+    this.trans = new Transport(this);
+    this.mapobj = new MapObjects(this);
+    this.rail = new Rail(this);
+    this.support = new Support(this);
     this.visionStats = { n: 0, sum: 0, max: 0, last: 0 };
     this.time = 0;
     this.units = []; this.missiles = []; this.timers = []; this.animations = []; this.selected = [];
@@ -205,6 +225,8 @@ export class Game {
       this.world.add(bridgeDecor(b.x0, b.x1, b.z, b.deckY, this.terrain.seaLevel, b.gaps || [], b.gapLen || 28));
     }
     if (this.minimapReady) this.minimapReady(this.terrain.minimapImage(180));
+    if (map.bridges) for (const b of map.bridges) this.addBridge(b.pts, b); // V3-M2: Brücken aus der Kartendefinition
+    if (map.railways) for (const r of map.railways) this.addRailway(r.pts || r, r.pts ? r : {});
     if (demo) { mission.demo ? mission.demo(this) : null; }
     else {
       mission.setup(this);
@@ -216,8 +238,15 @@ export class Game {
     this.paused = false;
     this.updateVision(1, true);
     this.fow.upload(1);
+    this.mapobj.applyAmbience();
     this.emit('loaded');
   }
+  // ---- V3-M2: Missions-API Welt (Gleise, Züge, Brücken) ----
+  addRailway(points, o = {}) { return this.rail.addRailway(points, o); }
+  addStation(x, z, o = {}) { return this.rail.addStation(x, z, o); }
+  spawnTrain(o = {}) { return this.rail.spawnTrain(o); }
+  addBridge(pts, o = {}) { return this.mapobj.addBridge(pts, o); }
+  get bridges() { return this.mapobj?.bridges || []; }
   dispose() {
     if (this.world) {
       this.gr.clearScene([this.gr.hemi, this.gr.sun, this.gr.sun.target, this.gr.sky]);
@@ -245,6 +274,7 @@ export class Game {
     if (t.build && u.build?.progress >= 1 && (t.build.blocks || t.build.blocksInfantry) && this.logi) this.logi.rebuildTraps();
     if (opts.order) u.moveTo(opts.order[0], opts.order[1]);
     this.mission?.onSpawn?.(this, u, opts); // MP-T7: missionsspezifische Einheitenwerte (Gefecht: Fraktionsausgleich)
+    if (opts.cargo && this.trans) this.trans.loadNew(u, opts.cargo); // V3-M2: Insassen
     return u;
   }
   // Gruppe in Formation spawnen
@@ -278,13 +308,16 @@ export class Game {
     if (u.detonated) this.scene.remove(u.root);
     if (u.type.build) this.logi?.onBuildingGone(u);
     if (u.garrison || u.occupants) this.gar?.onRemove(u);
+    if (u.cargo?.length || u.towing || u.towedBy) this.trans?.onRemove(u);
     if (this.mission?.onRemove) this.mission.onRemove(this, u);
   }
   killUnit(u, killer, silent = false) {
     if (!u.alive) return;
     this._inDie = true; // Online-Host: Effekte des Todes spielen Clients selbst ab (Event 'die')
     try { u.die(killer, silent); } finally { this._inDie = false; }
+    this.trans?.onDeath(u, killer); // V3-M2: Insassen (anteilig tot, Rest verwundet), Zugverbindung lösen
     this.removeUnit(u);
+    if (u.train) this.rail?.onDeath(u);
     // Statistik je Spieler (game.stats spiegelt den lokalen Spieler)
     if (u.side !== 'N' && !u.type.build) {
       const victim = this.ownerPlayer(u);
@@ -329,7 +362,7 @@ export class Game {
     if (this.logistics && target.hp > 0 && target.type.vehicle && !target.type.structure) this.logi.onVehicleHit(target, amount, src);
     if (amount > 5 && !target.type.structure) { if (this.isOwn(target)) this.emit('underAttack', target); else if (this.net?.isHost) this.net.attacked?.(target); }
     // KI reagiert auf Beschuss (teamneutral)
-    if (target.ai && src && src.alive && src.side !== target.side && !target.order && target.ai.mode !== 'convoy' && !target.type.structure) {
+    if (target.ai && src && src.alive && src.side !== target.side && !target.order && target.ai.mode !== 'convoy' && !target.type.structure && target.moveMode !== 'hold') {
       if (target.ai.mode === 'hold' && target.ai.reactive !== false) { /* bleibt stehen */ }
       else if (src.visibleTo?.(target.side) || Math.random() < 0.3) target.attack(src);
     }
@@ -378,6 +411,7 @@ export class Game {
   }
   splashDamage(x, z, r, dmg, w, side, exclude, hitAll = false, owner = null) {
     this.tac?.onBlast(x, z, r, dmg, side, hitAll);
+    this.mapobj?.onBlast(x, z, r, dmg, w); // V3-M2: Brücken unter Beschuss
     for (const u of [...this.units]) {
       if (!u.alive || u === exclude) continue;
       if (u.side === side && !hitAll) continue;
@@ -454,10 +488,20 @@ export class Game {
     const units = ids.map((id) => this.unitById(id)).filter((u) => u && u.alive && u.owner === p.id && u.side === p.team && !(u.panicT > 0));
     const fin = (v) => typeof v === 'number' && Number.isFinite(v);
     let ok = false;
+    // V3-M2: Befehlskette (Shift) – anhängen statt ersetzen; ein neuer Befehl ohne queue löscht die Kette
+    if (cmd.queue && ORD.queueable.has(cmd.t) && units.length) {
+      ok = this.orders.enqueue(p, cmd, units);
+      if (ok) this.emit('command', p.id, cmd);
+      return !!ok;
+    }
+    if (!cmd.fromQueue && units.length && (ORD.queueable.has(cmd.t) || cmd.t === 'stop' || cmd.t === 'retreat')) for (const u of units) { u.queue = null; if (cmd.t !== 'unload') u.retreat = null; }
     switch (cmd.t) {
       case 'move': {
         if (!units.length || !fin(cmd.x) || !fin(cmd.z)) return false;
-        ok = this.issueOrder(units, cmd.x, cmd.z, null, { attackMove: !!cmd.attackMove, playerId: p.id });
+        const rail = units.filter((u) => u.train);
+        if (rail.length) ok = this.rail.orderMove(rail, cmd.x, cmd.z);
+        const rest = units.filter((u) => !u.train);
+        if (rest.length) ok = this.issueOrder(rest, cmd.x, cmd.z, null, { attackMove: !!cmd.attackMove, playerId: p.id, formation: cmd.formation }) || ok;
         break;
       }
       case 'attack': {
@@ -471,13 +515,14 @@ export class Game {
       }
       case 'stop':
         if (!units.length) return false;
-        units.forEach((u) => { u.stop(); u.throwOrder = null; });
+        units.forEach((u) => { u.stop(); u.throwOrder = null; u.embarkGoal = null; u.unloadAt = null; u.hitchGoal = null; u.bridgeJob = null; u.retreat = null; });
+        this.rail.stop(units);
         ok = true;
         break;
       case 'hold': {
         if (!units.length) return false;
         const v = cmd.value === undefined ? !units.every((u) => u.holdFire) : !!cmd.value;
-        units.forEach((u) => (u.holdFire = v));
+        units.forEach((u) => { u.holdFire = v; u.fireMode = v ? 'hold' : 'free'; }); // V3-M2: einheitlich mit stance.fire
         ok = true;
         break;
       }
@@ -502,40 +547,39 @@ export class Game {
         if (!fin(cmd.x) || !fin(cmd.z)) return false;
         ok = this.useAbility(p.id, cmd.ability, cmd.x, cmd.z);
         break;
-      default:
-        return false;
+      case 'pickmines':
+        ok = this.logi.command(p, cmd, units);
+        break;
+      default: {
+        // V3-M2: Haltung/Rückzug/Formation, Transport, Brücken
+        const r = this.orders.command(p, cmd, units) ?? this.trans.command(p, cmd, units) ?? this.mapobj.command(p, cmd, units);
+        if (r === undefined) return false;
+        ok = r;
+      }
     }
     if (ok) {
-      if (p.id === this._localPlayerId && (cmd.t === 'stop' || cmd.t === 'hold' || cmd.t === 'ambush' || cmd.t === 'dig' || cmd.t === 'smoke' || cmd.t === 'grenade')) this.audio.ui('ack');
+      if (p.id === this._localPlayerId && /^(stop|hold|ambush|dig|smoke|grenade|stance|retreat|formation|embark|unload|hitch|unhitch|pickmines|blowbridge|buildbridge)$/.test(cmd.t)) this.audio.ui('ack');
       this.emit('command', p.id, cmd);
     }
     return !!ok;
   }
   // Interne Befehlslogik (Formation); Validierung erfolgt in command()
-  issueOrder(units, x, z, target, { attackMove = false, playerId = this._localPlayerId } = {}) {
-    units = units.filter((u) => u.alive && !u.type.structure && u.speed > 0);
+  issueOrder(units, x, z, target, { attackMove = false, playerId = this._localPlayerId, formation = null } = {}) {
+    // Züge (V3-M2): Angriff ja (Turm), Bewegung nur über rail.orderMove
+    if (target && target.side !== units[0]?.side) for (const u of units) if (u.train && u.alive) u.attack(target);
+    units = units.filter((u) => u.alive && !u.type.structure && u.speed > 0 && !u.towedBy);
     if (!units.length) return false;
     for (const u of units) { if (u.garrison) this.gar.leave(u); u.garrisonGoal = null; u.throwOrder = null; }
     const fb = playerId === this._localPlayerId; // Rückmeldung nur für den lokalen Spieler
     if (fb) this.audio.ui('ack');
     if (target && target.side !== units[0].side) {
-      for (const u of units) u.attack(target);
+      for (const u of units) { u.attack(target); if (u.order) u.order.explicit = true; }
       if (fb) this.effects.marker(target.pos.x, target.pos.z, 0xff4040, 0.8, Math.max(2, target.radius + 1));
       return true;
     }
-    // Formation um den Zielpunkt
-    const n = units.length;
-    const cx = units.reduce((s, u) => s + u.pos.x, 0) / n, cz = units.reduce((s, u) => s + u.pos.z, 0) / n;
-    const dir = Math.atan2(x - cx, z - cz);
-    const cols = Math.ceil(Math.sqrt(n * 2));
-    const sorted = [...units].sort((a, b) => (a.type.vehicle ? 0 : 1) - (b.type.vehicle ? 0 : 1));
-    sorted.forEach((u, i) => {
-      const r = Math.floor(i / cols), c = i % cols;
-      const sp = u.type.vehicle || u.type.naval ? 8 : u.type.air ? 6 : 3;
-      const ox = (c - (Math.min(cols, n - r * cols) - 1) / 2) * sp, oz = -r * sp;
-      const px = x + ox * Math.cos(dir) + oz * Math.sin(dir), pz = z - ox * Math.sin(dir) + oz * Math.cos(dir);
-      u.moveTo(n === 1 ? x : px, n === 1 ? z : pz, { attackMove });
-    });
+    // Formation um den Zielpunkt (V3-M2: Block/Reihe/Keil/Kolonne je Spieler bzw. Kommando, Abstände nach Einheitengröße)
+    const kind = formation || this.orders.formationOf(playerId);
+    for (const [u, px, pz] of this.orders.slots(units, x, z, kind)) { u.moveTo(px, pz, { attackMove }); if (u.moveMode) u.anchor = [px, pz]; }
     if (fb) this.effects.marker(x, z, attackMove ? 0xffa030 : 0x5dff8a, 0.8, 2);
     return true;
   }
@@ -745,7 +789,7 @@ export class Game {
     const concealOf = (u) => {
       let k = baseConceal(u);
       if (u.ambush?.on && !u.moving && !(u.lastFired && this.time - u.lastFired < 6)) k = Math.min(k, 0.4);
-      else if (u.type.infantry && u.supp >= 50) k *= 0.85;
+      else if (u.type.infantry && (u.supp >= 50 || u.prone)) k *= u.prone ? ORD.prone.conceal : 0.85; // V3-M2: kriechend schwerer zu sehen
       return k;
     };
     const baseConceal = (u) => {
@@ -848,6 +892,8 @@ export class Game {
     if (!this.paused) this.effects.update(Math.min(dt, 0.05));
     this.updateRings();
     this.updateCones();
+    this.orders?.updateVisual(); // V3-M2: Wegpunktlinie der gewählten eigenen Einheiten
+    if (!this.paused) this.mapobj?.updateSound(Math.min(dt, 0.1)); // Motor-/Umgebungsklang
   }
   stepSim(dt) {
     if (this.net?.isClient) return this.stepClient(dt);
@@ -876,6 +922,12 @@ export class Game {
     this.logi.update(dt);
     this.tac.update(dt);
     this.gar.update(dt);
+    // V3-M2: Transport/Schleppen, Züge, Walzen/Brücken, Befehlsketten, Fallschirme
+    this.trans.update(dt);
+    this.rail.update(dt);
+    this.mapobj.update(dt);
+    this.orders.update(dt);
+    this.support.update(dt);
     this.separate();
     // Flugkörper
     for (const m of this.missiles) m.update(dt);
@@ -917,6 +969,7 @@ export class Game {
     for (const u of [...this.units]) if (u.alive) u.update(dt);
     this.gar.update(dt);
     this.tac.updateClient(dt);
+    this.support.update(dt); // Fallschirm-Optik
     for (const m of this.missiles) m.update(dt);
     this.missiles = this.missiles.filter((m) => !m.dead);
     if (this.trackedMissile?.dead) this.trackedMissile = null;
@@ -952,7 +1005,7 @@ export class Game {
     const list = this._sepList || (this._sepList = []);
     list.length = 0;
     for (const u of this.units) {
-      if (!u.alive || u.type.structure || u.type.air) continue;
+      if (!u.alive || u.type.structure || u.type.air || u.type.rail || u.towedBy || u.dropping) continue; // V3-M2: Züge/Geschütze am Haken
       const cx = Math.floor(u.pos.x / CS), cz = Math.floor(u.pos.z / CS);
       u._sepI = list.length; u._sepCx = cx; u._sepCz = cz;
       list.push(u);

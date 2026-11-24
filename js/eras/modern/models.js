@@ -672,3 +672,96 @@ function jet(side, kind) {
 registerModel('m_jet_f16', (side) => jet(side, 'f16'));
 registerModel('m_jet_mirage', (side) => jet(side, 'mirage'));
 registerModel('m_jet_su34', (side) => jet(side, 'su34'));
+
+// ============================================================ V3-M2: gezogene Geschütze, Gegenbatterie-Radar, Eisenbahn
+// Gezogenes Geschütz (D-30 / M119 / MT-12): Lafette mit Spreizholmen nach hinten, Schutzschild, Rohr (Turm-Knoten = Oberlafette)
+registerModel('m_towgun', (side, type) => {
+  const M = K.M, g = new THREE.Group(), cam = camOf(side), how = type.gunKind === 'howitzer';
+  for (const s of [-1, 1]) {
+    wheel(g, 0.55, 0.3, s * 1.0, 0.55, 0.2);
+    box(g, 0.14, 0.14, 2.6, M.darkMetal, s * 0.45, 0.35, -1.3, 0, s * 0.22, 0); // Holme
+  }
+  box(g, 1.9, 0.18, 0.5, M.darkMetal, 0, 0.6, 0.2);
+  const turret = new THREE.Group(); turret.position.set(0, 0.9, 0.2); g.add(turret);
+  box(turret, 1.7, 0.95, 0.08, cam, 0, 0.35, 0.45); // Schutzschild
+  box(turret, 0.55, 0.45, 1.0, cam, 0, 0.15, 0);
+  const barrel = new THREE.Group(); barrel.position.set(0, 0.3, 0.3); turret.add(barrel);
+  const len = how ? 3.6 : 4.4, r = how ? 0.1 : 0.075;
+  cyl(barrel, r, r * 1.2, len, M.gunMetal, 0, 0, len / 2, Math.PI / 2, 0, 0, 8);
+  box(barrel, r * 3, r * 3, 0.35, M.darkMetal, 0, 0, len - 0.2);
+  if (how) barrel.rotation.x = -0.18;
+  const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, len + 0.15); barrel.add(muzzle);
+  mark(g, side, 1.0, -0.2);
+  return { root: g, turret, barrel, muzzle, height: 1.8 };
+});
+// Gegenbatterie-Radar: Lkw (UA) bzw. MT-LB (RU) mit drehbarer Antenne (radar-Knoten)
+registerModel('m_cbradar', (side, type) => {
+  const M = K.M, cam = camOf(side);
+  let g;
+  if (type.tracked) {
+    const h = hullBase(side, { L: 6.4, W: 2.8, n: 6, hh: 1.0, skirt: 'none' }); g = h.g;
+    box(g, 2.2, 1.0, 2.6, cam, 0, 2.3, -1.0);
+  } else { g = truckBase(cam, 7, 2.5, 3); box(g, 2.3, 1.4, 3.6, cam, 0, 2.0, -1.4); }
+  const radar = new THREE.Group(); radar.position.set(0, type.tracked ? 2.9 : 2.8, -1.4); g.add(radar);
+  cyl(radar, 0.12, 0.12, 0.7, M.darkMetal, 0, 0.35, 0, 0, 0, 0, 6);
+  box(radar, 2.6, 1.6, 0.18, X().pale, 0, 1.3, 0, -0.25, 0, 0);
+  for (let i = 0; i < 4; i++) box(radar, 0.04, 1.4, 0.05, M.darkMetal, -0.9 + i * 0.6, 1.3, 0.11, -0.25, 0, 0);
+  antenna(g, 0.9, 2.8, 1.6, 2.4);
+  mark(g, side, 2.95, 1.2);
+  return { root: g, radar, height: 4.2 };
+});
+// Eisenbahn (modern): Diesellok, Güterwagen, Kesselwagen, Panzerwagen, Flak-Waggon – Länge ≈ 9,6 m (radius 4,6)
+function railChassis(g, L) {
+  const M = K.M;
+  box(g, 2.6, 0.35, L, M.darkMetal, 0, 1.05, 0);
+  for (const z of [-L * 0.32, L * 0.32]) { box(g, 1.9, 0.35, 2.3, M.darkMetal, 0, 0.62, z); for (const s of [-1, 1]) for (const k of [-0.55, 0.55]) wheel(g, 0.42, 0.12, s * 0.72, 0.42, z + k * 1.2, M.darkMetal, 10); }
+  for (const z of [-L / 2 - 0.15, L / 2 + 0.15]) for (const s of [-1, 1]) cyl(g, 0.16, 0.16, 0.3, M.gunMetal, s * 0.85, 1.05, z, Math.PI / 2, 0, 0, 8); // Puffer
+}
+function railCar(kind) {
+  return (side) => {
+    const M = K.M, x = X(), g = new THREE.Group(), cam = camOf(side), L = 9.2;
+    const body = side === 'UA' ? new THREE.MeshStandardMaterial({ color: 0x3f5a3a, roughness: 0.8 }) : new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.8 });
+    let turret = null, barrel = null, muzzle = new THREE.Object3D(), h = 3.9;
+    railChassis(g, L);
+    if (kind === 'loco') {
+      box(g, 2.5, 2.4, 6.6, body, 0, 2.4, -0.9);
+      box(g, 2.6, 2.6, 2.1, body, 0, 2.5, 3.4); // Führerstand
+      box(g, 2.3, 0.7, 0.05, M.glass, 0, 3.1, 4.46);
+      for (const s of [-1, 1]) box(g, 0.05, 0.6, 1.2, M.glass, s * 1.31, 3.1, 3.4);
+      box(g, 2.7, 0.15, 9.2, M.darkMetal, 0, 3.75, 0.2);
+      box(g, 0.9, 0.4, 1.4, M.darkMetal, 0, 3.75, -2.6); // Lüfter
+      headlights(g, 2.2, 4.5, 0.9, 0.18);
+      box(g, 2.6, 0.18, 0.06, x.orange, 0, 1.6, 4.48); // Warnstreifen
+    } else if (kind === 'wagon') {
+      box(g, 2.5, 2.4, 8.8, body, 0, 2.45, 0); box(g, 2.7, 0.15, 9.0, M.darkMetal, 0, 3.7, 0);
+      for (const s of [-1, 1]) box(g, 0.05, 1.9, 2.2, M.darkMetal, s * 1.27, 2.35, 0);
+    } else if (kind === 'tank') {
+      cyl(g, 1.15, 1.15, 8.2, body, 0, 2.4, 0, Math.PI / 2, 0, 0, 14);
+      cyl(g, 0.45, 0.45, 0.5, M.darkMetal, 0, 3.6, 0, 0, 0, 0, 10);
+      for (const z of [-3.6, 3.6]) add(g, sphG(1.15, 12, 6), body, 0, 2.4, z).scale.set(1, 1, 0.35);
+    } else if (kind === 'flak') {
+      for (const s of [-1, 1]) box(g, 0.12, 1.1, 8.8, cam, s * 1.25, 1.75, 0);
+      for (const z of [-4.4, 4.4]) box(g, 2.6, 1.1, 0.12, cam, 0, 1.75, z);
+      for (let i = 0; i < 8; i++) box(g, 0.7, 0.35, 0.5, M.sandbag || M.tarp, (i % 2 ? 0.75 : -0.75), 1.4, -3.4 + i * 0.95);
+      turret = new THREE.Group(); turret.position.set(0, 1.4, 0.6); g.add(turret);
+      box(turret, 1.2, 0.45, 1.0, M.darkMetal, 0, 0.25, 0);
+      barrel = new THREE.Group(); barrel.position.set(0, 0.6, 0.2); barrel.rotation.x = -0.45; turret.add(barrel);
+      for (const s of [-0.22, 0.22]) cyl(barrel, 0.045, 0.05, 2.2, M.gunMetal, s, 0, 1.1, Math.PI / 2, 0, 0, 6);
+      muzzle.position.set(0, 0, 2.3); barrel.add(muzzle);
+      h = 3;
+    } else { // Panzerwagen
+      box(g, 2.6, 1.9, 8.8, cam, 0, 2.2, 0, 0, 0, 0);
+      for (const z of [-4.5, 4.5]) box(g, 2.6, 1.5, 0.3, cam, 0, 2.0, z);
+      for (const s of [-1, 1]) for (const z of [-2.8, 0, 2.8]) box(g, 0.1, 0.3, 0.6, M.darkMetal, s * 1.32, 2.6, z);
+      box(g, 2.7, 0.4, 8.0, X().cage, 0, 3.6, 0); // Gitterdach gegen Drohnen
+      turret = new THREE.Group(); turret.position.set(0, 3.15, 1.6); g.add(turret);
+      box(turret, 1.5, 0.55, 1.6, cam, 0, 0.27, 0);
+      const gg = gun(turret, { y: 0.3, z: 0.8, len: 2.4, r: 0.05 }); barrel = gg.barrel; muzzle = gg.muzzle;
+      h = 4.3;
+    }
+    mark(g, side, kind === 'tank' ? 3.55 : 3.8, -2.5);
+    g.add(muzzle);
+    return { root: g, turret, barrel, muzzle, height: h };
+  };
+}
+for (const k of ['loco', 'wagon', 'tank', 'armor', 'flak']) registerModel('m_rail_' + k, railCar(k));

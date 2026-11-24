@@ -171,7 +171,19 @@ function prepareType(k, t) {
     if (t.mineKind) t.build.mineKind = t.mineKind;
   }
   if (t.build?.selfDig) t.selfDig = true;
+  // V3-M2: Transport/Zug/Walzen vereinheitlichen – transport: n (Infanterieplätze), tow (Zugfahrzeug), towable (gezogenes
+  // Geschütz; WK2: towed/towedBy), crush (walzt Bäume/Büsche/Hecken/Sandsäcke: Kampfpanzer, Bergepanzer), airdropOnly
+  // (Transportflugzeuge: nur Fallschirmabwurf, kein Aufsitzen)
+  if (t.transport === undefined && CORE_TRANSPORT[k] !== undefined) t.transport = CORE_TRANSPORT[k];
+  if (t.towed) t.towable = true;
+  if (t.towedBy) for (const tk of t.towedBy) if (UNIT_TYPES[tk]) UNIT_TYPES[tk].tow = true;
+  if (t.tow === undefined && t.vehicle && !t.structure && !t.unmanned && (t.supply || CORE_TOW.has(k)) && t.speed >= 4) t.tow = true;
+  if (t.crush === undefined) t.crush = !!(t.vehicle && !t.structure && !t.rail && !t.towable && (t.armor === 'heavy' || t.repair));
+  if (t.air && t.transport && !/heli|mi8|mi-8|ch53|nh90|hind|mi24|uh60/i.test(String(t.model) + k)) t.airdropOnly = true;
 }
+// V3-M2: Transportkapazität der Basis-Typen (Epochen setzen transport direkt in ihren units.js)
+const CORE_TRANSPORT = { bmp: 7, btr: 8, bradley: 6, truck: 12, ua_truck: 12, ua_supply: 6, ru_supply: 6, pickup: 4, ua_tankdestroyer: 4 };
+const CORE_TOW = new Set(['truck', 'ua_truck', 'ua_supply', 'ru_supply', 'ua_recovery', 'ru_recovery']);
 for (const [k, t] of Object.entries(UNIT_TYPES)) prepareType(k, t);
 
 /**

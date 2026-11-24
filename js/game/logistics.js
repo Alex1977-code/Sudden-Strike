@@ -50,6 +50,8 @@ export const LOGI = {
   maxBuildPerPlayer: 30,
   mineDmg: { veh: 240, inf: 70 },
   mineDetect: { engineer: 12, recon: 16 },
+  pickTime: 4.5,      // s je aufgenommener Mine (je Pionier) – V3-M2
+  mineCarry: 16,      // Minen, die ein Pionier höchstens trägt
   bailChance: 0.28, immobChance: 0.15,
 };
 const MINE_W = { vs: { soft: 1, light: 1, heavy: 0.75, air: 0, struct: 1 }, name: 'Mine', mine: true };
@@ -315,18 +317,20 @@ export class Logistics {
     const fin = (v) => typeof v === 'number' && Number.isFinite(v);
     switch (cmd.t) {
       case 'build': return this.cmdBuild(p, cmd, units, fin);
-      case 'clearmines': {
-        const eng = units.filter((u) => u.type.engineer && !u.abandoned);
+      case 'clearmines': case 'pickmines': {
+        // V3-M2: pickmines = Minen aufnehmen (in den Vorrat des Pioniers, u.mineStock), sonst räumen (auch Draht)
+        const pick = cmd.t === 'pickmines';
+        const eng = units.filter((u) => u.type.engineer && !u.abandoned && (!pick || (u.mineStock || 0) < LOGI.mineCarry));
         if (!eng.length || !fin(cmd.x) || !fin(cmd.z)) return false;
-        let m = null, bd = 9;
+        let m = null, bd = pick ? 14 : 9;
         for (const u of g.units) {
-          if (!u.alive || !(u.type.build?.mines || u.type.build?.blocksInfantry)) continue; // Minen oder Draht
+          if (!u.alive || !(u.type.build?.mines || (!pick && u.type.build?.blocksInfantry))) continue; // Minen oder Draht
           if (!(u.side === p.team || u.seenBy[p.team])) continue;
           const d = Math.hypot(u.pos.x - cmd.x, u.pos.z - cmd.z);
           if (d < bd) { bd = d; m = u; }
         }
         if (!m) return false;
-        for (const e of eng) this.assign(e, { type: 'clear', target: m.id });
+        for (const e of eng) this.assign(e, { type: 'clear', target: m.id, pick: pick || undefined });
         return true;
       }
       case 'demolish': {
@@ -371,13 +375,18 @@ export class Logistics {
     const rot = fin(cmd.rot) ? cmd.rot : 0;
     const def = UNIT_TYPES[cmd.kind].build;
     if (this.countBuilds(p.id) >= LOGI.maxBuildPerPlayer) return false;
-    if (eng.reduce((s, e) => s + e.material, 0) < def.cost - 1e-6) return false;
+    // V3-M2: Minenfelder aus aufgenommenen Minen (statt Material), wenn die Pioniere genug tragen
+    const fromStock = def.mines > 0 && eng.reduce((s, e) => s + (e.mineStock || 0), 0) >= def.mines;
+    if (!fromStock && eng.reduce((s, e) => s + e.material, 0) < def.cost - 1e-6) return false;
     if (!this.footprintOk(cmd.kind, cmd.x, cmd.z, rot)) return false;
-    // Material von den nächsten Pionieren abbuchen
-    let need = def.cost;
+    // Material (bzw. Minen) von den nächsten Pionieren abbuchen
+    let need = fromStock ? def.mines : def.cost;
     for (const e of [...eng].sort((a, b) => d2(a.pos.x, a.pos.z, cmd.x, cmd.z) - d2(b.pos.x, b.pos.z, cmd.x, cmd.z))) {
-      const take = Math.min(e.material, need); e.material -= take; need -= take; if (need <= 1e-6) break;
+      if (fromStock) { const take = Math.min(e.mineStock || 0, need); e.mineStock -= take; need -= take; }
+      else { const take = Math.min(e.material, need); e.material -= take; need -= take; }
+      if (need <= 1e-6) break;
     }
+    if (fromStock) this.stats.reused = (this.stats.reused || 0) + def.mines;
     const u = g.spawn(cmd.kind, p.team, cmd.x, cmd.z, { owner: p.id, rot, noBlock: true, build: { progress: 0, time: def.time, kind: cmd.kind }, mines: def.mines || 0 });
     this.setProgress(u, 0.02);
     if (def.hidden && p.team !== g.localSide) u.root.visible = false;
@@ -428,9 +437,16 @@ export class Logistics {
         if (dist > Math.max(2.5, t.radius * 0.55)) { if (!u.order || u.order.type !== 'move') u._goto(t.pos.x, t.pos.z); return; }
         if (u.order) { u.order = null; u.path = null; }
         u.working = g.time;
-        t.mines -= dt / LOGI.clearTime;
+        if (job.pick) {
+          // V3-M2: Minen aufnehmen – langsamer als Räumen, wandern in den Vorrat des Pioniers
+          const before = Math.ceil(t.mines - 1e-6);
+          t.mines -= dt / LOGI.pickTime;
+          const got = before - Math.ceil(Math.max(0, t.mines) - 1e-6);
+          if (got > 0) { u.mineStock = Math.min(LOGI.mineCarry, (u.mineStock || 0) + got); this.stats.picked = (this.stats.picked || 0) + got; }
+          if (u.mineStock >= LOGI.mineCarry && t.mines > 0.0001) { u.job = null; g.alertTo(u.owner, `${u.name}: Minenvorrat voll (${LOGI.mineCarry})`, 2); return; }
+        } else t.mines -= dt / LOGI.clearTime;
         if (Math.random() < dt * 0.6) g.effects.smallHit(t.pos.x + rand(-3, 3), t.pos.y + 0.3, t.pos.z + rand(-3, 3));
-        if (t.mines <= 0.0001) { this.stats.cleared++; this.removeBuilding(t); g.emit('minesCleared', t); u.job = null; }
+        if (t.mines <= 0.0001) { this.stats.cleared++; this.removeBuilding(t); g.emit(job.pick ? 'minesPicked' : 'minesCleared', t, u); u.job = null; }
         return;
       }
       case 'demolish': {

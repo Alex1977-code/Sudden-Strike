@@ -1876,6 +1876,115 @@ export class Terrain {
     this._lod = null; this._lodScene = null; this._lodHook = null; this._lodPrev = null;
   }
 
+  // ---------- V3-M2 (additiv): Laufzeit-Änderungen für Walzen (Vegetation) und Brücken (Höhenfeld) ----------
+  // removeTreeAt(x, z, r) / removeHedgeAt(x, z, r) / removeBushAt(x, z, r) → Anzahl entfernter Instanzen (Maßstab 0).
+  //   Bäume: objects.trees[i].gone = true, Waldzelle frei, wenn dort kein Wald/Baum mehr steht. Hecken: objects.hedges[i].gone,
+  //   gHard/gForest der Zellen im Umkreis frei (Wall bleibt als kleine Bodenwelle).
+  // editHeights(x0, z0, x1, z1, fn(x, z, h) → h): Höhenfeld + Geländenetz + Wassertiefe im Rechteck ändern.
+  removeTreeAt(x, z, r = 1.6) {
+    const trees = this.objects.trees, r2 = r * r;
+    let n = 0;
+    for (const t of trees) {
+      if (t.gone || (t.x - x) * (t.x - x) + (t.z - z) * (t.z - z) > r2) continue;
+      t.gone = true; n++;
+      this._hideInstanceNear(t.x, t.z);
+      const k = this.cellIndex(t.x, t.z);
+      if (k >= 0 && !this.forestAt(t.x, t.z) && !trees.some((o) => !o.gone && this.cellIndex(o.x, o.z) === k)) this.gForest[k] = 0;
+    }
+    return n;
+  }
+  _hideInstanceNear(x, z) {
+    const L = this._lod;
+    if (L) {
+      for (const G of L.groups) for (let i = 0; i < G.n; i++) {
+        if (Math.abs(G.P[i * 3] - x) > 0.05 || Math.abs(G.P[i * 3 + 2] - z) > 0.05) continue;
+        for (let k = 0; k < 16; k++) G.M[i * 16 + k] = 0;
+        G.P[i * 3 + 1] = -1e5;
+        L.lx = 1e9; // Neuaufteilung nah/fern beim nächsten Bild
+        return true;
+      }
+    }
+    const g = this.treeMeshes;
+    if (!g) return false;
+    for (const im of g.children) {
+      if (!im.isInstancedMesh) continue;
+      const a = im.instanceMatrix.array;
+      for (let i = 0; i < im.count; i++) {
+        if (Math.abs(a[i * 16 + 12] - x) > 0.05 || Math.abs(a[i * 16 + 14] - z) > 0.05) continue;
+        for (let k = 0; k < 16; k++) a[i * 16 + k] = 0;
+        im.instanceMatrix.needsUpdate = true;
+        return true;
+      }
+    }
+    return false;
+  }
+  removeHedgeAt(x, z, r = 2) {
+    const H = this.objects.hedges;
+    if (!H || !H.length) return 0;
+    const r2 = r * r;
+    let im = null;
+    this.mesh?.parent?.traverse((o) => { if (o.isInstancedMesh && o.name === 'hedges') im = o; });
+    let n = 0;
+    H.forEach((h, i) => {
+      if (h.gone || (h.x - x) * (h.x - x) + (h.z - z) * (h.z - z) > r2) return;
+      h.gone = true; n++;
+      if (im) { const a = im.instanceMatrix.array; for (let k = 0; k < 16; k++) a[i * 16 + k] = 0; im.instanceMatrix.needsUpdate = true; }
+    });
+    if (n) {
+      const [ci, cj] = this.cellOf(x, z), cr = Math.ceil(r / CELL) + 1;
+      for (let j = cj - cr; j <= cj + cr; j++) for (let i = ci - cr; i <= ci + cr; i++) {
+        if (i < 0 || j < 0 || i >= this.gw || j >= this.gw) continue;
+        const [cx, cz] = this.cellCenter(i, j);
+        if ((cx - x) * (cx - x) + (cz - z) * (cz - z) > (r + 1) * (r + 1)) continue;
+        const k = j * this.gw + i;
+        if (this.gCrush?.[k]) { this.gCrush[k] = 0; if (this.gBlocked[k] === 0) this.gHard[k] = 0; }
+        if (!this.forestAt(cx, cz)) this.gForest[k] = 0;
+      }
+    }
+    return n;
+  }
+  removeBushAt(x, z, r = 1.5) {
+    let n = 0;
+    const r2 = r * r;
+    this.mesh?.parent?.traverse((o) => {
+      if (!o.isInstancedMesh || !/^bush\d/.test(o.name)) return;
+      const a = o.instanceMatrix.array;
+      for (let i = 0; i < o.count; i++) {
+        const dx = a[i * 16 + 12] - x, dz = a[i * 16 + 14] - z;
+        if (dx * dx + dz * dz > r2 || (a[i * 16] === 0 && a[i * 16 + 5] === 0)) continue;
+        for (let k = 0; k < 16; k++) a[i * 16 + k] = 0;
+        o.instanceMatrix.needsUpdate = true; n++;
+      }
+    });
+    return n;
+  }
+  editHeights(x0, z0, x1, z1, fn) {
+    const n = this.hn, half = this.half, H = this.heights;
+    const i0 = Math.max(0, Math.floor(x0 + half)), i1 = Math.min(n - 1, Math.ceil(x1 + half));
+    const j0 = Math.max(0, Math.floor(z0 + half)), j1 = Math.min(n - 1, Math.ceil(z1 + half));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * n + i; H[k] = fn(i - half, j - half, H[k]); }
+    const mesh = this.mesh;
+    if (mesh) {
+      const pos = mesh.geometry.attributes.position, s = Math.round(Math.sqrt(pos.count)) - 1;
+      if ((s + 1) * (s + 1) === pos.count) {
+        const st = this.size / s;
+        const c0 = Math.max(0, Math.floor((x0 + half) / st) - 1), c1 = Math.min(s, Math.ceil((x1 + half) / st) + 1);
+        const r0 = Math.max(0, Math.floor((z0 + half) / st) - 1), r1 = Math.min(s, Math.ceil((z1 + half) / st) + 1);
+        for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) { const idx = r * (s + 1) + c; pos.setY(idx, this.height(pos.getX(idx), pos.getZ(idx))); }
+      } else for (let idx = 0; idx < pos.count; idx++) { const px = pos.getX(idx), pz = pos.getZ(idx); if (px >= x0 - 2 && px <= x1 + 2 && pz >= z0 - 2 && pz <= z1 + 2) pos.setY(idx, this.height(px, pz)); }
+      pos.needsUpdate = true;
+      mesh.geometry.computeVertexNormals();
+    }
+    let water = null;
+    mesh?.parent?.traverse((o) => { if (o.name === 'water' && o.userData.depthTex) water = o; });
+    const tex = water?.userData.depthTex;
+    if (tex?.image?.data) {
+      const dd = tex.image.data;
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * n + i, v = clamp((this.seaLevel - H[k] + 1) / 10, 0, 1); dd[k * 4] = dd[k * 4 + 1] = dd[k * 4 + 2] = (v * 255) | 0; }
+      tex.needsUpdate = true;
+    }
+  }
+
   // Minikarten-Bild
   minimapImage(px = 180) {
     const c = document.createElement('canvas');

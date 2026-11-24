@@ -267,6 +267,7 @@ export class Combat {
   // Granate im Anflug (Artillerie, auch für Missionsereignisse)
   incomingShell(x, z, w, side, delay = 3, shooter = null, size = 1.4, owner = shooter?.owner ?? null) {
     const game = this.game;
+    if (shooter && shooter.weapons) game.support?.onArtilleryFire(shooter, w); // V3-M2: Gegenbatterie (Radar/Schallmessung)
     game.later(delay, () => {
       const y = game.terrain.surface(x, z);
       game.effects.explosion(x, y, z, size, { water: game.terrain.isWater(x, z) });

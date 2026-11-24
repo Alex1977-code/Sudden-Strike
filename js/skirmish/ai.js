@@ -9,6 +9,11 @@
 // schnellen Einheiten „klauen") → Fähigkeit der Rolle auf sichtbare Gegnerballungen.
 
 import { knownHostile } from '../game/garrison.js';
+import { buildKindsFor } from '../game/logistics.js';
+import { UNIT_TYPES } from '../game/unitTypes.js';
+// V3-M2: Pioniere bauen das Baumenü ihrer Epoche/Fraktion (buildKindsFor) und nehmen feindliche Minen auf (pickmines) statt
+// sie nur zu räumen; Besatzungen ohne Haus graben sich ein ({t:'dig'}); Fähigkeiten 'smoke' (Rauchwand vor der angreifenden
+// Hauptgruppe) und 'airdrop' (Luftlandung auf schwach verteidigte Punkte). Transporte setzen automatisch ab (transport.js).
 
 export const AI_LEVELS = {
   easy: { courage: 2.2, interval: 4.0, steals: 0, window: 0, abilityChance: 0.35, err: 14, clusterMin: 5, retreatHp: 0, reissue: 14 },
@@ -345,6 +350,10 @@ export class AICommander {
     }
     const strays = units.filter((u) => !u.order && !u.garrison && !u.garrisonGoal && d2(u.pos.x, u.pos.z, cp.x, cp.z) > (cp.radius * 0.6) ** 2);
     if (strays.length) this.cmd({ t: 'move', ids: strays.map((u) => u.id), x: cp.x, z: cp.z, attackMove: true });
+    // V3-M2: Infanterie ohne Haus am Punkt gräbt sich ein (Schützenloch)
+    const g = this.g;
+    const diggers = units.filter((u) => u.type.infantry && !u.order && !u.garrison && !u.garrisonGoal && !u.job && !u.moving && !g.logi?.coverOf(u) && (u._aiDigT ?? -99) < g.time - 30);
+    if (diggers.length) { for (const u of diggers) u._aiDigT = g.time; if (this.cmd({ t: 'dig', ids: diggers.map((u) => u.id) })) this.stats.digs = (this.stats.digs || 0) + diggers.length; }
   }
 
   supportUnits(arty, air, trucks, lead, enemies) {
@@ -529,7 +538,7 @@ export class AICommander {
     const g = this.g, team = this.p.team, sk = this.sk;
     const es = g.playersOfTeam(other(team)).find((q) => q.spawn);
     const built = g.logi.countBuilds(this.p.id);
-    const order = ['tanktrap', 'sandbag', 'minefield', 'trench'];
+    const base = ['tanktrap', 'sandbag', 'minefield', 'trench'];
     const cost = { tanktrap: 1, sandbag: 1, minefield: 2, trench: 2 };
     for (const e of engineers) {
       if (e.job) continue;
@@ -550,7 +559,11 @@ export class AICommander {
         const dd = d2(u.pos.x, u.pos.z, e.pos.x, e.pos.z);
         if (dd < bd) { bd = dd; mine = u; }
       }
-      if (mine && this.cmd({ t: 'clearmines', ids: [e.id], x: mine.pos.x, z: mine.pos.z })) { this.stats.clears++; continue; }
+      if (mine && this.cmd({ t: (e.mineStock || 0) < 12 ? 'pickmines' : 'clearmines', ids: [e.id], x: mine.pos.x, z: mine.pos.z })) { this.stats.clears++; continue; }
+      // Epochen-Bauarten des Pioniers (ohne selbst gegrabene Schützenlöcher)
+      const kinds = buildKindsFor(e.type).filter((k) => !UNIT_TYPES[k]?.build?.selfDig);
+      const order = [...base.filter((k) => kinds.includes(k)), ...kinds.filter((k) => !base.includes(k))];
+      for (const k of order) if (cost[k] === undefined) cost[k] = UNIT_TYPES[k]?.build?.cost ?? 2;
       // Gehaltene Punkte befestigen
       if (built < 10 && es) {
         let best = null, bs = Infinity;
@@ -566,7 +579,8 @@ export class AICommander {
           let dx = es.spawn.x - cp.x, dz = es.spawn.z - cp.z; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
           const kind = order[nb % order.length];
           if (e.material + 1e-6 >= cost[kind]) {
-            const off = { tanktrap: cp.radius * 0.95, sandbag: cp.radius * 0.5, minefield: cp.radius * 1.5 + 6, trench: cp.radius * 0.25 }[kind];
+            const bd = UNIT_TYPES[kind]?.build || {};
+            const off = { tanktrap: cp.radius * 0.95, sandbag: cp.radius * 0.5, minefield: cp.radius * 1.5 + 6, trench: cp.radius * 0.25 }[kind] ?? (bd.mines ? cp.radius * 1.5 + 6 : bd.blocks ? cp.radius * 0.95 : cp.radius * 0.5);
             for (let tryN = 0; tryN < 5; tryN++) {
               const lat = (Math.random() - 0.5) * (8 + tryN * 4);
               const x = cp.x + dx * off - dz * lat + (Math.random() - 0.5) * 2, z = cp.z + dz * off + dx * lat + (Math.random() - 0.5) * 2;
@@ -636,6 +650,18 @@ export class AICommander {
         const ops = g.units.filter((u) => u.alive && u.owner === p.id && u.type.key === a.def.requires);
         const veh = enemies.filter((e) => e.type.vehicle && ops.some((o) => d2(o.pos.x, o.pos.z, e.pos.x, e.pos.z) < 170 * 170));
         if (veh.length) { const c = this.bestCluster(veh, R); if (c && c.score >= 2) target = [c.x, c.z]; }
+      } else if (a.id === 'smoke') {
+        // Rauchwand zwischen angreifender Hauptgruppe und naher Feindballung
+        const main = this.groups.find((q) => q.kind === 'main' && q.target && q.ids.size >= 3 && q.cx !== undefined);
+        if (main) {
+          const near = enemies.filter((e) => !e.type.air && d2(e.pos.x, e.pos.z, main.cx, main.cz) < 55 * 55);
+          const c = near.length >= 2 ? this.bestCluster(near, 14) : null;
+          if (c) target = [(main.cx + c.x * 2) / 3, (main.cz + c.z * 2) / 3];
+        }
+      } else if (a.id === 'airdrop') {
+        // Luftlandung auf einen nicht gehaltenen, schwach verteidigten Punkt
+        const cands = this.sk.points.filter((q) => q.owner !== team && this.enemyPower(enemies, q.x, q.z, 45) < 3).sort((x, y) => d2(x.x, x.z, this.home[0], this.home[1]) - d2(y.x, y.z, this.home[0], this.home[1]));
+        if (cands.length && g.time > 90) target = [cands[0].x, cands[0].z];
       } else if (a.id === 'artillery' || a.id === 'himars' || a.id === 'tornado' || a.id === 'stormshadow') {
         const gnd = enemies.filter((e) => !e.type.air);
         const c = this.bestCluster(gnd, R);

@@ -176,6 +176,12 @@ export const ABILITIES = {
       if (isLocal(game, p)) game.camera.focus(sp[0], sp[1]);
     },
   },
+  // V3-M2: Luftlandung – WK2 Fallschirmjäger aus Transportflugzeug, modern/Afghanistan per Transporthubschrauber (support.js)
+  airdrop: {
+    name: 'Luftlandung', icon: '🪂', cooldown: 120, charges: 2, radius: 14,
+    desc: 'WK2: Transporter (C-47/Ju 52) wirft Fallschirmjäger gestreut über dem Ziel ab. Modern: Mi-8/CH-53 landet und setzt einen Trupp ab.',
+    exec(game, x, z, p) { return game.support ? game.support.airdrop(p, x, z) : false; },
+  },
   ew: {
     name: 'EloKa-Störsender', icon: '📶', cooldown: 45, radius: 38,
     desc: 'Elektronische Kampfführung: feindliche Drohnen im Gebiet stürzen ab.',

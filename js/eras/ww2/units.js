@@ -53,15 +53,15 @@ veh('ww2_sherman', 'US', { name: 'M4A1 Sherman', hp: 600, speed: 8, radius: 2.9,
 veh('ww2_sherman76', 'US', { name: 'M4A3E8 Sherman (76)', hp: 620, speed: 8, radius: 2.9, weapons: ['ww2_m1_76', 'ww2_m1919'], desc: 'Verbesserte Kanone, breite Ketten.' });
 veh('ww2_m10', 'US', { name: 'M10 Wolverine', hp: 430, armor: 'light', speed: 9.5, radius: 2.9, turretRate: 1.8, weapons: ['ww2_m1_76', 'ww2_browning50'], desc: 'Jagdpanzer mit offenem Turm: schnell, dünn gepanzert.' });
 veh('ww2_m3ht', 'US', { name: 'M3 Halbkette', icon: '🚙', hp: 330, armor: 'light', speed: 10, radius: 2.8, sight: 34, turnRate: 2, weapons: ['ww2_browning50'], transport: 10, desc: 'Mannschaftstransporter mit .50-Cal-MG.' });
-veh('ww2_jeep', 'US', { name: 'Jeep Willys', icon: '🚙', hp: 110, armor: 'light', speed: 14, radius: 1.6, sight: 40, turnRate: 3, weapons: ['ww2_m1919'], desc: 'Leichtes Aufklärungs- und Zugfahrzeug.' });
-veh('ww2_gmc', 'US', { name: 'GMC CCKW Lkw', icon: '🚚', hp: 200, armor: 'light', speed: 10, radius: 2.8, sight: 24, turnRate: 1.8, weapons: [], ...SUPPLY, desc: 'Nachschub-Lkw, zieht Geschütze.' });
+veh('ww2_jeep', 'US', { transport: 3, name: 'Jeep Willys', icon: '🚙', hp: 110, armor: 'light', speed: 14, radius: 1.6, sight: 40, turnRate: 3, weapons: ['ww2_m1919'], desc: 'Leichtes Aufklärungs- und Zugfahrzeug.' });
+veh('ww2_gmc', 'US', { transport: 12, name: 'GMC CCKW Lkw', icon: '🚚', hp: 200, armor: 'light', speed: 10, radius: 2.8, sight: 24, turnRate: 1.8, weapons: [], ...SUPPLY, desc: 'Nachschub-Lkw, zieht Geschütze.' });
 veh('ww2_m7', 'US', { name: 'M7 Priest', icon: '💥', hp: 420, armor: 'light', speed: 7, radius: 2.9, turretRate: 0.8, weapons: ['ww2_m101', 'ww2_browning50'], desc: '105-mm-Selbstfahrhaubitze.' });
 // UK
 veh('ww2_cromwell', 'UK', { name: 'Cromwell', hp: 480, speed: 9.5, radius: 3, weapons: ['ww2_qf75', 'ww2_besa'], desc: 'Schneller Kreuzerpanzer.' });
 veh('ww2_firefly', 'UK', { name: 'Sherman Firefly', hp: 570, speed: 7.8, radius: 2.9, weapons: ['ww2_17pdr', 'ww2_besa'], desc: 'Sherman mit 17-pdr – bricht Tiger und Panther.' });
 veh('ww2_churchill', 'UK', { name: 'Churchill VII', hp: 820, speed: 5, radius: 3.4, weapons: ['ww2_qf75', 'ww2_besa'], desc: 'Schwerer Infanteriepanzer, zäh und langsam.' });
 veh('ww2_carrier', 'UK', { name: 'Universal Carrier', icon: '🚙', hp: 240, armor: 'light', speed: 9, radius: 2.1, turnRate: 2.4, weapons: ['ww2_bren'], transport: 4, desc: 'Leichter Kettenträger mit Bren.' });
-veh('ww2_bedford', 'UK', { name: 'Bedford QL Lkw', icon: '🚚', hp: 190, armor: 'light', speed: 10, radius: 2.7, sight: 24, turnRate: 1.8, weapons: [], ...SUPPLY, desc: 'Nachschub-Lkw, zieht Geschütze.' });
+veh('ww2_bedford', 'UK', { transport: 12, name: 'Bedford QL Lkw', icon: '🚚', hp: 190, armor: 'light', speed: 10, radius: 2.7, sight: 24, turnRate: 1.8, weapons: [], ...SUPPLY, desc: 'Nachschub-Lkw, zieht Geschütze.' });
 // SU
 veh('ww2_t34_76', 'SU', { name: 'T-34/76', hp: 540, speed: 9, radius: 2.9, weapons: ['ww2_f34', 'ww2_dt'], desc: 'Robuster Mittlerer Panzer mit Schrägpanzerung.' });
 veh('ww2_t34_85', 'SU', { name: 'T-34/85', hp: 610, speed: 8.8, radius: 2.9, weapons: ['ww2_zis85', 'ww2_dt'], desc: 'Größerer Turm, 85-mm-Kanone.' });
@@ -70,7 +70,7 @@ veh('ww2_is2', 'SU', { name: 'IS-2', hp: 900, speed: 6, radius: 3.2, weapons: ['
 veh('ww2_su76', 'SU', { name: 'SU-76', icon: '💥', hp: 300, armor: 'light', speed: 9, radius: 2.6, turretRate: 0.6, weapons: ['ww2_zis3'], desc: 'Leichtes offenes Sturmgeschütz.' });
 veh('ww2_su100', 'SU', { name: 'SU-100', hp: 570, speed: 7.8, radius: 2.9, turretRate: 0.5, weapons: ['ww2_d10', 'ww2_dt'], desc: 'Jagdpanzer mit 100-mm-Kanone.' });
 veh('ww2_bm13', 'SU', { name: 'BM-13 Katjuscha', icon: '🎆', hp: 230, armor: 'light', speed: 9.5, radius: 3, sight: 30, turretRate: 1.0, weapons: ['ww2_bm13'], desc: 'Raketenwerfer – Fähigkeit „Katjuscha-Salve".' });
-veh('ww2_zis_truck', 'SU', { name: 'ZiS-5 Lkw', icon: '🚚', hp: 180, armor: 'light', speed: 10, radius: 2.7, sight: 24, turnRate: 1.8, weapons: [], ...SUPPLY, desc: 'Nachschub-Lkw, zieht Geschütze.' });
+veh('ww2_zis_truck', 'SU', { transport: 12, name: 'ZiS-5 Lkw', icon: '🚚', hp: 180, armor: 'light', speed: 10, radius: 2.7, sight: 24, turnRate: 1.8, weapons: [], ...SUPPLY, desc: 'Nachschub-Lkw, zieht Geschütze.' });
 veh('ww2_ba64', 'SU', { name: 'BA-64', icon: '🚙', hp: 150, armor: 'light', speed: 13, radius: 2.0, sight: 42, turnRate: 3, weapons: ['ww2_dt'], desc: 'Leichter Panzerspähwagen.' });
 // DE
 veh('ww2_pz4', 'DE', { name: 'Panzer IV Ausf. H', hp: 560, speed: 7.5, radius: 2.9, weapons: ['ww2_kwk40', 'ww2_mg34'], desc: 'Rückgrat der Panzertruppe, 7,5 cm lang.' });
@@ -80,8 +80,8 @@ veh('ww2_stug3', 'DE', { name: 'StuG III Ausf. G', hp: 520, speed: 7, radius: 2.
 veh('ww2_hetzer', 'DE', { name: 'Jagdpanzer 38(t) Hetzer', hp: 400, speed: 7.5, radius: 2.5, turretRate: 0.5, weapons: ['ww2_kwk40'], conceal: 0.25, desc: 'Kleiner, niedriger Jagdpanzer.' });
 veh('ww2_jagdpz4', 'DE', { name: 'Jagdpanzer IV/70', hp: 560, speed: 6.8, radius: 2.9, turretRate: 0.5, weapons: ['ww2_kwk42', 'ww2_mg34'], desc: 'Jagdpanzer mit langer 7,5-cm-Kanone.' });
 veh('ww2_sdkfz251', 'DE', { name: 'Sd.Kfz. 251 Halbkette', icon: '🚙', hp: 340, armor: 'light', speed: 9.5, radius: 2.8, turnRate: 2, weapons: ['ww2_mg42'], transport: 10, desc: 'Gepanzerter Mannschaftstransporter.' });
-veh('ww2_kubel', 'DE', { name: 'Kübelwagen', icon: '🚙', hp: 100, armor: 'light', speed: 13, radius: 1.6, sight: 40, turnRate: 3, weapons: [], desc: 'Leichter Stabs- und Zugwagen.' });
-veh('ww2_opel', 'DE', { name: 'Opel Blitz Lkw', icon: '🚚', hp: 190, armor: 'light', speed: 10, radius: 2.7, sight: 24, turnRate: 1.8, weapons: [], ...SUPPLY, desc: 'Nachschub-Lkw, zieht Geschütze.' });
+veh('ww2_kubel', 'DE', { transport: 3, name: 'Kübelwagen', icon: '🚙', hp: 100, armor: 'light', speed: 13, radius: 1.6, sight: 40, turnRate: 3, weapons: [], desc: 'Leichter Stabs- und Zugwagen.' });
+veh('ww2_opel', 'DE', { transport: 12, name: 'Opel Blitz Lkw', icon: '🚚', hp: 190, armor: 'light', speed: 10, radius: 2.7, sight: 24, turnRate: 1.8, weapons: [], ...SUPPLY, desc: 'Nachschub-Lkw, zieht Geschütze.' });
 veh('ww2_wespe', 'DE', { name: 'Wespe (10,5-cm)', icon: '💥', hp: 280, armor: 'light', speed: 7.5, radius: 2.5, turretRate: 0.8, weapons: ['ww2_lefh18'], desc: 'Selbstfahrhaubitze.' });
 veh('ww2_puma', 'DE', { name: 'Sd.Kfz. 234/2 Puma', icon: '🚙', hp: 250, armor: 'light', speed: 12, radius: 2.7, sight: 42, turnRate: 2.4, weapons: ['ww2_kwk39', 'ww2_mg34'], desc: 'Schneller Spähwagen mit 5-cm-Kanone.' });
 
@@ -114,7 +114,7 @@ air('ww2_ju87', 'DE', { name: 'Ju 87 Stuka', hp: 300, speed: 22, alt: 22, radius
 air('ww2_c47', 'US', { name: 'C-47 Skytrain', hp: 520, speed: 18, alt: 30, radius: 5, weapons: [], transport: 18, desc: 'Transporter – Fallschirmabwurf.' });
 air('ww2_dakota', 'UK', { name: 'Dakota', hp: 520, speed: 18, alt: 30, radius: 5, weapons: [], transport: 18, desc: 'Transporter – Fallschirmabwurf.' });
 air('ww2_ju52', 'DE', { name: 'Ju 52', hp: 480, speed: 16, alt: 30, radius: 5, weapons: [], transport: 18, desc: 'Transporter – Fallschirmabwurf.' });
-T.ww2_lcvp = { ...ERA, faction: 'US', name: 'LCVP Landungsboot', icon: '🚢', cls: 'naval', model: 'ww2_lcvp', hp: 260, armor: 'light', speed: 10, sight: 40, radius: 4, weapons: ['ww2_m1919'], turnRate: 0.9, turretRate: 2, transport: 36, landing: true, desc: 'Landungsboot für 36 Mann (Transportlogik später).' };
+T.ww2_lcvp = { ...ERA, faction: 'US', name: 'LCVP Landungsboot', icon: '🚢', cls: 'naval', model: 'ww2_lcvp', hp: 260, armor: 'light', speed: 10, sight: 40, radius: 4, weapons: ['ww2_m1919'], turnRate: 0.9, turretRate: 2, transport: 36, landing: true, desc: 'Landungsboot für 36 Mann: Infanterie per Rechtsklick aufsitzen, „Absitzen“ am Strand.' };
 
 // ---------- Panzerzug (Zug-Logik später) ----------
 function train(tag, fac, k, o) { const key = `ww2_${tag}_train_${k}`; T[key] = { ...ERA, faction: fac, icon: '🚂', cls: 'veh', model: key, armor: 'light', speed: 6, sight: 30, radius: 4.5, turnRate: 0.3, turretRate: 1.2, rail: true, train: k, ...o }; return key; }

@@ -176,6 +176,7 @@ export function createEditor(ctx) {
         const c = cam || (game.active && game.mission?.editorPreview ? camState() : null);
         game.camera.orbit = false;
         game.camera.maxDist = Math.max(E.camMax0 ?? 170, E.doc.map.size * 0.9);
+        if (game.mission?.editorPreview) releaseWorld();
         game.load(compilePreview(E.doc, c));
         game.paused = true;
         E.keys.t = terrainKey();
@@ -187,6 +188,21 @@ export function createEditor(ctx) {
     setStatus('Gelände wird berechnet …');
     if (immediate) run();
     else E.rebuildT = setTimeout(() => { setStatus('Gelände wird berechnet …'); requestAnimationFrame(() => setTimeout(run, 0)); }, 350);
+  }
+  // GPU-Speicher der alten Vorschau freigeben: gr.clearScene() gibt nur Geometrien frei; Gelände-Texturen/Materialien
+  // blieben bei jedem Neuaufbau liegen (+2 Texturen je Aufbau → Speicher läuft bei vielen Änderungen voll).
+  // dispose() auf noch anderweitig genutzte Texturen ist unkritisch (three.js lädt sie bei Bedarf neu hoch).
+  function releaseWorld() {
+    const w = game.world;
+    if (!w) return;
+    const seen = new Set();
+    const texOf = (m) => {
+      for (const v of Object.values(m)) if (v && v.isTexture) seen.add(v);
+      if (m.uniforms) for (const u of Object.values(m.uniforms)) { const v = u && u.value; if (v && v.isTexture) seen.add(v); else if (Array.isArray(v)) for (const t of v) if (t && t.isTexture) seen.add(t); }
+    };
+    w.traverse((o) => { const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : []; for (const m of ms) { texOf(m); seen.add(m); } });
+    for (const x of seen) { try { x.dispose(); } catch (e) { /* ignorieren */ } }
+    for (const f of Object.values(game.fows || {})) { try { f.tex?.dispose?.(); } catch (e) { /* ignorieren */ } }
   }
   const terrainKey = () => JSON.stringify([E.doc.map, E.doc.elements]);
   const objKey = () => JSON.stringify([E.doc.units, E.doc.points]);

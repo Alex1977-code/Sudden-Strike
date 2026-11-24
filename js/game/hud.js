@@ -5,6 +5,7 @@ import { UNIT_TYPES } from './unitTypes.js';
 import { buildKindsFor } from './logistics.js';
 import { TAC } from './tactics.js';
 import { icon, iconLabel, drawIcon, unitIconKey } from './icons.js';
+import { HudExt } from './hudext.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -94,13 +95,14 @@ export class HUD {
         const ids = own.filter((u) => !u.type.structure && !u.type.air).map((u) => u.id);
         if (ids.length) game.issueCommand({ t: 'ambush', ids, value: act === 'ambush', range: TAC.ambush.range });
         this.refreshBuildbar(true); this.refreshSelection();
-      }
+      } else this.ext?.onAct(act, own, b);
       game.audio.ui('click');
     });
     this.mm.addEventListener('pointerdown', (e) => this._minimapClick(e));
     this.mm.addEventListener('pointermove', (e) => { if (e.buttons & 1) this._minimapClick(e, true); });
     this.mm.addEventListener('contextmenu', (e) => e.preventDefault());
     $('sk-teams-btn')?.addEventListener('click', () => { $('sk-teams').classList.toggle('open'); this.skDirty = true; });
+    this.ext = new HudExt(this); // V3-M2: Befehle & Welt (Haltungen, Rückzug, Formation, Auf-/Absitzen, Schleppen, Brücken, Minen)
   }
   _resize() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -356,6 +358,7 @@ export class HUD {
         if (u.lifetime) { ctx.fillStyle = '#ffd500'; ctx.font = '10px system-ui'; ctx.textAlign = 'center'; drawIcon(ctx, 'battery', x - 10, yy + 5, 10, '#ffd500'); ctx.textAlign = 'left'; ctx.fillText(`${Math.ceil(u.lifetime)}s`, x - 3, yy + 9); ctx.textAlign = 'center'; }
       }
     }
+    this.ext?.drawOverlay(ctx, W, H, cam, v); // V3-M2: Insassen, Brückenbau, Minen aufnehmen
     // Eroberungspunkte: Name + Fortschritt über dem Punkt
     const skp = g.mission?.skirmish;
     if (skp) {
@@ -547,6 +550,7 @@ export class HUD {
     }
     if (own && u.ambush?.on) p.push(`<span style="color:#c8a2ff">Hinterhalt ${u.ambush.range} m</span>`);
     if (own && u.smokeMax) p.push(`<span class="muted">Nebel ${u.smokeN}/${u.smokeMax}</span>`);
+    if (this.ext) { const x = this.ext.tacText(u, own); if (x) p.push(x); }
     const m = u.mods;
     if (m) {
       if (u.immobilized && !g.logistics) p.push('<span style="color:#ff8a8a">Kette/Räder zerstört</span>'); // Gefecht: steht in der Logistikzeile
@@ -595,7 +599,7 @@ export class HUD {
     const mat = eng.reduce((n, u) => n + u.material, 0);
     const pend = this.input?.pendingBuild;
     const tmode = pend && (pend.mode === 'grenade' || pend.mode === 'smoke');
-    if (pend && !eng.length && pend.mode !== 'binoculars' && pend.mode !== 'garrison' && !tmode) { this.input.cancelBuild(); return; }
+    if (pend && !eng.length && pend.mode !== 'binoculars' && pend.mode !== 'garrison' && !tmode && !pend.ext) { this.input.cancelBuild(); return; }
     const inf = g.logistics ? own.filter((u) => u.type.infantry && !u.type.kamikaze) : [];
     const gar = own.filter((u) => u.garrison);
     const obs = own.filter((u) => u.bino);
@@ -606,10 +610,11 @@ export class HUD {
     const digg = tinf.filter((u) => !u.garrison).length;
     const ambOn = own.filter((u) => u.ambush?.on).length;
     const kinds = eng.length ? [...new Set(eng.flatMap((u) => buildKindsFor(u.type)))] : [];
-    const sig = `${inf.length ? 1 : 0}|${gar.length}|${obs.length}|${eng.length}|${bail.length}|${Math.floor(mat + 1e-6)}|${pend ? pend.mode + (pend.kind || '') : ''}|${tinf.length}|${gren}|${smk}|${digg}|${ambOn}|${kinds.join(',')}`;
+    const extSig = this.ext ? this.ext.sig(own) : '';
+    const sig = `${inf.length ? 1 : 0}|${gar.length}|${obs.length}|${eng.length}|${bail.length}|${Math.floor(mat + 1e-6)}|${pend ? pend.mode + (pend.kind || '') : ''}|${tinf.length}|${gren}|${smk}|${digg}|${ambOn}|${kinds.join(',')}|${extSig}`;
     if (!force && sig === this.buildSig) return;
     this.buildSig = sig;
-    if (!eng.length && !bail.length && !inf.length && !gar.length && !obs.length && !tinf.length && !smk) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+    if (!eng.length && !bail.length && !inf.length && !gar.length && !obs.length && !tinf.length && !smk && !(this.ext && own.length)) { el.classList.add('hidden'); el.innerHTML = ''; return; }
     const btn = (act, kind, ic, label, dis, active) => `<button data-act="${act}"${kind ? ` data-kind="${kind}"` : ''}${dis ? ' disabled' : ''}${active ? ' class="active"' : ''} title="${label}" aria-label="${label}">${icon(ic)}<span>${label}</span></button>`;
     let h = '';
     if (eng.length) {
@@ -629,6 +634,8 @@ export class HUD {
     if (smk) h += btn('smoke', '', 'smoke', 'Nebel', false, pend?.mode === 'smoke');
     if (digg) h += btn('dig', '', 'dig', 'Eingraben', false, false);
     if (tinf.length || gar.length) h += ambOn ? btn('firefree', '', 'firefree', 'Feuer frei', false, true) : btn('ambush', '', 'ambush', 'Hinterhalt', false, false);
+    if (this.ext) h += this.ext.buttons(own, pend, btn, eng);
+    if (!h) { el.classList.add('hidden'); el.innerHTML = ''; return; }
     el.innerHTML = h;
     el.classList.remove('hidden');
   }

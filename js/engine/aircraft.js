@@ -408,33 +408,33 @@ BUILDERS.po2 = (mk) => lightPlane({ c1: 0x6d7a55, len: 6.5, r: 0.45, nose: 'radi
 
 // Katalog: Modell → { kind: Soundart, mark: Standard-Hoheitszeichen, speed (m/s), alt (m), len/span (für Schatten), trail: Kondensstreifen, scale: Anzeigemaßstab }
 export const AIRCRAFT_MODELS = {
-  f16: { kind: 'jet', mark: 'ua', speed: 78, alt: 34, span: 9.4, len: 15, trail: 1, scale: 1.35, label: 'F-16' },
-  f35: { kind: 'jet', mark: 'us', speed: 76, alt: 36, span: 10.7, len: 15.7, trail: 1, scale: 1.3, label: 'F-35' },
-  a10: { kind: 'jet', mark: 'us', speed: 58, alt: 24, span: 17.5, len: 16.3, trail: 0, scale: 1.25, label: 'A-10' },
-  b52: { kind: 'jet', mark: 'us', speed: 52, alt: 50, span: 56, len: 49, trail: 1, scale: 1.0, label: 'B-52' },
-  b2: { kind: 'jet', mark: null, speed: 54, alt: 48, span: 52, len: 21, trail: 0, scale: 1.0, label: 'B-2' },
-  mirage: { kind: 'jet', mark: 'ua', speed: 80, alt: 34, span: 9.1, len: 14.4, trail: 1, scale: 1.35, label: 'Mirage 2000' },
-  su34: { kind: 'jet', mark: 'ru', speed: 72, alt: 34, span: 14.7, len: 23, trail: 1, scale: 1.2, label: 'Su-34' },
-  su57: { kind: 'jet', mark: 'ru', speed: 82, alt: 36, span: 14.1, len: 20, trail: 1, scale: 1.25, label: 'Su-57' },
-  mig31k: { kind: 'jet', mark: 'ru', speed: 90, alt: 46, span: 13.5, len: 22.7, trail: 1, scale: 1.2, label: 'MiG-31K' },
-  tu95: { kind: 'prop_plane', mark: 'ru', speed: 50, alt: 48, span: 51, len: 49.5, trail: 1, scale: 1.0, label: 'Tu-95' },
-  su25: { kind: 'jet', mark: 'ru', speed: 60, alt: 26, span: 14.4, len: 15.5, trail: 0, scale: 1.3, label: 'Su-25' },
-  mig23: { kind: 'jet', mark: 'sv', speed: 76, alt: 30, span: 13.9, len: 16.7, trail: 0, scale: 1.3, label: 'MiG-23' },
-  tornado: { kind: 'jet', mark: 'cross', speed: 72, alt: 28, span: 13.9, len: 16.7, trail: 0, scale: 1.3, label: 'Tornado' },
-  b17: { kind: 'prop_plane', mark: 'us', speed: 42, alt: 40, span: 31.6, len: 22.7, trail: 0, scale: 1.1, label: 'B-17' },
-  lancaster: { kind: 'prop_plane', mark: 'uk', speed: 40, alt: 40, span: 31, len: 21, trail: 0, scale: 1.1, label: 'Lancaster' },
-  p47: { kind: 'prop_plane', mark: 'us', speed: 52, alt: 26, span: 12.4, len: 11, trail: 0, scale: 1.4, label: 'P-47' },
-  typhoon: { kind: 'prop_plane', mark: 'uk', speed: 54, alt: 26, span: 12.6, len: 9.7, trail: 0, scale: 1.4, label: 'Typhoon' },
-  il2: { kind: 'prop_plane', mark: 'sv', speed: 44, alt: 24, span: 14.6, len: 11.6, trail: 0, scale: 1.4, label: 'Il-2' },
-  ju87: { kind: 'prop_plane', mark: 'cross', speed: 44, alt: 30, span: 13.8, len: 11, trail: 0, scale: 1.4, label: 'Ju 87' },
-  ho229: { kind: 'jet', mark: 'cross', speed: 70, alt: 34, span: 16.8, len: 7.5, trail: 0, scale: 1.5, label: 'Ho 229' },
-  c47: { kind: 'prop_plane', mark: 'us', speed: 38, alt: 28, span: 29, len: 19.6, trail: 0, scale: 1.1, label: 'C-47' },
-  dakota: { kind: 'prop_plane', mark: 'uk', speed: 38, alt: 28, span: 29, len: 19.6, trail: 0, scale: 1.1, label: 'Dakota' },
-  ju52: { kind: 'prop_plane', mark: 'cross', speed: 36, alt: 28, span: 29.3, len: 18.9, trail: 0, scale: 1.1, label: 'Ju 52' },
-  cub: { kind: 'prop_plane', mark: 'us', speed: 30, alt: 20, span: 10.5, len: 6.4, trail: 0, scale: 1.6, label: 'L-4 Cub' },
-  auster: { kind: 'prop_plane', mark: 'uk', speed: 30, alt: 20, span: 11, len: 6.8, trail: 0, scale: 1.6, label: 'Auster' },
-  storch: { kind: 'prop_plane', mark: 'cross', speed: 28, alt: 20, span: 10.8, len: 6.6, trail: 0, scale: 1.6, label: 'Fi 156 Storch' },
-  po2: { kind: 'prop_plane', mark: 'sv', speed: 30, alt: 20, span: 8.2, len: 6.5, trail: 0, scale: 1.7, label: 'Po-2' },
+  f16: { kind: 'jet', mark: 'ua', speed: 78, alt: 26, span: 9.4, len: 15, trail: 1, scale: 1.35, label: 'F-16' },
+  f35: { kind: 'jet', mark: 'us', speed: 76, alt: 28, span: 10.7, len: 15.7, trail: 1, scale: 1.3, label: 'F-35' },
+  a10: { kind: 'jet', mark: 'us', speed: 58, alt: 20, span: 17.5, len: 16.3, trail: 0, scale: 1.25, label: 'A-10' },
+  b52: { kind: 'jet', mark: 'us', speed: 52, alt: 40, span: 56, len: 49, trail: 1, scale: 0.55, label: 'B-52' },
+  b2: { kind: 'jet', mark: null, speed: 54, alt: 38, span: 52, len: 21, trail: 0, scale: 0.58, label: 'B-2' },
+  mirage: { kind: 'jet', mark: 'ua', speed: 80, alt: 26, span: 9.1, len: 14.4, trail: 1, scale: 1.35, label: 'Mirage 2000' },
+  su34: { kind: 'jet', mark: 'ru', speed: 72, alt: 26, span: 14.7, len: 23, trail: 1, scale: 1.2, label: 'Su-34' },
+  su57: { kind: 'jet', mark: 'ru', speed: 82, alt: 28, span: 14.1, len: 20, trail: 1, scale: 1.25, label: 'Su-57' },
+  mig31k: { kind: 'jet', mark: 'ru', speed: 90, alt: 36, span: 13.5, len: 22.7, trail: 1, scale: 1.2, label: 'MiG-31K' },
+  tu95: { kind: 'prop_plane', mark: 'ru', speed: 50, alt: 40, span: 51, len: 49.5, trail: 1, scale: 0.55, label: 'Tu-95' },
+  su25: { kind: 'jet', mark: 'ru', speed: 60, alt: 20, span: 14.4, len: 15.5, trail: 0, scale: 1.3, label: 'Su-25' },
+  mig23: { kind: 'jet', mark: 'sv', speed: 76, alt: 24, span: 13.9, len: 16.7, trail: 0, scale: 1.3, label: 'MiG-23' },
+  tornado: { kind: 'jet', mark: 'cross', speed: 72, alt: 22, span: 13.9, len: 16.7, trail: 0, scale: 1.3, label: 'Tornado' },
+  b17: { kind: 'prop_plane', mark: 'us', speed: 42, alt: 34, span: 31.6, len: 22.7, trail: 0, scale: 0.7, label: 'B-17' },
+  lancaster: { kind: 'prop_plane', mark: 'uk', speed: 40, alt: 34, span: 31, len: 21, trail: 0, scale: 0.7, label: 'Lancaster' },
+  p47: { kind: 'prop_plane', mark: 'us', speed: 52, alt: 20, span: 12.4, len: 11, trail: 0, scale: 1.4, label: 'P-47' },
+  typhoon: { kind: 'prop_plane', mark: 'uk', speed: 54, alt: 20, span: 12.6, len: 9.7, trail: 0, scale: 1.4, label: 'Typhoon' },
+  il2: { kind: 'prop_plane', mark: 'sv', speed: 44, alt: 18, span: 14.6, len: 11.6, trail: 0, scale: 1.4, label: 'Il-2' },
+  ju87: { kind: 'prop_plane', mark: 'cross', speed: 44, alt: 22, span: 13.8, len: 11, trail: 0, scale: 1.4, label: 'Ju 87' },
+  ho229: { kind: 'jet', mark: 'cross', speed: 70, alt: 26, span: 16.8, len: 7.5, trail: 0, scale: 1.5, label: 'Ho 229' },
+  c47: { kind: 'prop_plane', mark: 'us', speed: 38, alt: 24, span: 29, len: 19.6, trail: 0, scale: 0.9, label: 'C-47' },
+  dakota: { kind: 'prop_plane', mark: 'uk', speed: 38, alt: 24, span: 29, len: 19.6, trail: 0, scale: 0.9, label: 'Dakota' },
+  ju52: { kind: 'prop_plane', mark: 'cross', speed: 36, alt: 24, span: 29.3, len: 18.9, trail: 0, scale: 0.9, label: 'Ju 52' },
+  cub: { kind: 'prop_plane', mark: 'us', speed: 30, alt: 16, span: 10.5, len: 6.4, trail: 0, scale: 1.6, label: 'L-4 Cub' },
+  auster: { kind: 'prop_plane', mark: 'uk', speed: 30, alt: 16, span: 11, len: 6.8, trail: 0, scale: 1.6, label: 'Auster' },
+  storch: { kind: 'prop_plane', mark: 'cross', speed: 28, alt: 16, span: 10.8, len: 6.6, trail: 0, scale: 1.6, label: 'Fi 156 Storch' },
+  po2: { kind: 'prop_plane', mark: 'sv', speed: 30, alt: 16, span: 8.2, len: 6.5, trail: 0, scale: 1.7, label: 'Po-2' },
 };
 export const AIRCRAFT_KEYS = Object.keys(AIRCRAFT_MODELS);
 
@@ -600,6 +600,13 @@ class Flight {
     const r = p.root; r.visible = true; r.position.set(p.x, p.y, p.z);
     r.rotation.set(-p.pitch, p.yaw, p.roll, 'YXZ');
     for (const pr of p.props) pr.rotation.z += 0.9 + 0.3 * Math.random();
+    // Kameraschutz: nie zwischen Kamera und Boden in Kameranähe – nahe Maschinen werden verkleinert und unter Kamerahöhe gehalten
+    const cam = this.air.game.gr?.camera;
+    if (cam) {
+      const dx = p.x - cam.position.x, dy = p.y - cam.position.y, dz = p.z - cam.position.z, dist = Math.hypot(dx, dy, dz), near = 110;
+      p.model.scale.setScalar(this.sc * Math.max(0.3, Math.min(1, dist / near)));
+      if (p.y > cam.position.y - 10) r.position.y = cam.position.y - 10;
+    }
     // Schattenfleck am Boden (wandert mit, wird mit der Höhe größer/blasser durch Skalierung)
     const game = this.air.game, gy = game.terrain.surface(p.x, p.z) + 0.2, h = Math.max(0, p.y - gy);
     const sc = this.sc * (1 + h / 220), b = p.blob; b.visible = true;

@@ -29,7 +29,7 @@ function footPen(u, x, z, h, m = FP_M) {
   let pen = 0, px = 0, pz = 0;
   for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
     const k = j * gw + i;
-    if (!pf.hardBlock(k)) continue;
+    if (!(u.type.crush && pf.hardBlockHeavy ? pf.hardBlockHeavy(k) : pf.hardBlock(k))) continue; // V3-M2: schwere Fahrzeuge walzen Hecken
     const dx = (i + 0.5) * C - hf - x, dz = (j + 0.5) * C - hf - z;
     // Trennachsentest: Welt-x, Welt-z, Rechteck quer (c,-s), Rechteck längs (s,c)
     const ox = ex + 1 - Math.abs(dx); if (ox <= FP_EPS) continue;
@@ -49,7 +49,7 @@ function footPen(u, x, z, h, m = FP_M) {
   return pen;
 }
 // Gilt der Grundflächentest für diese Einheit? (Bodenfahrzeuge, keine Boote/Bauwerke)
-function usesFootprint(u) { const ty = u.type; return !!ty.vehicle && !ty.air && !ty.naval && !ty.structure && !!u.game.pathfinder?.hardBlock; }
+function usesFootprint(u) { const ty = u.type; return !!ty.vehicle && !ty.air && !ty.naval && !ty.structure && !ty.rail && !u.towedBy && !!u.game.pathfinder?.hardBlock; }
 
 export class Unit {
   constructor(game, typeKey, side, x, z, opts = {}) {
@@ -229,7 +229,7 @@ export class Unit {
   computePath(x, z) {
     if (this.type.air) { this.path = [[x, z]]; return; }
     const mode = this.type.naval ? 'water' : 'ground';
-    this.path = this.game.pathfinder.find(this.pos.x, this.pos.z, x, z, mode, this.type.vehicle, this.radius);
+    this.path = this.game.pathfinder.find(this.pos.x, this.pos.z, x, z, mode, this.type.crush ? 'heavy' : this.type.vehicle, this.radius); // V3-M2: 'heavy' = walzt Hecken
   }
 
   // ---------------- Kampf ----------------
@@ -271,7 +271,8 @@ export class Unit {
     // Explizites Ziel?
     const ot = this.order?.type === 'attack' ? this.order.target : null;
     if (ot && this.canWeaponTarget(w, ot) && this.isSpotted(ot) && this.inRange(w, ot) && this.hasLos(ot, w)) return ot;
-    if (this.holdFire || this.ambush?.on) return null; // Feuer halten / Hinterhalt
+    if (this.holdFire || this.ambush?.on || this.retreat) return null; // Feuer halten / Hinterhalt / Rückzug (V3-M2)
+    const rf = this.fireMode === 'return' && game.orders; // V3-M2: Feuer erwidern – nur auf Schützen, die kürzlich gefeuert haben
     const tac = game.tac, gren = w.kind === 'grenade';
     let best = null, bestScore = -Infinity;
     const list = game.units;
@@ -284,6 +285,7 @@ export class Unit {
       if (Math.abs(u.pos.x - this.pos.x) > rangeLimit + 15 || Math.abs(u.pos.z - this.pos.z) > rangeLimit + 15) continue;
       if (!this.canWeaponTarget(w, u) || !this.isSpotted(u) || !this.inRange(w, u) || !this.hasLos(u, w)) continue;
       if (gren && tac && !tac.grenadeWorthy(this, w, u)) continue; // Handgranaten nur gegen Deckung/Häuser/Stellungen
+      if (rf && !game.orders.mayTarget(this, u)) continue;
       const eff = w.vs[u.armor] || 0;
       let score = eff * 10 - this.distTo(u) * 0.08;
       if (w.prefer && w.prefer.includes(u.armor)) score += 6;
@@ -420,7 +422,7 @@ export class Unit {
     if (tx === null && this.path && this.path.length && !holdForAttack) { [tx, tz] = this.path[0]; }
     if (tx === null) {
       if (type.air) { // Schweben / Kreisen
-        if (!type.kamikaze && type.key !== 'recon' && type.key !== 'ka52') { this.heading += dt * 0.5; this.stepForward(dt, 0.6); }
+        if (!type.kamikaze && type.key !== 'recon' && type.key !== 'ka52' && !this.landed && !this.landing) { this.heading += dt * 0.5; this.stepForward(dt, 0.6); }
         this.curAlt += (this.alt - this.curAlt) * Math.min(1, dt);
         this.diving = false;
       }
@@ -649,11 +651,11 @@ export class Unit {
 
   updateWeapons(dt) {
     if (this.type.kamikaze) return;
-    if (this.abandoned) { for (const ws of this.weapons) ws.target = null; this.aiming = null; return; }
+    if (this.abandoned || this.towedBy || this.limberT > 0) { for (const ws of this.weapons) ws.target = null; this.aiming = null; return; } // V3-M2: auf-/abgeprotzt
     const game = this.game;
     let aimTarget = null, aimPoint = null;
     const tac = game.tac, gunOut = !!(this.mods?.gun && this.type.vehicle);
-    const holds = this.holdFire || !!this.ambush?.on;
+    const holds = this.holdFire || !!this.ambush?.on || !!this.retreat;
     for (const ws of this.weapons) {
       const w = ws.def;
       ws.cd -= dt;
@@ -778,6 +780,7 @@ export class Unit {
   }
   aiEngageNearby(r) {
     if (this.order?.type === 'attack' && this.order.target.alive) return;
+    if (this.moveMode === 'hold') return; // V3-M2: Stellung halten
     let best = null, bd = r;
     for (const u of this.game.units) {
       if (u.side === this.side || u.side === 'N' || !u.alive || u.type.noAutoTarget || !this.isSpotted(u)) continue;

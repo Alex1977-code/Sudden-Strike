@@ -35,12 +35,12 @@ export const CAPTURE_TIME = 6; // Sekunden bis zum Besitzerwechsel
 // ---------- Startarmeen je Rolle und Fraktion ----------
 export const ARMIES = {
   armor: {
-    UA: [['leopard', 3], ['bradley', 2], ['ua_tankdestroyer', 1], ['rifle', 4], ['javelin', 1], ['mg', 1], ['stinger', 1], ['ua_engineer', 1]],
-    RU: [['t90', 2], ['t72', 2], ['bmp', 2], ['btr', 1], ['ru_tankdestroyer', 1], ['e_rifle', 5], ['e_atgm', 1], ['e_igla', 1], ['e_engineer', 1]],
+    UA: [['leopard', 3], ['bradley', 2], ['ua_tankdestroyer', 1], ['rifle', 4], ['javelin', 1], ['mg', 1], ['stinger', 1], ['ua_engineer', 1], ['ua_officer', 1]],
+    RU: [['t90', 2], ['t72', 2], ['bmp', 2], ['btr', 1], ['ru_tankdestroyer', 1], ['e_rifle', 5], ['e_atgm', 1], ['e_igla', 1], ['e_engineer', 1], ['e_officer', 1]],
   },
   infantry: {
-    UA: [['rifle', 5], ['mg', 2], ['javelin', 2], ['sniper', 1], ['dronepilot', 1], ['sso', 1], ['recon', 1], ['ua_engineer', 1], ['ua_medic', 1], ['ua_observer', 2]],
-    RU: [['e_rifle', 6], ['e_mg', 2], ['e_atgm', 2], ['e_sniper', 1], ['e_recon', 1], ['e_spetsnaz', 1], ['orlan', 1], ['e_engineer', 1], ['e_medic', 1], ['e_observer', 2]],
+    UA: [['rifle', 5], ['mg', 2], ['javelin', 2], ['sniper', 1], ['dronepilot', 1], ['sso', 1], ['recon', 1], ['ua_engineer', 1], ['ua_medic', 1], ['ua_observer', 2], ['ua_officer', 1]],
+    RU: [['e_rifle', 6], ['e_mg', 2], ['e_atgm', 2], ['e_sniper', 1], ['e_recon', 1], ['e_spetsnaz', 1], ['orlan', 1], ['e_engineer', 1], ['e_medic', 1], ['e_observer', 2], ['e_officer', 1]],
   },
   support: {
     UA: [['himars', 1], ['gepard', 1], ['pickup', 1], ['stinger', 1], ['rifle', 4], ['mg', 1], ['javelin', 1], ['recon', 1], ['ua_engineer', 1], ['ua_observer', 1]],
@@ -51,11 +51,11 @@ export const ARMIES = {
     RU: [['ru_supply', 2], ['ru_recovery', 1], ['t72', 2], ['bmp', 1], ['btr', 1], ['e_engineer', 2], ['e_medic', 1], ['e_rifle', 4], ['e_mg', 1], ['e_atgm', 1]],
   },
 };
-// Fähigkeiten je Rolle
+// Fähigkeiten je Rolle (V3-M2: Artillerie-Nebel 'smoke' und Luftlandung 'airdrop' – Mi-8 setzt einen Trupp ab)
 export const ABIL = {
-  armor: { UA: ['scan', { id: 'artillery', charges: 3 }], RU: ['scan', { id: 'artillery', charges: 3 }] },
-  infantry: { UA: [{ id: 'fpv', charges: 6 }, 'scan'], RU: [{ id: 'lancet', charges: 6 }, 'scan'] },
-  support: { UA: ['himars', 'artillery', 'scan', 'ew'], RU: ['tornado', 'artillery', 'scan', 'ew'] }, // MP-T7: RU-Gegenstück zum HIMARS
+  armor: { UA: ['scan', { id: 'artillery', charges: 3 }, { id: 'smoke', charges: 3 }], RU: ['scan', { id: 'artillery', charges: 3 }, { id: 'smoke', charges: 3 }] },
+  infantry: { UA: [{ id: 'fpv', charges: 6 }, 'scan', { id: 'airdrop', charges: 1 }], RU: [{ id: 'lancet', charges: 6 }, 'scan', { id: 'airdrop', charges: 1 }] },
+  support: { UA: ['himars', 'artillery', 'scan', 'ew', { id: 'smoke', charges: 4 }], RU: ['tornado', 'artillery', 'scan', 'ew', { id: 'smoke', charges: 4 }] }, // MP-T7: RU-Gegenstück zum HIMARS
   logistics: { UA: ['scan', { id: 'artillery', charges: 3 }], RU: ['scan', { id: 'artillery', charges: 3 }] },
 };
 // Verstärkungs-Reihenfolge je Rolle (wird zyklisch abgearbeitet)
@@ -283,6 +283,12 @@ export function createSkirmish(setup) {
         sk.points.push(pt);
         setOwnerVisual(pt, null);
       }
+      // V3-M2: Dämme/Furten der Generatorkarte werden zu sprengbaren Brücken, Bahnlinien (Preset Bahn/Stadt) zu Gleisen
+      if (!S.customMap) {
+        g.mapobj.bridgesFromCauseways();
+        for (const f of gen.map.features) if (f.type === 'road' && f.width === 3 && f.paved === false && f.pts?.length >= 2) g.addRailway(f.pts);
+        if (g.rail.rails.length) for (const c of gen.capturePoints) if (c.kind === 'railway') g.addStation(c.x, c.z, { name: c.name });
+      }
       g.addObjective('cp', 'Eroberungspunkte halten – beim Verstärkungs-Countdown erhält der Besitzer Nachschub');
       g.addObjective('win', victoryText(S, pointsLimit, timeLimit));
       if (netClient) return; // Online-Client: Einheiten, KI und Meldungen kommen vom Host
@@ -437,6 +443,12 @@ function spawnArmy(g, p, S, sk) {
     ...g.spawnGroup(inf, team, sp.x, sp.z + dir * 11, { ...opts, spacing: 3.2, cols: 6 }),
   ];
   for (const [t, n] of air) for (let i = 0; i < n; i++) out.push(g.spawn(t, team, sp.x + (i - 0.5) * 4, sp.z + dir * 4, opts));
+  // V3-M2: KI-Spieler fahren einen Teil der Schützen in den Schützenpanzern/Lkw mit (setzen bei Feindkontakt ab)
+  if (p.ai && g.trans) {
+    const carriers = out.filter((u) => g.trans.canCarry(u) && !u.type.air);
+    const riders = out.filter((u) => u.type.infantry && (u.type.key === 'rifle' || u.type.key === 'e_rifle' || u.type.key === 'mg' || u.type.key === 'e_mg'));
+    for (const v of carriers) { let k = Math.min(4, g.trans.room(v)); while (k-- > 0 && riders.length) g.trans.board(riders.shift(), v); }
+  }
 }
 
 

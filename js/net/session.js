@@ -36,6 +36,7 @@ function restoreTimeout(lobby) { const o = lobby.transport.opts; if (o._normalTi
 
 // Einheiten-Schema: [id, typ, owner, x, z, heading, hp, maxHp, turm/fernglas, flags, flughöhe, munition, sprit, material, bau, haus,
 //                    niederhalten 0..100, veteranenstufe 0..3, fahrzeugmodule (Bitfeld packMods)]  – V3-M1
+//                    + V3-M2: Insassenzahl (cg), gezogenes Geschütz (lk = id), Haltung/Zustand (st, Bitfeld ST)
 export const UNIT_CODEC = createCodec([
   { name: 'id', type: 'uint', delta: true }, { name: 'type', type: 'uint' }, { name: 'owner', type: 'int' },
   { name: 'x', type: 'fixed', step: 1 / 32 }, { name: 'z', type: 'fixed', step: 1 / 32 }, { name: 'h', type: 'angle', bits: 8 },
@@ -43,7 +44,12 @@ export const UNIT_CODEC = createCodec([
   { name: 'flags', type: 'uint' }, { name: 'alt', type: 'fixed', step: 0.25 }, { name: 'stock', type: 'int' },
   { name: 'fuel', type: 'uint' }, { name: 'mat', type: 'uint' }, { name: 'build', type: 'uint' }, { name: 'gh', type: 'uint' },
   { name: 'sup', type: 'uint' }, { name: 'vet', type: 'uint' }, { name: 'mod', type: 'uint' },
+  { name: 'cg', type: 'uint' }, { name: 'lk', type: 'uint' }, { name: 'st', type: 'uint' },
 ]);
+// V3-M2 Haltungs-/Zustandsbits (st): Feuermodus 0..2 (Bit 0-1), Bewegung 0..2 (Bit 2-3) und Rest nur fürs eigene Team;
+// kriechend, aufgeprotzt, protzt, gelandet für alle (sichtbar). Minenvorrat (eigenes Team) ab Bit 10.
+export const ST = { fire: 3, move: 12, prone: 16, retreat: 32, cbOff: 64, limber: 128, towed: 256, landed: 512, mineShift: 10 };
+const FIRE_C = { free: 0, return: 1, hold: 2 }, MOVE_C = { free: 0, hold: 1, pursue: 2 };
 // ambush/led nur für das eigene Team (Hinterhalt bleibt dem Gegner verborgen); burn = brennende Einheit bzw. brennendes Haus
 export const F = { moving: 1, hold: 2, immob: 4, abandoned: 8, bino: 16, garrison: 32, dive: 64, UA: 128, RU: 256, hot: 512, fired: 1024, work: 2048, ambush: 4096, panic: 8192, led: 16384, burn: 32768 };
 const r1 = (v) => Math.round(v * 10) / 10;
@@ -104,6 +110,8 @@ export class HostSession {
       isHost: true, isClient: false, session: this,
       sendCommand: (cmd) => g.command(g.localPlayerId, cmd),
       feedback: (to, kind, args) => this._feedback(to, kind, args),
+      // V3-M2: Welt-Ereignisse (Walzen 'cr', Brücke 'br', Fallschirm 'pd'); all = an beide Teams, sonst nur bei Sicht
+      event: (ev, x, z, all) => { if (all) { for (const t of ['UA', 'RU']) if (this._teamHasRemote(t)) this.teamQ[t].push(ev); } else this._fxAt(x, z, ev); },
       attacked: (u) => this._attacked(u),
       onMissile: (m) => this._onMissile(m),
       onMissileGone: (m) => this._onMissileGone(m),
@@ -291,11 +299,12 @@ export class HostSession {
       });
       for (const T of ['UA', 'RU']) plFor[T] = rows.map((r, i) => (g.players[i].team === T ? r : [r[0], r[1], r[2], r[3], 0, r[5], r[6], r[7], r[8], -1, r[10], r[11]]));
     }
-    const enc = {};
-    for (const team of ['UA', 'RU']) if (this._teamHasRemote(team)) enc[team] = UNIT_CODEC.encode(this.teamEntries(team));
+    const enc = {}, extra = {};
+    for (const team of ['UA', 'RU']) if (this._teamHasRemote(team)) { enc[team] = UNIT_CODEC.encode(this.teamEntries(team)); extra[team] = this.teamExtras(team); }
+    if (g.bridges.length) common.br = g.mapobj.stateCodes(); // V3-M2: Brückenzustände
     for (const id of this.connected) {
       const p = g.playerById(id); if (!p) continue;
-      const msg = { ...common, ...(withPlayers ? { pl: plFor[p.team] } : {}), u: enc[p.team], me: { ab: p.abilities.map((a) => [Math.round(a.cd * 10), a.charges === Infinity ? -1 : a.charges]) } };
+      const msg = { ...common, ...(withPlayers ? { pl: plFor[p.team] } : {}), u: enc[p.team], ...extra[p.team], me: { ab: p.abilities.map((a) => [Math.round(a.cd * 10), a.charges === Infinity ? -1 : a.charges]) } };
       this._count('bytes', id, msg);
       this.lobby.sendSnap(msg, id);
     }
@@ -327,6 +336,20 @@ export class HostSession {
     out.sort((a, b) => a[0] - b[0]);
     return out;
   }
+  /** V3-M2: Zusatzdaten nur fürs eigene Team: Insassen-Typen (cg) und Wegpunkte/Befehlsketten (wp). */
+  teamExtras(T) {
+    const g = this.game, cg = {}, wp = {};
+    let nc = 0, nw = 0;
+    for (const u of g.units) {
+      if (!u.alive || u.side !== T) continue;
+      if (u.cargo?.length) { cg[u.id] = u.cargo.map((q) => TYPE_IDX.get(q.type.key)); nc++; }
+      if (!u.type.structure && (u.queue?.length || u.order || u.retreat || u.embarkGoal || u.unloadAt || u.bridgeJob)) { const w = g.orders.packWaypoints(u); if (w) { wp[u.id] = w; nw++; } }
+    }
+    const out = {};
+    if (nc) out.cg = cg;
+    if (nw) out.wp = wp;
+    return out;
+  }
   unitEntry(u, T) {
     const g = this.game, own = u.side === T || (u.abandoned && u.prevSide === T);
     let f = 0;
@@ -349,7 +372,23 @@ export class HostSession {
     return [u.id, TYPE_IDX.get(u.type.key), u.owner ?? -1, u.pos.x, u.pos.z, u.heading, Math.max(0, u.hp), u.maxHp, u.bino ? u.bino.yaw : u.turretYaw, f,
       u.type.air ? u.curAlt : 0, am ? Math.floor(am.cur + 1e-6) : -1, own && u.maxFuel ? Math.round(u.fuel) : 0,
       own && u.maxMaterial ? Math.round(u.material * 10) : 0, u.build ? Math.round(Math.min(1, u.build.progress) * 250) : 0, u.garrison ? u.garrison.id : 0,
-      Math.round(u.supp || 0), u.vet || 0, packMods(u.mods) | (own ? (u.smokeN & 3) << 6 : 0)];
+      Math.round(u.supp || 0), u.vet || 0, packMods(u.mods) | (own ? (u.smokeN & 3) << 6 : 0),
+      own ? (u.cargo?.length || 0) : 0, u.towing ? u.towing.id : 0, this.stanceBits(u, own)];
+  }
+  stanceBits(u, own) {
+    let b = 0;
+    if (own) {
+      b |= FIRE_C[u.holdFire ? 'hold' : u.fireMode || 'free'] ?? 0;
+      b |= (MOVE_C[u.moveMode || 'free'] ?? 0) << 2;
+      if (u.retreat) b |= ST.retreat;
+      if (u.cbOff) b |= ST.cbOff;
+      b += Math.min(31, Math.floor(u.mineStock || 0)) << ST.mineShift;
+    }
+    if (u.prone) b |= ST.prone;
+    if (u.limberT > 0) b |= ST.limber;
+    if (u.towedBy) b |= ST.towed;
+    if (u.landed) b |= ST.landed;
+    return b;
   }
   houseEntry(h, T, hot) {
     let f = 0;
@@ -407,7 +446,8 @@ export class ClientSession {
     // Sofortige Rückmeldung (Ton, Marker) – ausgeführt wird auf dem Host
     if (cmd.t === 'move') { g.audio.ui('ack'); g.effects?.marker(cmd.x, cmd.z, cmd.attackMove ? 0xffa030 : 0x5dff8a, 0.8, 2); }
     else if (cmd.t === 'attack') { const t = g.unitById(cmd.target); g.audio.ui('ack'); if (t) g.effects?.marker(t.pos.x, t.pos.z, 0xff4040, 0.8, Math.max(2, t.radius + 1)); }
-    else if (cmd.t === 'stop' || cmd.t === 'hold' || cmd.t === 'ambush' || cmd.t === 'dig' || cmd.t === 'smoke' || cmd.t === 'grenade') g.audio.ui('ack');
+    else if (/^(stop|hold|ambush|dig|smoke|grenade|stance|retreat|formation|embark|unload|hitch|unhitch|pickmines|blowbridge|buildbridge)$/.test(cmd.t)) g.audio.ui('ack');
+    if (cmd.queue && Number.isFinite(cmd.x)) g.effects?.marker(cmd.x, cmd.z, 0xc8ff5d, 0.8, 1.6);
     return true;
   }
   onLoaded() {
@@ -472,6 +512,15 @@ export class ClientSession {
     }
     // Nicht mehr gemeldete Einheiten verschwinden zur Interpolationszeit (ein Tod-Event derselben Zeit wird vorher abgespielt)
     for (const u of g.units) if (u.remote && u.alive && !seen.has(u.id) && u.netGoneT == null) u.netGoneT = s.t;
+    // V3-M2: Insassen-Typen, Wegpunkte (eigenes Team), Brückenzustände
+    const ls = g.localSide;
+    for (const u of g.units) {
+      if (!u.remote || u.side !== ls) continue;
+      const c = s.cg?.[u.id];
+      u.netCargo = c ? c.map((i) => TYPE_KEYS[i]).filter(Boolean) : null;
+      if (s.wp?.[u.id]) g.orders.unpackWaypoints(u, s.wp[u.id]); else u.netWp = null;
+    }
+    if (Array.isArray(s.br)) s.br.forEach((c, i) => { const b = g.bridges[i]; if (b) g.mapobj.applyState(b.id, c); });
     // Eigene Fähigkeiten
     const lp = g.localPlayer;
     if (s.me?.ab && lp) {
@@ -508,7 +557,7 @@ export class ClientSession {
   }
   _applyUnit(e, t) {
     const g = this.game;
-    const [id, ti, owner, x, z, h, hp, maxHp, ty, f, alt, stock, fuel, mat, build, gh, sup, vet, mod] = e;
+    const [id, ti, owner, x, z, h, hp, maxHp, ty, f, alt, stock, fuel, mat, build, gh, sup, vet, mod, cg, lk, st] = e;
     const key = TYPE_KEYS[ti];
     const type = UNIT_TYPES[key];
     if (!type) return;
@@ -564,6 +613,17 @@ export class ClientSession {
     u.panicT = f & F.panic ? 1 : 0;
     u.burnT = f & F.burn ? 1 : 0;
     if (u.mods) unpackMods(u, mod || 0);
+    // V3-M2: Insassen, Geschütz am Haken, Haltung
+    u.netCargoN = cg || 0; u.towingId = lk || 0;
+    const sb = st || 0;
+    u.prone = !!(sb & ST.prone); u.limberT = sb & ST.limber ? 1 : 0; u.towedBy = sb & ST.towed ? true : null; u.landed = !!(sb & ST.landed);
+    if (u.side === g.localSide) {
+      u.fireMode = ['free', 'return', 'hold'][sb & ST.fire] || 'free';
+      u.moveMode = [null, 'hold', 'pursue'][(sb & ST.move) >> 2] || null;
+      u.retreat = sb & ST.retreat ? (u.retreat || {}) : null;
+      u.cbOff = !!(sb & ST.cbOff);
+      u.mineStock = sb >> ST.mineShift;
+    }
     if (u.side === g.localSide) { u.smokeN = ((mod || 0) >> 6) & 3; u.ambush = f & F.ambush ? { on: true, range: u.ambush?.range ?? 25 } : (u.ambush ? { ...u.ambush, on: false } : null); u.ledT = f & F.led ? g.time + 0.6 : -99; }
     if (stock >= 0) { const ws = u.weapons.find((w) => w.stockMax !== Infinity); if (ws) ws.stock = stock; }
     if (u.maxFuel) u.fuel = fuel;
@@ -644,6 +704,10 @@ export class ClientSession {
       case 'fp': fx.firePool(ev[1], ev[2], ev[3], ev[4]); break;
       case 'sm': g.tac?.addSmoke(ev[1], ev[2], ev[3], ev[4], ev[5] || 0); break;
       case 'rv': g.reveals.push({ x: ev[1], z: ev[2], r: ev[3], t: ev[4], team: g.localSide }); g.visionT = 0; break;
+      // V3-M2: Walzen (Baum/Hecke/Busch), Brückenzustand, Fallschirm
+      case 'cr': g.mapobj?.crush(ev[1] === 't' ? 'tree' : ev[1] === 'h' ? 'hedge' : 'b', ev[2], ev[3], ev[4], ev[5] || 0, ev[6] || 1, true); break;
+      case 'br': g.mapobj?.applyState(ev[1], ev[2]); break;
+      case 'pd': { const u = g.unitById(ev[1]); if (u && u.alive) g.support?.chute(u, ev[2], ev[3], true); break; }
       case 'bt': { const u = g.unitById(ev[1]); if (u) { fx.marker(u.pos.x, u.pos.z, 0x5dff8a, 0.8, 3); if (g.isOwn(u)) { g.alert(`🔨 ${u.name} fertig`, 2); g.audio.ui('ack'); } } break; }
       case 'ua': { const u = g.unitById(ev[1]); if (u && u.alive) g.emit('underAttack', u); break; }
       case 'fb': {

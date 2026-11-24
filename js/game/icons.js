@@ -174,6 +174,29 @@ export const ICONS = {
   field: [T(R(3, 6.5, 18, 13.5, 1)), 'M3 11h18M3 15.5h18', 'M10 4.5l2 2 2-2'],
   ford: ['M3 7.5c2-2 4-2 6 0s4 2 6 0 4-2 6 0', 'M3 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0', S(C(7.5, 12.3, 1.4)), S(C(12, 12.3, 1.4)), S(C(16.5, 12.3, 1.4))],
   zone: ['=' + C(12, 12, 9), 'M10 17V7', T('M10 7.5h6l-1.5 2 1.5 2h-6')],
+  // ---------- Befehle & Welt (V3-M2) ----------
+  retreat: ['M19 12H6.5M11 7l-5 5 5 5', 'M20.5 5v14'],
+  fire_return: [C(12, 12, 5.6), 'M12 3.5v3.6M12 16.9v3.6M3.5 12h3.6M16.9 12h3.6', 'M8.6 9.2a4 4 0 0 1 6.8 0M15.4 9.2l.4-2.4M15.4 9.2l-2.3-.6'],
+  stance_hold: [T('M6 4.5h12v6.2c0 4.3-2.6 7.4-6 8.8-3.4-1.4-6-4.5-6-8.8z'), 'M9 11.5h6M12 8.5v6'],
+  stance_pursue: [S(C(5, 12, 1.4)), 'M8 12h7M12.5 8.5L16 12l-3.5 3.5', '=' + C(12, 12, 9)],
+  prone: [S(C(5, 15.5, 1.8)), 'M7 15.8h9.5l3 1.7M10.5 15.8l2.2-2.6h3', 'M3 19.5h18'],
+  stand: [S(C(12, 4.6, 1.8)), 'M12 7v7.5M8.6 10.5h6.8M12 14.5l-3 5.5M12 14.5l3 5.5'],
+  formation_block: [S(C(7, 7, 1.6)), S(C(12, 7, 1.6)), S(C(17, 7, 1.6)), S(C(7, 12, 1.6)), S(C(12, 12, 1.6)), S(C(17, 12, 1.6)), 'M12 15.5v5M9.8 18.3L12 20.5l2.2-2.2'],
+  formation_line: [S(C(4.5, 12, 1.6)), S(C(9.5, 12, 1.6)), S(C(14.5, 12, 1.6)), S(C(19.5, 12, 1.6)), 'M12 4v4.5M9.8 6.2L12 4l2.2 2.2'],
+  formation_wedge: [S(C(12, 6, 1.6)), S(C(8, 11, 1.6)), S(C(16, 11, 1.6)), S(C(4, 16, 1.6)), S(C(20, 16, 1.6)), '=M12 6L4 16M12 6l8 10'],
+  formation_column: [S(C(12, 4.5, 1.5)), S(C(12, 9.5, 1.5)), S(C(12, 14.5, 1.5)), S(C(12, 19.5, 1.5))],
+  embark: [T(R(3, 9, 15, 8, 1.5)), C(7, 18.5, 1.6), C(14, 18.5, 1.6), 'M18 13h3.5', S(C(21, 5, 1.4)), 'M21 7v3.5l-2.5 2.5'],
+  unload: [T(R(2.5, 9, 13, 8, 1.5)), C(6, 18.5, 1.6), C(12.5, 18.5, 1.6), S(C(20, 7.5, 1.4)), 'M20 9.5v4.5M18 20.5l2-6.5 2 6.5', 'M15.5 13h2'],
+  unload_at: [T(R(2.5, 10, 11, 7, 1.5)), C(5.5, 18.5, 1.5), C(11, 18.5, 1.5), 'M19 21.5s-3.8-4.6-3.8-7.6a3.8 3.8 0 0 1 7.6 0c0 3-3.8 7.6-3.8 7.6z', S(C(19, 13.9, 1.2))],
+  hitch: [T(R(2.5, 8, 9, 7, 1.2)), C(5.5, 17, 1.6), 'M11.5 13h4.5', C(17.2, 13, 1.2), 'M18.4 13l3 -5M18.4 13l3 5', C(19.5, 19.5, 1.5)],
+  unhitch: [T(R(2.5, 8, 9, 7, 1.2)), C(5.5, 17, 1.6), 'M11.5 13h2.5', '=M15 13h2', C(19, 13, 1.2), 'M20.2 13l2-3.5M20.2 13l2 3.5'],
+  pickmines: [T(E(9, 15, 6, 2.6)), 'M9 12.4v-2', 'M17 4.5v9M14 10.5l3 3 3-3', 'M3 19.5h18'],
+  blowbridge: ['M2 8.5h7.5M14.5 8.5H22', 'M3.5 20c0-5 2.5-9.5 6-11M20.5 20c0-5-2.5-9.5-6-11', 'M2 20h20', S(C(12, 7, 1.6)), 'M12 2.5v2M8.6 4l1.3 1.4M15.4 4l-1.3 1.4'],
+  buildbridge: [T('M2 15h20v3H2z'), 'M5 18.5v2.5M12 18.5v2.5M19 18.5v2.5', 'M5 12l3-6 3 6M13 12l3-6 3 6'],
+  counterbattery: [T('M4 19.5l4-10 4 10z'), 'M8 9.5V6M5.5 5.2c1.4-1.4 3.6-1.4 5 0M3.6 3.4c2.4-2.4 6.4-2.4 8.8 0', 'M14 14l6-6M17 8h3v3', S(C(20, 18, 1.5))],
+  airdrop: [T('M4 9a8 6 0 0 1 16 0z'), 'M4 9l8 8M20 9l-8 8M12 9v8', S(C(12, 18.5, 1.6))],
+  train: [T(R(5, 3.5, 14, 13, 2.5)), 'M5 10.5h14M9.5 3.5v7', C(8.5, 13.5, 1), C(15.5, 13.5, 1), 'M8 16.5L5 21M16 16.5l3 4.5M6.5 19h11'],
+  waypoint: [S(C(5, 18, 1.5)), '=M6.5 17l5-6 6-2', 'M17.5 9l-.2-5.5L21 7.6z'],
 };
 // Rollen (Gefecht) und Fähigkeits-IDs verweisen auf vorhandene Symbole
 const ALIAS = {
@@ -213,6 +236,12 @@ export const ICON_LABELS = {
   warning: 'Warnung', battery: 'Akku', repair: 'Reparatur', flag: 'Flagge', lock: 'Gesperrt', medal: 'Abgeschlossen', unknown: 'Unbekannt',
   role_armor: 'Panzerkeil', role_infantry: 'Infanterie', role_support: 'Artillerie', role_logistics: 'Logistik',
   officer: 'Offizier', grenade: 'Handgranate', smoke: 'Nebel', ambush: 'Hinterhalt', dig: 'Eingraben', firefree: 'Feuer frei',
+  retreat: 'Rückzug', fire_return: 'Feuer erwidern', stance_hold: 'Stellung halten', stance_pursue: 'Verfolgen (begrenzt)',
+  prone: 'Kriechen', stand: 'Aufstehen', formation_block: 'Formation Block', formation_line: 'Formation Reihe',
+  formation_wedge: 'Formation Keil', formation_column: 'Formation Kolonne', embark: 'Aufsitzen', unload: 'Absitzen',
+  unload_at: 'Absitzen am Ziel', hitch: 'Aufprotzen', unhitch: 'Abprotzen', pickmines: 'Minen aufnehmen',
+  blowbridge: 'Brücke sprengen', buildbridge: 'Brücke bauen', counterbattery: 'Gegenbatteriefeuer', airdrop: 'Luftlandung',
+  train: 'Zug', waypoint: 'Befehlskette',
 };
 
 // Einheitentyp-Schlüssel → Icon (explizit; neue Epochen können iconKey setzen oder hier erweitern)
@@ -231,6 +260,9 @@ const KEY_MAP = {
   railcar: 'railcar', bridge_road: 'bridge', bridge_rail: 'bridge', house: 'house', tanktrap: 'tanktrap', sandbag: 'sandbag',
   trench: 'trench', minefield: 'mine', cp_zeppelin: 'zeppelin', cp_aerostat: 'aerostat', cp_airfield: 'airfield', cp_depot: 'depot',
   cp_radio: 'radio', cp_railway: 'railway', cp_village: 'village',
+  // V3-M2
+  m_d30: 'arty_tube', m_m119: 'arty_tube', m_mt12: 'at', m_tpq36: 'radar_veh', m_zoopark: 'radar_veh', m_mi8: 'heli', m_mi8ru: 'heli',
+  m_rail_loco: 'train', m_rail_wagon: 'railcar', m_rail_tank: 'railcar', m_rail_armor: 'train', m_rail_flak: 'railcar',
 };
 
 const has = (name) => Object.prototype.hasOwnProperty.call(ICONS, name);
@@ -264,6 +296,8 @@ export function unitIconKey(type) {
     return 'inf';
   }
   if (type.cls === 'veh') {
+    if (type.rail) return 'train'; // V3-M2
+    if (type.towable && /how|haubitze/i.test(String(type.gunKind || '') + nm)) return 'arty_tube';
     if (type.supply) return 'truck';
     if (type.repair) return 'recovery';
     if (kinds.includes('artillery') || /spg|haubitze|howitzer/.test(model + nm)) return 'arty_tube';

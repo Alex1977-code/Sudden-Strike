@@ -42,5 +42,10 @@ registerWeapons({
   m_vampire_bomb: { name: 'Abwurfbombe (Vampire)', kind: 'shell', range: 14, dmg: 220, reload: 4.5, acc: 0.8, vs: { soft: 1, light: 1, heavy: 0.8, air: 0, struct: 0.6 }, splash: 4, sound: 'grenade', groundTargetsOnly: true, prefer: ['light', 'heavy', 'soft'], stock: 6, wt: 3 },
   m_orion_atgm: { name: 'Lenkflugkörper (Orion)', kind: 'atgm', range: 54, dmg: 460, reload: 9, acc: 0.85, vs: { soft: 0.25, light: 1, heavy: 1, air: 0, struct: 0.35 }, speed: 55, splash: 2.2, sound: 'missile', groundTargetsOnly: true, prefer: ['heavy', 'light'], topAttack: true, stock: 4, wt: 14 },
   m_orion_bomb: { name: 'Gleitbombe KAB-20', kind: 'shell', range: 18, dmg: 260, reload: 6, acc: 0.75, vs: { soft: 1, light: 1, heavy: 0.8, air: 0, struct: 0.7 }, splash: 5, sound: 'grenade', groundTargetsOnly: true, stock: 4, wt: 5 },
+  // ---- V3-M2: gezogene Geschütze, Panzerzug ----
+  m_d30: h155('122-mm-Haubitze D-30', { range: 200, dmg: 170, reload: 8, splash: 6, stock: 40, wt: 8 }),
+  m_m119: h155('105-mm-Haubitze M119', { range: 185, dmg: 150, reload: 6, splash: 5.5, stock: 44, wt: 7 }),
+  m_mt12: { name: '100-mm-Pak MT-12 Rapira', kind: 'shell', range: 44, dmg: 280, reload: 5.5, acc: 0.74, vs: VS_TANK, splash: 2.2, sound: 'cannon', bigMuzzle: true, groundTargetsOnly: true, prefer: ['heavy', 'light'], stock: 36, wt: 7 },
+  m_zu23: { name: '23-mm-Zwillingsflak ZU-23-2', kind: 'bullet', range: 36, dmg: 18, reload: 0.7, acc: 0.55, vs: { soft: 1, light: 0.55, heavy: 0.03, air: 1, struct: 0.1 }, canAir: true, airAcc: 0.45, sound: 'autocannon', tracer: 'r', burst: 4, stock: 600, wt: 0.3 },
   m_ugv_charge: { name: 'UGV-Sprengladung', kind: 'kamikaze', range: 3.5, dmg: 750, reload: 0, acc: 1, vs: { soft: 1, light: 1, heavy: 0.9, air: 0, struct: 0.8 }, splash: 5, groundTargetsOnly: true, prefer: ['heavy', 'light'] },
 });
