@@ -8,6 +8,8 @@
 // Teamabsprache über TeamIntel.claims) → Countdown-Reaktion (gefährdete Punkte verstärken, unbewachte Punkte mit
 // schnellen Einheiten „klauen") → Fähigkeit der Rolle auf sichtbare Gegnerballungen.
 
+import { knownHostile } from '../game/garrison.js';
+
 export const AI_LEVELS = {
   easy: { courage: 2.2, interval: 4.0, steals: 0, window: 0, abilityChance: 0.35, err: 14, clusterMin: 5, retreatHp: 0, reissue: 14 },
   normal: { courage: 1.6, interval: 3.0, steals: 1, window: 45, abilityChance: 0.7, err: 7, clusterMin: 4, retreatHp: 0.22, reissue: 10 },
@@ -300,7 +302,7 @@ export class AICommander {
     if (free.length) {
       let bestH = null, bd = (cp.radius * 1.4) ** 2;
       for (const h of this.g.units) {
-        if (h.type.key !== 'house' || !h.alive || (h.occupants?.length && h.garrisonSide !== this.p.team)) continue;
+        if (h.type.key !== 'house' || !h.alive || knownHostile(this.g, h, this.p.team)) continue; // MP-T7: nur aufgeklärte Feindbesatzung meiden (kein Wissen über verdeckte)
         const q = d2(h.pos.x, h.pos.z, cp.x, cp.z);
         if (q < bd && (h.occupants?.length || 0) < 4) { bd = q; bestH = h; }
       }

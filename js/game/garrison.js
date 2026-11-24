@@ -12,6 +12,8 @@ export const GAR = {
 
 export const houseCap = (h) => Math.max(4, Math.min(12, Math.round(h.w * h.d * h.floors / 14) + 2));
 export const floorsOf = (house) => house.houseDef?.floors || 1;
+// Ist die Feindbesatzung eines Hauses für `team` aufgeklärt? (feuert gerade / wurde am Haus entdeckt) – MP-T7
+export const knownHostile = (g, h, team) => !!(h.occupants?.length && h.garrisonSide !== team && g.time - (h.revealT ?? -99) < GAR.revealFor);
 
 export class Garrison {
   constructor(game) { this.g = game; this.pending = []; this.badges = new Map(); }
@@ -23,8 +25,13 @@ export class Garrison {
       if (!h || !h.alive || h.type.key !== 'house') return false;
       const inf = units.filter((u) => u.type.infantry && !u.type.kamikaze && !u.abandoned);
       if (!inf.length) return false;
-      if (h.occupants?.length && h.garrisonSide !== p.team) return false;
-      const room = houseCap(h.houseDef) - (h.occupants?.length || 0) - this.pending.filter((e) => e.house === h).length;
+      // MP-T7 (Anti-Info-Leck): Eine nicht aufgeklärte Feindbesatzung wird wie ein leeres Haus behandelt – der Befehl wird
+      // angenommen, die Trupps laufen hin und entdecken die Besatzung erst am Haus (update). Nur eine bereits erkannte
+      // (feuernde) Feindbesatzung lehnt den Befehl ab; die kennt das Team ohnehin. Platz zählt nur eigene Insassen/Anmärsche.
+      const hostile = h.occupants?.length && h.garrisonSide !== p.team;
+      if (hostile && knownHostile(g, h, p.team)) return false;
+      const ownIn = hostile ? 0 : (h.occupants?.length || 0);
+      const room = houseCap(h.houseDef) - ownIn - this.pending.filter((e) => e.house === h && e.u.side === p.team).length;
       if (room <= 0) return false;
       let n = 0;
       for (const u of inf) {
@@ -60,7 +67,14 @@ export class Garrison {
       if (Math.hypot(u.pos.x - h.pos.x, u.pos.z - h.pos.z) <= reach) {
         this.pending.splice(i, 1);
         if ((h.occupants?.length || 0) < houseCap(hd) && (!h.occupants?.length || h.garrisonSide === u.side)) this.enter(u, h);
-        else { u.garrisonGoal = null; }
+        else {
+          u.garrisonGoal = null;
+          // Am Haus auf Feindbesatzung gestoßen (MP-T7): jetzt aufgeklärt, Meldung an den Besitzer des Trupps
+          if (h.occupants?.length && h.garrisonSide !== u.side) {
+            h.revealT = g.time;
+            if (u.owner !== null && (h._contactT?.[u.side] ?? -99) < g.time - 5) { (h._contactT ||= {})[u.side] = g.time; g.alertTo(u.owner, '⚠ Gebäude ist feindlich besetzt!', 3); }
+          }
+        }
       } else if (!u.order && !u.path?.length) { u.garrisonGoal = null; this.pending.splice(i, 1); } // Weg blockiert
     }
     // Abzeichen nur für das Team der Besatzung

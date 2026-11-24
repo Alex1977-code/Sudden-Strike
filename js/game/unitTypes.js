@@ -36,6 +36,9 @@ export const W = {
   kornet: { name: '9M133 Kornet', kind: 'atgm', range: 50, dmg: 480, reload: 11, acc: 0.86, vs: { soft: 0.3, light: 1, heavy: 1, air: 0, struct: 0.4 }, speed: 40, splash: 2.5, sound: 'missile', groundTargetsOnly: true, prefer: ['heavy', 'light'], straight: true, stock: 4, wt: 14 },
   igla: { name: '9K38 Igla', kind: 'sam', range: 40, dmg: 360, reload: 7, acc: 0.78, vs: { air: 1 }, canAir: true, airOnly: true, airAcc: 0.7, speed: 88, sound: 'missile', ammo: 4, reloadAmmo: 30, intercept: { drone: 0.7, cruise: 0.28 }, stock: 6, wt: 8 },
   spetsnaz: { name: 'AK-12 (Speznas)', kind: 'bullet', range: 27, dmg: 10, reload: 1.15, acc: 0.68, vs: { soft: 1, light: 0.08, heavy: 0, air: 0.5, struct: 0.02 }, canAir: true, airAcc: 0.16, sound: 'rifle', tracer: 'r', burst: 3, stock: 360, wt: 0.1 },
+  // Gefechtsmodus (MP-T7): Panzerjäger (Lenkflugkörper-Fahrzeuge)
+  stugna: { name: 'Stugna-P', kind: 'atgm', range: 52, dmg: 480, reload: 9, acc: 0.88, vs: { soft: 0.25, light: 1, heavy: 1, air: 0, struct: 0.4 }, speed: 42, splash: 2.2, sound: 'missile', groundTargetsOnly: true, prefer: ['heavy', 'light'], straight: true, stock: 10, wt: 14 },
+  chrysanthema: { name: '9M123 Chrysanthema', kind: 'atgm', range: 54, dmg: 470, reload: 8.5, acc: 0.86, vs: { soft: 0.25, light: 1, heavy: 1, air: 0, struct: 0.4 }, speed: 45, splash: 2.2, sound: 'missile', groundTargetsOnly: true, prefer: ['heavy', 'light'], straight: true, stock: 12, wt: 14 },
   pistol: { name: 'Pistole', kind: 'bullet', range: 14, dmg: 5, reload: 1.3, acc: 0.4, vs: { soft: 1, light: 0.02, heavy: 0, air: 0, struct: 0.01 }, sound: 'rifle', tracer: null, burst: 2, stock: 90, wt: 0.05 },
   fpv: { name: 'FPV-Gefechtskopf', kind: 'kamikaze', range: 3, dmg: 480, reload: 0, acc: 1, vs: { soft: 0.6, light: 1, heavy: 1, air: 0, struct: 0.4 }, topAttack: true, splash: 3, groundTargetsOnly: true, prefer: ['heavy', 'light'] },
   lancet: { name: 'Lancet-Gefechtskopf', kind: 'kamikaze', range: 3, dmg: 420, reload: 0, acc: 1, vs: { soft: 0.6, light: 1, heavy: 0.9, air: 0, struct: 0.4 }, topAttack: true, splash: 3, groundTargetsOnly: true, prefer: ['heavy', 'light'] },
@@ -107,6 +110,10 @@ export const UNIT_TYPES = {
   // Gefechtsmodus (MP-T4c): Beobachter mit Fernglas (im Stand nach 2 s weite Sicht im 90°-Kegel)
   ua_observer: { name: 'Artilleriebeobachter', icon: '🔭', cls: 'inf', model: 'soldier', weaponModel: 'tablet', hp: 55, armor: 'soft', speed: 4.1, sight: 24, radius: 0.8, weapons: ['pistol'], conceal: 0.5, observer: { range: 96, cone: Math.PI / 2, delay: 2 }, desc: 'Im Stand nach 2 s Fernglas: sehr weite Sicht im Kegel.' },
   e_observer: { name: 'Vorgeschobener Beobachter', icon: '🔭', cls: 'inf', model: 'soldier', weaponModel: 'tablet', hp: 55, armor: 'soft', speed: 4, sight: 24, radius: 0.8, weapons: ['pistol'], conceal: 0.5, observer: { range: 96, cone: Math.PI / 2, delay: 2 }, desc: 'Im Stand nach 2 s Fernglas: sehr weite Sicht im Kegel.' },
+
+  // Gefechtsmodus (MP-T7): Panzerjäger – im Wald stehend und schweigend sehr schwer aufzuklären (mission.vehicleConceal)
+  ua_tankdestroyer: { name: 'Panzerjäger Stugna-P (BTR-4E)', icon: '🎯', cls: 'veh', model: 'tankdestroyer', hp: 380, armor: 'light', speed: 9.5, sight: 36, radius: 3, weapons: ['stugna', 'hmg'], turnRate: 2, turretRate: 1.6, desc: 'Jagdpanzer mit Lenkflugkörpern (52 m). Im Wald stehend und ohne zu feuern erst auf kurze Distanz zu entdecken.' },
+  ru_tankdestroyer: { name: '9P157-2 Chrysanthema-S', icon: '🎯', cls: 'veh', model: 'tankdestroyer', hp: 440, armor: 'light', speed: 8.5, sight: 36, radius: 3.1, weapons: ['chrysanthema', 'coaxRU'], turnRate: 1.8, turretRate: 1.5, desc: 'Jagdpanzer mit Lenkflugkörpern (54 m). Im Wald stehend und ohne zu feuern erst auf kurze Distanz zu entdecken.' },
 
   // ======== Gebäude / Ziele ========
   hq: { name: 'Gefechtsstand', icon: '⛺', cls: 'struct', model: 'hq', hp: 1400, armor: 'struct', sight: 30, radius: 5, weapons: [] },

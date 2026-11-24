@@ -616,6 +616,43 @@ function ifv(side, variant) {
   return { root: g, turret, barrel, muzzle, height: 2.8 };
 }
 
+// Panzerjäger (Gefecht, MP-T7): UA = Radfahrzeug (BTR-4E) mit Stugna-P-Doppelstarter, RU = Kettenfahrzeug (BMP-3-Fahrgestell)
+// mit ausfahrbarem Chrysanthema-Doppelwerfer. Flache Silhouette, Werfer auf dem Turmträger (dreht sich mit dem Ziel).
+function tankDestroyer(side) {
+  const g = new THREE.Group();
+  const cam = side === 'UA' ? M.camoUA : M.camoRU;
+  const L = 7, W = 3.0, wheeled = side === 'UA';
+  if (wheeled) {
+    for (const s of [-1, 1]) for (let i = 0; i < 4; i++) wheel(g, 0.55, 0.45, s * (W / 2 - 0.2), 0.55, -2.4 + i * 1.55);
+    add(g, hullGeo(W - 0.4, 1.25, L, 0.45, 0.1), cam, 0, 1.45, 0);
+    box(g, 0.1, 0.12, 6.0, M.darkMetal, -(W / 2 - 0.2), 1.15, 0); box(g, 0.1, 0.12, 6.0, M.darkMetal, W / 2 - 0.2, 1.15, 0);
+  } else {
+    const tx = W / 2 - 0.3;
+    for (const s of [-1, 1]) { trackSet(g, s, tx, L, { w: 0.7, h: 0.9, n: 6, wr: 0.34 }); box(g, 0.08, 0.5, L * 0.6, cam, s * (tx + 0.46), 1.0, 0); }
+    add(g, hullGeo(W - 0.4, 1.15, L, 0.38, 0.05), cam, 0, 1.4, 0);
+  }
+  headlights(g, 1.4, L / 2 - 0.14, 1.0, 0.2);
+  box(g, 1.3, 0.12, 1.4, M.darkMetal, 0, 2.08, -2.4); // Motorabdeckung
+  // Tarnnetz-Rolle hinten
+  cyl(g, 0.22, 0.22, 2.2, M.darkMetal, 0, 2.15, -3.1, 0, 0, Math.PI / 2, 8);
+  const turret = new THREE.Group();
+  turret.position.set(0, 2.05, 0.6);
+  g.add(turret);
+  box(turret, 1.1, 0.35, 1.3, cam, 0, 0.15, 0);           // Drehkranz/Träger
+  box(turret, 0.25, 0.9, 0.25, M.darkMetal, 0, 0.6, -0.2); // Hubarm
+  const barrel = new THREE.Group(); barrel.position.set(0, 1.05, -0.1); turret.add(barrel);
+  for (const sx of [-0.32, 0.32]) {
+    cyl(barrel, 0.15, 0.15, 1.7, side === 'UA' ? M.darkMetal : M.sand, sx, 0, 0.4, Math.PI / 2, 0, 0, 8); // Startrohr
+    cyl(barrel, 0.17, 0.17, 0.08, M.gunMetal, sx, 0, 1.25, Math.PI / 2, 0, 0, 8);
+  }
+  box(barrel, 0.35, 0.3, 0.45, M.darkMetal, 0, 0.05, -0.2); // Zieloptik
+  if (!wheeled) box(barrel, 0.45, 0.35, 0.4, M.gunMetal, 0, 0.35, 0.1); // Radar (Chrysanthema)
+  const muzzle = new THREE.Object3D(); muzzle.position.set(0.32, 0, 1.3); barrel.add(muzzle);
+  antenna(g, -1.0, 2.0, -2.6, 2.2, 0.08);
+  iff(g, side, 2.1, -1.6);
+  return { root: g, turret, barrel, muzzle, height: 3.1 };
+}
+
 function truckBase(cam, L = 7, W = 2.6, wheels = 3) {
   const g = new THREE.Group();
   const pitch = (L - 2) / Math.max(1, wheels - 1);
@@ -1570,7 +1607,7 @@ function structureRail(g, x) {
 
 // ---------------- Fabrik ----------------
 const NO_BLOB = new Set(['quad', 'reconquad', 'shahed', 'lancet', 'orlan', 'recon_wing', 'heli', 'seadrone', 'boat', 'bridge_road', 'bridge_rail']);
-const TURRET_SKIP = new Set(['leopard', 't72', 't90', 'bradley', 'bmp', 'gepard', 'spg']);
+const TURRET_SKIP = new Set(['leopard', 't72', 't90', 'bradley', 'bmp', 'gepard', 'spg', 'tankdestroyer']);
 
 export function buildModel(type, side, season, quality) {
   initMats();
@@ -1582,6 +1619,7 @@ export function buildModel(type, side, season, quality) {
     case 'bradley': r = ifv(side, 'bradley'); break;
     case 'bmp': r = ifv(side, 'bmp'); break;
     case 'btr': r = ifv(side, 'btr'); break;
+    case 'tankdestroyer': r = tankDestroyer(side); break;
     case 'gepard': r = gepard(side); break;
     case 'himars': r = launcherTruck(side, 'himars'); break;
     case 'patriot': r = launcherTruck(side, 'patriot'); break;

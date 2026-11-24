@@ -234,6 +234,7 @@ export class Game {
       if (opts.rot !== undefined) { u.heading = opts.rot; u.root.rotation.y = opts.rot; u.root.updateMatrix(); }
     }
     if (opts.order) u.moveTo(opts.order[0], opts.order[1]);
+    this.mission?.onSpawn?.(this, u, opts); // MP-T7: missionsspezifische Einheitenwerte (Gefecht: Fraktionsausgleich)
     return u;
   }
   // Gruppe in Formation spawnen
@@ -629,7 +630,7 @@ export class Game {
   // ================== Sicht ==================
   // Effektive Sichtweite eines Beobachters (Gebäude-Besatzung: höhere Position)
   sightOf(o) {
-    let s = o.type.sight;
+    let s = o.type.sight * (o.sightMul || 1); // sightMul: Gefechts-Fraktionsausgleich (MP-T7), sonst 1
     if (o.garrison) s *= Math.min(1.5, 1 + 0.1 * (o.garrison.houseDef?.floors || 1)) * (o.type.key.includes('sniper') ? 1.15 : 1);
     return s;
   }

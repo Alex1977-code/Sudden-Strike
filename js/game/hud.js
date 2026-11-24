@@ -108,9 +108,9 @@ export class HUD {
     if (!sel.length) { this.selEl.innerHTML = ''; return; }
     if (sel.length === 1) {
       const u = sel[0];
-      const w = u.type.weaponDefs.map((w) => w.name).join(', ') || 'unbewaffnet';
+      const w = u.weapons.map((ws) => ws.def.name).join(', ') || 'unbewaffnet'; // MP-T7: Einheitenwaffen (Gefecht ggf. ergänzt)
       const side = g.isOwn(u) ? '' : u.side === g.localSide ? `<span style="color:#5db8ff">Verbündet${g.playerById(u.owner) ? ' (' + g.playerById(u.owner).name + ')' : ''}</span> · ` : u.abandoned ? '<span style="color:#ffd500">Verlassen</span> · ' : u.side === 'N' ? '<span class="muted">Neutral</span> · ' : '<span style="color:#ff6b6b">Feind</span> · ';
-      this.selEl.innerHTML = `${this._unitBox(u, 1)}<div class="sel-detail"><b>${u.name}</b><br>${side}<span class="muted">${w}</span><br><span class="muted">${u.abandoned ? 'Verlassen – Infanterie kann das Fahrzeug übernehmen, Bergepanzer reparieren.' : (u.type.desc || '')}</span>${u.holdFire ? '<br><span style="color:#ffd500">Feuer halten</span>' : ''}<div class="logi"></div><span class="hpnum"></span></div>`;
+      this.selEl.innerHTML = `${this._unitBox(u, 1)}<div class="sel-detail"><b>${u.name}</b><br>${side}<span class="muted">${w}</span><br><span class="muted">${u.abandoned ? 'Verlassen – Infanterie kann das Fahrzeug übernehmen, Bergepanzer reparieren.' : (u.type.desc || '')}</span>${u.holdFire ? '<br><span style="color:#ffd500">Feuer halten</span>' : ''}<div class="logi"></div><span class="hpnum"></span></div><div class="sel-mini"><b>${u.name}</b> <span class="logi-m">${this.logiShort(u)}</span></div>`;
       this.selEl.firstChild.onclick = () => g.camera.focus(u.pos.x, u.pos.z);
       return;
     }
@@ -121,16 +121,19 @@ export class HUD {
     for (const [k, list] of groups) {
       const avg = list.reduce((s, u) => s + u.hp / u.maxHp, 0) / list.length;
       const d = document.createElement('div');
-      d.innerHTML = this._unitBox(list[0], avg, list.length);
+      d.innerHTML = this._unitBox(list[0], avg, list.length, g.logistics && list[0].supply ? this._supplyFrac(list) : null);
       const el = d.firstChild;
+      el.dataset.k = k;
       el.title = list[0].name;
       el.onclick = () => g.select(list);
       this.selEl.appendChild(el);
     }
   }
-  _unitBox(u, hp, cnt) {
+  _unitBox(u, hp, cnt, sup = null) {
     const col = hp > 0.6 ? '#46c46b' : hp > 0.3 ? '#e5b93e' : '#e5484d';
-    return `<div class="sel-unit" title="${u.name}">${u.type.icon}${cnt > 1 ? `<span class="cnt">${cnt}</span>` : ''}<div class="hp"><i style="width:${Math.max(0, hp * 100)}%;background:${col}"></i></div></div>`;
+    if (sup === null && cnt === undefined && this.game.logistics && u.supply) sup = this._supplyFrac([u]);
+    const supBar = sup !== null ? `<div class="sup" title="Lkw-Vorrat"><i style="width:${Math.max(0, sup * 100)}%"></i></div>` : '';
+    return `<div class="sel-unit" title="${u.name}">${u.type.icon}${cnt > 1 ? `<span class="cnt">${cnt}</span>` : ''}${supBar}<div class="hp"><i style="width:${Math.max(0, hp * 100)}%;background:${col}"></i></div></div>`;
   }
 
   // ---------- Fähigkeiten ----------
@@ -383,6 +386,16 @@ export class HUD {
       if (bar) { const hp = Math.max(0, u.hp / u.maxHp); bar.style.width = hp * 100 + '%'; }
       const lg = this.selEl.querySelector('.logi');
       if (lg) lg.innerHTML = this.logiText(u);
+      const lm = this.selEl.querySelector('.logi-m');
+      if (lm) lm.innerHTML = this.logiShort(u);
+      const sb = this.selEl.querySelector('.sup i');
+      if (sb && u.supply) sb.style.width = this._supplyFrac([u]) * 100 + '%';
+    } else if (sel.length > 1) {
+      // Gruppen: Vorratsbalken der Versorgungs-Lkw aktualisieren
+      for (const el of this.selEl.querySelectorAll('.sel-unit[data-k]')) {
+        const list = sel.filter((u) => u.alive && u.type.key === el.dataset.k);
+        const i = el.querySelector('.sup i'); if (i && list.length) i.style.width = this._supplyFrac(list) * 100 + '%';
+      }
     }
     this.refreshBuildbar();
   }
@@ -400,6 +413,20 @@ export class HUD {
     if (u.build && u.build.progress < 1) parts.push(`Bau ${Math.round(u.build.progress * 100)} %`);
     return parts.join(' · ');
   }
+  // Kompakte Logistikzeile für die Handy-Auswahl (MP-T7): Munition, Treibstoff, Material, Lkw-Vorrat
+  logiShort(u) {
+    if (!this.game.logistics || u.side !== this.game.localSide) return '';
+    const p = [];
+    const am = u.ammoInfo();
+    if (am) p.push(`<span title="Munition">🎯${Math.floor(am.cur)}/${am.max}</span>`);
+    if (u.maxFuel) p.push(`<span title="Treibstoff">⛽${Math.round(u.fuel / u.maxFuel * 100)}%</span>`);
+    if (u.maxMaterial) p.push(`<span title="Material">🧱${Math.floor(u.material + 1e-6)}/${u.maxMaterial}</span>`);
+    if (u.supply) p.push(`<span class="sup-txt" title="Lkw-Vorrat Munition · Treibstoff · Material">📦 M${Math.round(u.supply.ammo / u.type.supply.ammo * 100)}% S${Math.round(u.supply.fuel / u.type.supply.fuel * 100)}% B${Math.floor(u.supply.material)}</span>`);
+    if (u.immobilized) p.push('<span style="color:#ff8a8a">Kette!</span>');
+    else if (u.maxFuel && u.fuel <= 0) p.push('<span style="color:#ff8a8a">Tank leer</span>');
+    return p.join(' ');
+  }
+  _supplyFrac(list) { return list.reduce((s, u) => s + (u.supply ? (u.supply.ammo / u.type.supply.ammo + u.supply.fuel / u.type.supply.fuel) / 2 : 0), 0) / list.length; }
   // Befehlsleiste für Pioniere (Bauen, Minen räumen, Sprengen) und Fahrzeuge (Aussteigen)
   refreshBuildbar(force = false) {
     const g = this.game, el = this.buildEl;

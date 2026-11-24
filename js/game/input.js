@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { clamp, lerp } from '../engine/util.js';
 import { UNIT_TYPES } from './unitTypes.js';
+import { knownHostile } from './garrison.js';
 
 export class RTSCamera {
   constructor(game, cam) {
@@ -178,8 +179,9 @@ export class Input {
       }
     }
     if (u && u.type.key === 'house' && !attackMove) {
-      // Haus: Infanterie besetzt (eigene/leere Häuser), alle anderen und Feindbesatzung → Angriff
-      const mine = !u.occupants?.length || u.garrisonSide === g.localSide;
+      // Haus: Infanterie besetzt (eigene/leere Häuser), alle anderen und erkannte Feindbesatzung → Angriff
+      // (MP-T7: nur aufgeklärte Feindbesatzung zählt – sonst verriete die Reaktion die Besetzung)
+      const mine = !knownHostile(g, u, g.localSide);
       const inf = own.filter((o) => o.type.infantry && !o.type.kamikaze);
       if (mine && inf.length) {
         g.issueCommand({ t: 'garrison', ids: inf.map((o) => o.id), target: u.id });

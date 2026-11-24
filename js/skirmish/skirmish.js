@@ -16,7 +16,7 @@
 import * as THREE from 'three';
 import { generateSkirmishMap, MAP_PRESETS, MAP_SIZES } from './maps.js';
 import { AICommander, TeamIntel } from './ai.js';
-import { UNIT_TYPES } from '../game/unitTypes.js';
+import { UNIT_TYPES, W } from '../game/unitTypes.js';
 
 export const TEAM_NAME = { UA: 'Ukraine', RU: 'Russland' };
 export const TEAM_COLOR = { UA: '#2f7de1', RU: '#e5484d', N: '#8c9096' };
@@ -32,7 +32,7 @@ export const CP_ICON = { zeppelin: 'Z', aerostat: 'B', airfield: 'F', depot: 'D'
 export const CAPTURE_TIME = 6; // Sekunden bis zum Besitzerwechsel
 
 // ---------- Startarmeen je Rolle und Fraktion ----------
-const ARMIES = {
+export const ARMIES = {
   armor: {
     UA: [['leopard', 3], ['bradley', 2], ['rifle', 4], ['javelin', 1], ['mg', 1], ['stinger', 1], ['ua_engineer', 1]],
     RU: [['t90', 2], ['t72', 2], ['bmp', 2], ['btr', 1], ['e_rifle', 5], ['e_atgm', 1], ['e_igla', 1], ['e_engineer', 1]],
@@ -51,14 +51,14 @@ const ARMIES = {
   },
 };
 // Fähigkeiten je Rolle
-const ABIL = {
+export const ABIL = {
   armor: { UA: ['scan', { id: 'artillery', charges: 3 }], RU: ['scan', { id: 'artillery', charges: 3 }] },
   infantry: { UA: [{ id: 'fpv', charges: 6 }, 'scan'], RU: [{ id: 'lancet', charges: 6 }, 'scan'] },
   support: { UA: ['himars', 'artillery', 'scan', 'ew'], RU: ['artillery', 'scan', 'ew'] },
   logistics: { UA: ['scan', { id: 'artillery', charges: 3 }], RU: ['scan', { id: 'artillery', charges: 3 }] },
 };
 // Verstärkungs-Reihenfolge je Rolle (wird zyklisch abgearbeitet)
-const REINF = {
+export const REINF = {
   armor: { UA: ['leopard', 'rifle', 'bradley', 'rifle', 'javelin', 'leopard', 'mg', 'bradley'], RU: ['t90', 'e_rifle', 'bmp', 'e_rifle', 'e_rpg', 't72', 'e_mg', 'btr'] },
   infantry: { UA: ['rifle', 'rifle', 'javelin', 'mg', 'sniper', 'rifle', 'sso', 'javelin'], RU: ['e_rifle', 'e_rifle', 'e_atgm', 'e_mg', 'e_sniper', 'e_rifle', 'e_spetsnaz', 'e_atgm'] },
   support: { UA: ['rifle', 'gepard', 'javelin', 'rifle', 'stinger', 'pickup'], RU: ['e_rifle', 'pantsir', 'e_atgm', 'e_rifle', 'e_igla', 'btr'] },
@@ -69,10 +69,68 @@ const PARA = { UA: 'rifle', RU: 'e_rifle' };
 // Kampagne qualitativ überlegen (Leopard ≈ 1,7× Feuerkraft eines T-90, Bradley mit TOW …). Russland erhält dafür
 // mehr Einheiten (Masse statt Klasse) und robustere Fahrzeuge/Infanterie (hpMul beim Spawnen).
 export const FACTION_HP = { t90: 1.35, t72: 1.3, bmp: 1.3, btr: 1.2, pantsir: 1.15, msta: 1.1, e_rifle: 1.1, e_mg: 1.1, e_atgm: 1.1, e_rpg: 1.1 };
+// MP-T7: weitere Gefechtswerte je Typ (nur im Gefecht, per mission.onSpawn je Einheit; UNIT_TYPES/W bleiben unverändert):
+//   sight = Faktor Sichtweite (u.sightMul), weapons = { Waffenschlüssel: Überschreibungen } (je Einheit geklonte Waffe),
+//   add = zusätzliche Gefechtswaffen (SK_WEAPONS) hinter den Typwaffen.
+// Begründung (MP-T7, KI-gegen-KI-Analyse): Mit den T4c-Sichtlinien entscheidet der erste Schuss. Der Leopard sah (38 m)
+// und traf (46 m, 60 Schaden/s) weiter und öfter als T-72/T-90 (34–36 m, 42 m, 35 Schaden/s); der Bradley hat TOW, der BMP
+// keine Panzerabwehr; RU-Infanterie sah 2 m kürzer; Lancet schwächer als FPV. Folge: russische Panzer- und
+// Infanterierollen verloren jedes Treffen (Abschüsse je Rolle bis 1:5) und das Team brach nach 3–6 min ein.
+const T125 = { range: 44, reload: 5.2, acc: 0.78 };            // 125 mm mit moderner Feuerleitung (T-72B3/T-90M)
+const RIFLE_RU = { range: 24, acc: 0.53, reload: 1.45 };
+const INF_SIGHT = 34 / 32;                                     // RU-Infanterie sieht wie UA-Infanterie
+export const FACTION_MODS = {
+  t90: { sight: 38 / 36, weapons: { tank125: T125 } },
+  t72: { sight: 37 / 34, weapons: { tank125: T125 } },
+  bmp: { sight: 35 / 32, add: ['konkurs'] },                   // BMP-2 mit 9M113 Konkurs (Gegenstück zum TOW des Bradley)
+  btr: { sight: 34 / 32 },
+  e_rifle: { sight: INF_SIGHT, weapons: { rifleRU: RIFLE_RU } },
+  e_mg: { sight: INF_SIGHT },
+  e_rpg: { sight: INF_SIGHT, weapons: { rifleRU: RIFLE_RU } },
+  e_atgm: { sight: 1, weapons: { kornet: { dmg: 500, reload: 10, acc: 0.88 }, rifleRU: RIFLE_RU } },
+  e_engineer: { sight: INF_SIGHT },
+  e_medic: { sight: 30 / 28 },
+  e_recon: { sight: INF_SIGHT },
+  e_observer: { sight: 1 },
+  lancet: { weapons: { lancet: { dmg: 480, vs: { soft: 0.6, light: 1, heavy: 1, air: 0, struct: 0.4 } } } }, // wie FPV
+};
+// Gefechtswaffen, die es in der Kampagne nicht gibt
+export const SK_WEAPONS = {
+  konkurs: { name: '9M113 Konkurs', kind: 'atgm', range: 44, dmg: 420, reload: 12, acc: 0.8, vs: { soft: 0.2, light: 1, heavy: 1, air: 0, struct: 0.35 }, speed: 40, splash: 2, sound: 'missile', groundTargetsOnly: true, prefer: ['heavy'], straight: true, stock: 4, wt: 14 },
+};
+const _wClone = new Map();
+function skWeapon(key, over) {
+  const id = key + JSON.stringify(over || {});
+  let d = _wClone.get(id);
+  if (!d) { d = { ...(W[key] || SK_WEAPONS[key]), ...(over || {}) }; _wClone.set(id, d); }
+  return d;
+}
+// Fraktionswerte auf eine frisch gespawnte Einheit anwenden (HP, Sicht, Waffen) – Host und Online-Client gleich
+export function applyFactionMods(g, u) {
+  const key = u.type.key;
+  const k = FACTION_HP[key];
+  if (k) { u.maxHp = Math.round(u.maxHp * k); u.hp = u.maxHp; }
+  const m = FACTION_MODS[key];
+  if (!m) return;
+  if (m.sight) u.sightMul = m.sight;
+  const L = !!g.logistics;
+  const mk = (def) => ({ def, cd: Math.random() * (def.reload || 1), ammo: def.ammo ?? Infinity, reloadT: 0, target: null, acqT: Math.random() * 0.4, stock: L && def.stock ? def.stock : Infinity, stockMax: L && def.stock ? def.stock : Infinity });
+  if (m.weapons) u.type.weapons.forEach((wk, i) => { if (m.weapons[wk] && u.weapons[i]) { const ws = mk(skWeapon(wk, m.weapons[wk])); ws.cd = u.weapons[i].cd; u.weapons[i] = ws; } });
+  if (m.add) for (const wk of m.add) u.weapons.push(mk(skWeapon(wk)));
+}
 export const REINF_BONUS = { UA: 0, RU: 0 }; // Zusatz-Einheit je Paket ab 3 Einheiten (derzeit aus)
+// MP-T7 Materialschlacht statt Schneeball: Vorher bekam nur der Punktbesitzer Nachschub; wer das erste Treffen verlor,
+// bekam 3 Reservisten je Spieler und war nach 3–6 min dauerhaft unterlegen (Partien 900:150 nach 16 min, auch bei
+// gespiegelten Armeen). Jetzt:
+//   BASE_REINF   – Grundnachschub je Spieler und Countdown (unabhängig von Punkten, aus der Rollenliste)
+//   CATCHUP      – das Team mit weniger Punkt-Nachschub erhält diesen Anteil der Differenz zusätzlich (reihum verteilt)
+//   POINTS_LIMIT_MUL – Punkte-Limit = Summe Punktwerte × 100 × Faktor (Partiedauer 25–45 min)
+export const BASE_REINF = 2;
+export const CATCHUP = 0.65;
+export const POINTS_LIMIT_MUL = 1.0;
 // Reserve (Aufholmechanik): Beim Countdown erhält das Team mit weniger gehaltenen Punkten je Spieler mit < 8 Bodeneinheiten
 // einen kleinen Reservetrupp am eigenen Aufmarschraum.
-const RESERVE = { UA: ['rifle', 'rifle', 'javelin'], RU: ['e_rifle', 'e_rifle', 'e_atgm'] };
+export const RESERVE = { UA: ['rifle', 'rifle', 'javelin'], RU: ['e_rifle', 'e_rifle', 'e_atgm'] };
 // Verstärkungsumfang je Punkt (value: Zentrum-Zeppelin 3, sonst 1–2)
 export function reinforceSize(cp) {
   if (cp.kind === 'zeppelin') return 3 + cp.value; // 5–6 (+ Fallschirmtrupp)
@@ -140,7 +198,7 @@ export function createSkirmish(setup) {
   const popCap = Math.max(18, Math.min(40, Math.floor(220 / nPlayers)));
   const totalValue = gen.capturePoints.reduce((s, c) => s + c.value, 0);
   const timeLimit = S.timeLimit || (S.victory.startsWith('time') ? +S.victory.slice(4) * 60 : null);
-  const pointsLimit = S.victory === 'points' ? (S.pointsLimit || totalValue * 100) : null;
+  const pointsLimit = S.victory === 'points' ? (S.pointsLimit || Math.round(totalValue * 100 * POINTS_LIMIT_MUL / 50) * 50) : null;
   const localPl = players.find((p) => p.local) || players[0];
   const myTeam = localPl.team;
   const mySpawn = gen.spawns[myTeam][localPl.slot] || gen.spawns[myTeam][0];
@@ -155,6 +213,8 @@ export function createSkirmish(setup) {
     camera: { x: mySpawn.x, z: mySpawn.z + (myTeam === 'UA' ? -16 : 16), dist: camBase.dist, yaw: camBase.yaw },
     players: players.map((p) => ({ ...p })),
     noDefaultDefeat: true,
+    // MP-T7: Fraktionsausgleich je gespawnter Einheit (Startarmee, Verstärkung, Fallschirmjäger, Besatzungen, Online-Spiegel)
+    onSpawn(g, u) { if (u.side === 'UA' || u.side === 'RU') applyFactionMods(g, u); },
     logistics: true, // Munition, Treibstoff, Versorgung, Pioniere, Besatzungen (MP-T4b)
     friendlyEdges: { UA: [0, half + 40], RU: [0, -half - 40] },
     markers: [],
@@ -346,13 +406,8 @@ function spawnArmy(g, p, S, sk) {
     ...g.spawnGroup(inf, team, sp.x, sp.z + dir * 11, { ...opts, spacing: 3.2, cols: 6 }),
   ];
   for (const [t, n] of air) for (let i = 0; i < n; i++) out.push(g.spawn(t, team, sp.x + (i - 0.5) * 4, sp.z + dir * 4, opts));
-  for (const u of out) applyFactionHp(u);
 }
 
-function applyFactionHp(u) {
-  const k = FACTION_HP[u.type.key];
-  if (k) { u.maxHp = Math.round(u.maxHp * k); u.hp = u.maxHp; }
-}
 
 // ---------- Eroberung ----------
 function updateCapture(g, sk, dt) {
@@ -422,27 +477,46 @@ function nextRecipient(g, sk, team) {
 }
 function unitCount(g, p) { let n = 0; for (const u of g.units) if (u.alive && u.owner === p.id && !u.type.structure && !u.type.kamikaze) n++; return n; }
 function deliverReinforcements(g, sk) {
-  const summary = { UA: 0, RU: 0 };
+  const summary = { UA: 0, RU: 0 }, pkg = { UA: 0, RU: 0 }, extra = { UA: 0, RU: 0 };
   let said = 0;
+  // Alle Neuzugänge eines Spielers rücken als eine Kolonne ein (keine übereinanderliegenden Spawns)
+  const queue = new Map(), queued = (p) => queue.get(p.id)?.types.length || 0;
+  const enqueue = (p, types) => { if (!queue.has(p.id)) queue.set(p.id, { p, types: [] }); queue.get(p.id).types.push(...types); };
   for (const cp of sk.points) {
     if (!cp.owner) continue;
     const team = cp.owner;
     const p = nextRecipient(g, sk, team);
     if (!p) { sk.log.push({ t: g.time, type: 'reinforceSkipped', cp: cp.id, team }); continue; }
-    const room = sk.popCap - unitCount(g, p);
+    const room = sk.popCap - unitCount(g, p) - queued(p);
     const base = reinforceSize(cp);
     const n = Math.min(base + (base >= 3 ? REINF_BONUS[team] : 0), room);
-    const types = [];
-    const q = REINF[p.role][team];
-    for (let i = 0; i < n; i++) types.push(q[(sk.reinfIdx[p.id]++) % q.length]);
-    spawnColumn(g, p, types);
+    const types = nextTypes(sk, p, n);
+    enqueue(p, types);
     let para = 0;
     if (cp.kind === 'zeppelin' && room - n >= 2) { para = 2; paradrop(g, p, cp, PARA[team], para); }
     if (cp.kind === 'zeppelin') for (const a of p.abilities) if (a.charges !== Infinity) a.charges += 1;
     p.stats.reinf += n + para;
+    pkg[team] += n + para;
     summary[team]++;
     sk.log.push({ t: g.time, type: 'reinforce', cp: cp.id, name: cp.name, kind: cp.kind, team, player: p.id, n: n + para, types });
     if (said < 3) { said++; for (const t of ['UA', 'RU']) g.sayTo(t, team === t ? 'Stab' : 'Aufklärung', `${cp.name}: Verstärkung für Team ${TEAM_NAME[team]} (${p.name})`, 3.5); }
+  }
+  // Grundnachschub (jeder Spieler) und Aufholnachschub (Team mit weniger Punkt-Nachschub) – MP-T7
+  const give = (p, n, kind) => {
+    const room = sk.popCap - unitCount(g, p) - queued(p);
+    n = Math.min(n, room);
+    if (n <= 0) return 0;
+    const types = nextTypes(sk, p, n);
+    enqueue(p, types);
+    p.stats.reinf += n;
+    sk.log.push({ t: g.time, type: kind, team: p.team, player: p.id, n, types });
+    return n;
+  };
+  for (const p of g.players) if (!p.defeated && (p.team === 'UA' || p.team === 'RU')) extra[p.team] += give(p, BASE_REINF, 'baseReinforce');
+  for (const team of ['UA', 'RU']) {
+    let n = Math.round((pkg[other(team)] - pkg[team]) * CATCHUP);
+    const ps = g.playersOfTeam(team).filter((p) => !p.defeated);
+    for (let k = 0; n > 0 && ps.length && k < ps.length * 8; k++) { const got = give(ps[(sk.rr[team] + k) % ps.length], 1, 'catchUp'); n -= got; extra[team] += got; }
   }
   // Reserve für das unterlegene Team
   const held = { UA: 0, RU: 0 };
@@ -452,20 +526,27 @@ function deliverReinforcements(g, sk) {
     for (const p of g.playersOfTeam(team)) {
       if (p.defeated) continue;
       let ground = 0; for (const u of g.units) if (u.owner === p.id && isGround(u)) ground++;
-      const room = sk.popCap - unitCount(g, p);
+      const room = sk.popCap - unitCount(g, p) - queued(p);
       if (ground >= 8 || room <= 0) continue;
       const types = RESERVE[team].slice(0, room);
-      spawnColumn(g, p, types);
+      enqueue(p, types);
       p.stats.reinf += types.length;
       sk.log.push({ t: g.time, type: 'reserve', team, player: p.id, n: types.length, types });
     }
   }
+  for (const { p, types } of queue.values()) spawnColumn(g, p, types);
   g.emit('abilities');
   for (const ls of ['UA', 'RU']) {
-    g.alertTo(ls, `Verstärkung! ${TEAM_NAME[ls]}: ${summary[ls]} Punkt(e) · ${TEAM_NAME[other(ls)]}: ${summary[other(ls)]} Punkt(e)`, 4);
+    g.alertTo(ls, `Verstärkung! ${TEAM_NAME[ls]}: ${summary[ls]} Punkt(e) · ${TEAM_NAME[other(ls)]}: ${summary[other(ls)]} Punkt(e)${extra[ls] ? ` · +${extra[ls]} Frontnachschub` : ''}`, 4);
     g.uiTo(ls, summary[ls] >= summary[other(ls)] ? 'obj' : 'fail');
   }
   g.emit('reinforcements', summary);
+}
+// Nächste Einheitentypen aus der Verstärkungsliste der Rolle (zyklisch)
+function nextTypes(sk, p, n) {
+  const q = REINF[p.role][p.team], out = [];
+  for (let i = 0; i < n; i++) out.push(q[(sk.reinfIdx[p.id]++) % q.length]);
+  return out;
 }
 // Kolonne rückt vom Kartenrand hinter dem Spawn ein
 function spawnColumn(g, p, types) {
@@ -479,7 +560,6 @@ function spawnColumn(g, p, types) {
     g.later(0.2 + i * 0.9, () => {
       if (g.ended) return;
       const u = g.spawn(t, team, ex + (Math.random() - 0.5) * 2, ez, { owner: p.id, heading: team === 'UA' ? Math.PI : 0 });
-      applyFactionHp(u);
       const col = i % 3 - 1, row = Math.floor(i / 3);
       u.moveTo(sp.x + col * 6, sp.z - sgn * (6 + row * 6));
     });
@@ -508,7 +588,7 @@ function paradrop(g, p, cp, type, n) {
           grp.parent.remove(grp);
           // MP-T6: GPU-Ressourcen freigeben (Schirm-Geometrie ist geteilt)
           mat.dispose(); man.geometry.dispose(); man.material.dispose();
-          if (!g.ended && !p.defeated) applyFactionHp(g.spawn(type, p.team, x, z, { owner: p.id }));
+          if (!g.ended && !p.defeated) g.spawn(type, p.team, x, z, { owner: p.id });
         }
       },
     }));
