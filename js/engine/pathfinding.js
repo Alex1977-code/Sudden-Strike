@@ -75,14 +75,21 @@ export class Pathfinder {
     }
     this._sb.set(t.gBlocked); this._sh.set(t.gHard);
     for (let k = 0; k < n; k++) this.obs[k] = this.fieldObstacle(k) ? 1 : 0;
-    this._recompute(0, 0, t.gw - 1, t.gw - 1);
+    // Summentabelle der Hindernisse: Zellen ohne Hindernis im Umkreis CLR_R erhalten sofort den Höchstwert
+    const gw = t.gw, W = gw + 1, sat = new Int32Array(W * W);
+    for (let j = 0; j < gw; j++) { let row = 0; for (let i = 0; i < gw; i++) { row += this.obs[j * gw + i]; sat[(j + 1) * W + i + 1] = sat[j * W + i + 1] + row; } }
+    this._recompute(0, 0, gw - 1, gw - 1, sat);
   }
-  _recompute(i0, j0, i1, j1) {
-    const gw = this.t.gw, obs = this.obs, clr = this.clr;
+  _recompute(i0, j0, i1, j1, sat = null) {
+    const gw = this.t.gw, obs = this.obs, clr = this.clr, W = gw + 1;
     i0 = Math.max(0, i0); j0 = Math.max(0, j0); i1 = Math.min(gw - 1, i1); j1 = Math.min(gw - 1, j1);
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
       const k = j * gw + i;
       if (obs[k]) { clr[k] = 0; continue; }
+      if (sat) {
+        const a = Math.max(0, i - CLR_R), b = Math.max(0, j - CLR_R), c = Math.min(gw, i + CLR_R + 1), e = Math.min(gw, j + CLR_R + 1);
+        if (sat[e * W + c] - sat[b * W + c] - sat[e * W + a] + sat[b * W + a] === 0) { clr[k] = CLR_MAX; continue; }
+      }
       let d = CLR_MAX;
       for (let q = 0; q < OFFS.length; q++) {
         const o = OFFS[q], x = i + o[0], y = j + o[1];
@@ -108,6 +115,7 @@ export class Pathfinder {
     for (let q = 0; q < w; q++) if (B32[q] !== sb32[q] || H32[q] !== sh32[q]) { const k = q << 2; check(k); check(k + 1); check(k + 2); check(k + 3); }
     for (let k = w << 2; k < n; k++) check(k);
     if (!changed) return 0;
+    if (changed.length > 600) { this.buildField(); return changed.length; } // Großänderung: neu aufbauen (schneller)
     // Änderungen zu Rechtecken bündeln und nur die Umgebung (± CLR_R) neu berechnen
     const rects = [];
     for (const k of changed) {

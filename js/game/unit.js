@@ -47,7 +47,6 @@ function footPen(u, x, z, h, m = FP_M) {
   return pen;
 }
 // Gilt der Grundflächentest für diese Einheit? (Bodenfahrzeuge, keine Boote/Bauwerke)
-if (typeof window !== "undefined") window.__fpPen = (u, x, z, h) => footPen(u, x, z, h, 0); // DEBUG-TEMP
 function usesFootprint(u) { const ty = u.type; return !!ty.vehicle && !ty.air && !ty.naval && !ty.structure && !!u.game.pathfinder?.hardBlock; }
 
 export class Unit {

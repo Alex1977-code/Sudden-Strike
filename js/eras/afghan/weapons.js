@@ -46,6 +46,14 @@ export const AF_WEAPONS = {
   af_yakb: { name: 'JakB-12,7', kind: 'bullet', range: 34, dmg: 16, reload: 0.7, acc: 0.55, vs: { soft: 1, light: 0.5, heavy: 0.03, air: 0.3, struct: 0.08 }, sound: 'dshk', tracer: 'r', burst: 5, groundTargetsOnly: true, stock: 500, wt: 0.4 },
   af_s8: { name: 'S-8 Raketen', kind: 'atgm', range: 40, dmg: 210, reload: 4, acc: 0.6, vs: { soft: 1, light: 1, heavy: 0.5, air: 0, struct: 0.6 }, speed: 75, splash: 4, sound: 'rocket_salvo', groundTargetsOnly: true, prefer: ['soft', 'light'], straight: true, stock: 16, wt: 8 },
   af_shturm: { name: '9M114 Shturm', kind: 'atgm', range: 50, dmg: 430, reload: 9, acc: 0.85, vs: { soft: 0.25, light: 1, heavy: 1, air: 0, struct: 0.4 }, speed: 55, splash: 2.2, sound: 'atgm', groundTargetsOnly: true, prefer: ['heavy', 'light'], straight: true, stock: 8, wt: 14 },
+  // ---------- Granaten (kind 'grenade': Wurf-/Bogenlogik im Kern; fuse = Zündverzögerung in s) ----------
+  // Reichweiten im Spielmaßstab (Gewehr 24): Handgranate 14, Unterlauf-Granatwerfer 36, Granatmaschinenwaffe 38.
+  af_dm51: { name: 'DM51 Handgranate', kind: 'grenade', range: 14, dmg: 95, reload: 9, acc: 0.7, vs: { soft: 1, light: 0.12, heavy: 0, air: 0, struct: 0.25 }, splash: 5, fuse: 3, sound: 'grenade', groundTargetsOnly: true, indirect: false, ammo: 2, reloadAmmo: 18, stock: 4, wt: 0.3 },
+  af_f1: { name: 'F-1 Handgranate', kind: 'grenade', range: 14, dmg: 100, reload: 9, acc: 0.65, vs: { soft: 1, light: 0.12, heavy: 0, air: 0, struct: 0.25 }, splash: 5.5, fuse: 3.5, sound: 'grenade', groundTargetsOnly: true, ammo: 2, reloadAmmo: 18, stock: 4, wt: 0.3 },
+  af_rgd5: { name: 'RGD-5 Handgranate', kind: 'grenade', range: 15, dmg: 80, reload: 8, acc: 0.65, vs: { soft: 1, light: 0.1, heavy: 0, air: 0, struct: 0.2 }, splash: 4.5, fuse: 3.2, sound: 'grenade', groundTargetsOnly: true, ammo: 3, reloadAmmo: 18, stock: 5, wt: 0.3 },
+  af_gp25: { name: 'GP-25 Unterlauf-Granatwerfer', kind: 'grenade', range: 36, minRange: 6, dmg: 110, reload: 10, acc: 0.55, vs: { soft: 1, light: 0.15, heavy: 0, air: 0, struct: 0.3 }, splash: 5, fuse: 1.5, sound: 'grenade', groundTargetsOnly: true, ammo: 3, reloadAmmo: 22, stock: 8, wt: 0.4 },
+  af_ag36: { name: 'AG36 Granatwerfer', kind: 'grenade', range: 36, minRange: 6, dmg: 105, reload: 9, acc: 0.6, vs: { soft: 1, light: 0.15, heavy: 0, air: 0, struct: 0.3 }, splash: 5, fuse: 1.5, sound: 'grenade', groundTargetsOnly: true, ammo: 3, reloadAmmo: 22, stock: 8, wt: 0.4 },
+  af_ags17: { name: 'AGS-17 Granatmaschinenwaffe', kind: 'bullet', range: 38, dmg: 14, reload: 1.2, acc: 0.5, vs: { soft: 1, light: 0.3, heavy: 0, air: 0, struct: 0.1 }, sound: 'grenade', tracer: 'r', burst: 3, splash: 2.2, groundTargetsOnly: true, stock: 300, wt: 0.5 },
 };
 
 registerWeapons(AF_WEAPONS);
