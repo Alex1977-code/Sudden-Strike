@@ -58,7 +58,7 @@ export class Pathfinder {
   // Harte Hinderniszelle für Fahrzeuge (Abstandsfeld + Grundflächentest); Unterklassen ergänzen (Panzersperren)
   hardBlock(k) {
     const t = this.t, b = t.gBlocked[k];
-    return b !== 0 && (t.gHard[k] === 1 || b === 2 || b === 3);
+    return t.gHard[k] === 1 || b === 2 || b === 3;
   }
   fieldObstacle(k) { return this.t.gWater[k] === 1 || this.hardBlock(k); }
   // ---------- Abstandsfeld ----------
@@ -158,7 +158,9 @@ export class Pathfinder {
     let targetAdjusted = false;
     if (!this.passable(ej * gw + ei, mode)) { const p = this.nearestPassable(ei, ej, mode); if (!p) return null; [ei, ej] = p; targetAdjusted = true; }
     // Ziel zu eng für die Fahrzeugbreite: nächstgelegene ausreichend breite Zelle anfahren
-    if (wide && clr[ej * gw + ei] < cmin) { const p = this.nearestPassable(ei, ej, mode, cmin); if (p && Math.max(Math.abs(p[0] - ei), Math.abs(p[1] - ej)) <= 6) { [ei, ej] = p; targetAdjusted = true; } }
+    // (das eigentliche Ziel bleibt letzter Wegpunkt: das Fahrzeug fährt so nah heran, wie die Grundfläche erlaubt)
+    let squeeze = false;
+    if (wide && clr[ej * gw + ei] < cmin) { const p = this.nearestPassable(ei, ej, mode, cmin); if (p && Math.max(Math.abs(p[0] - ei), Math.abs(p[1] - ej)) <= 6) { [ei, ej] = p; squeeze = !targetAdjusted; targetAdjusted = true; } }
     const start = sj * gw + si, goal = ej * gw + ei;
     if (start === goal) return [[ex, ez]];
     this.cur++;
@@ -221,6 +223,7 @@ export class Pathfinder {
     pts.push(cells[cells.length - 1]);
     const world = pts.slice(1).map((k) => t.cellCenter(k % gw, (k / gw) | 0));
     if (found && !targetAdjusted) { if (world.length) world[world.length - 1] = [ex, ez]; else world.push([ex, ez]); }
+    else if (found && squeeze) world.push([ex, ez]);
     return world.length ? world : [[ex, ez]];
   }
   // need > 0: jede überstrichene Zelle braucht Abstandsfeld ≥ need (Korridortest mit Fahrzeugbreite)

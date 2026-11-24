@@ -13,18 +13,20 @@ const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Qua
 // Orientiertes Rechteck (Halbachsen 0,55·radius quer, 1,15·radius längs ≈ Wanne) gegen harte Hinderniszellen
 // (Gebäude, Bauwerke, Wracks, Panzersperren; pf.hardBlock). Liefert die größte Eindringtiefe (m) und in _fp.nx/_fp.nz
 // die Richtung, in die die Einheit herausgedrückt wird. Steile Hänge und Ufer prüft weiterhin nur der Mittelpunkt.
-const FP_EPS = 0.01;
+// FP_M: Sicherheitsabstand, den Bewegung und Herausdrücken zusätzlich einhalten (fängt das Abdrängen durch
+// Nachbareinheiten in game.separate ab, das nur den Mittelpunkt prüft).
+const FP_EPS = 0.01, FP_M = 0.15;
 const _fp = { pen: 0, nx: 0, nz: 0 };
-function footPen(u, x, z, h) {
+function footPen(u, x, z, h, m = FP_M) {
   const g = u.game, t = g.terrain, pf = g.pathfinder, gw = t.gw;
-  const r = u.radius, hw = 0.55 * r, hl = 1.15 * r;
+  const r = u.radius, hw = 0.55 * r + m, hl = 1.15 * r + m;
   const c = Math.cos(h), s = Math.sin(h), ac = Math.abs(c), as = Math.abs(s);
   const ex = hw * ac + hl * as, ez = hw * as + hl * ac, axy = ac + as; // Ausdehnung in x/z; Zellprojektion auf Rechteckachsen
   const [i0, j0] = t.cellOf(x - ex - 1, z - ez - 1), [i1, j1] = t.cellOf(x + ex + 1, z + ez + 1);
   let pen = 0, px = 0, pz = 0;
   for (let j = Math.max(0, j0); j <= Math.min(gw - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(gw - 1, i1); i++) {
     const k = j * gw + i;
-    if (!t.gBlocked[k] || !pf.hardBlock(k)) continue;
+    if (!pf.hardBlock(k)) continue;
     const [cx, cz] = t.cellCenter(i, j);
     const dx = cx - x, dz = cz - z;
     // Trennachsentest: Welt-x, Welt-z, Rechteck quer (c,-s), Rechteck längs (s,c)
@@ -45,7 +47,7 @@ function footPen(u, x, z, h) {
   return pen;
 }
 // Gilt der Grundflächentest für diese Einheit? (Bodenfahrzeuge, keine Boote/Bauwerke)
-if (typeof window !== "undefined") window.__fpPen = footPen; // DEBUG-TEMP
+if (typeof window !== "undefined") window.__fpPen = (u, x, z, h) => footPen(u, x, z, h, 0); // DEBUG-TEMP
 function usesFootprint(u) { const ty = u.type; return !!ty.vehicle && !ty.air && !ty.naval && !ty.structure && !!u.game.pathfinder?.hardBlock; }
 
 export class Unit {
@@ -484,51 +486,107 @@ export class Unit {
   // Kollision → entlang des Hindernisses gleiten; nie tiefer eindringen; steckt das Fahrzeug bereits (Drehung, Abdrängen,
   // frisches Wrack), wird es zuerst sanft herausgedrückt.
   _stepVehicle(nx, nz, dt) {
-    const t = this.game.terrain, pf = this.game.pathfinder, p = this.pos, h = this.heading;
+    const t = this.game.terrain, pf = this.game.pathfinder, p = this.pos;
     if (t.cellIndex(nx, nz) < 0) return;
-    let cur = footPen(this, p.x, p.z, h);
-    if (cur > FP_EPS) { this._depenetrate(dt); cur = footPen(this, p.x, p.z, h); }
+    let h = this.heading;
+    const len = Math.hypot(nx - p.x, nz - p.z);
+    // Drehung (aus updateMovement) prüfen: verklemmt sie das Fahrzeug und lässt sich das nicht durch Herausdrücken
+    // lösen (enge Gasse), wird sie zurückgenommen – stattdessen vor- bzw. zurücksetzen
+    let turnBlocked = false;
+    if (this._okH !== undefined && this._okH !== h) {
+      const pNew = footPen(this, p.x, p.z, h, 0), pOld = footPen(this, p.x, p.z, this._okH, 0);
+      if (pNew > FP_EPS && pNew > pOld) {
+        const ox = p.x, oz = p.z;
+        this._depenetrate(dt);
+        if (footPen(this, p.x, p.z, h, 0) > Math.max(FP_EPS, pOld)) { p.x = ox; p.z = oz; this.heading = h = this._okH; turnBlocked = true; }
+      }
+    }
+    if (footPen(this, p.x, p.z, h) > FP_EPS) this._depenetrate(dt);
+    // Maßgeblich ist die exakte Wanne (ohne Sicherheitsabstand): sie darf nie tiefer eindringen
+    const cur = footPen(this, p.x, p.z, h, 0);
+    if (cur <= FP_EPS) this._okH = h;
     const curK = t.cellIndex(p.x, p.z);
     const stuckInside = curK >= 0 && !pf.passable(curK, 'ground', true);
     const lim = Math.max(FP_EPS, cur + 1e-4);
-    const canAt = (x, z) => {
+    const canAt = (x, z, l = lim) => {
       const k = t.cellIndex(x, z);
       if (k < 0 || (!pf.passable(k, 'ground', true) && !stuckInside)) return false;
-      return footPen(this, x, z, h) <= lim;
+      return footPen(this, x, z, h, 0) <= l;
     };
-    const sx = nx - p.x, sz = nz - p.z;
+    const fx = Math.sin(h), fz = Math.cos(h);
     this.moving = true;
-    if (canAt(nx, nz)) { p.x = nx; p.z = nz; this._fpBlockT = 0; return; }
-    // Gleiten: Schrittanteil in Richtung Hindernis entfernen (Normale aus dem Grundflächentest am Zielpunkt)
-    footPen(this, nx, nz, h);
-    const dn = sx * _fp.nx + sz * _fp.nz;
-    if (dn < 0) {
-      const tx = sx - dn * _fp.nx, tz = sz - dn * _fp.nz;
-      if (tx * tx + tz * tz > 1e-8 && canAt(p.x + tx, p.z + tz)) { p.x += tx; p.z += tz; this._fpBlockT = 0; return; }
+    // Schritt (Faktor m: 1 vorwärts, <0 rückwärts) mit Gleiten entlang des Hindernisses
+    const tryStep = (m) => {
+      const sx = fx * len * m, sz = fz * len * m, ax = p.x + sx, az = p.z + sz;
+      if (canAt(ax, az)) { p.x = ax; p.z = az; return true; }
+      footPen(this, ax, az, h, 0);
+      const dn = sx * _fp.nx + sz * _fp.nz;
+      if (dn < 0) {
+        const tx = sx - dn * _fp.nx, tz = sz - dn * _fp.nz;
+        if (tx * tx + tz * tz > 1e-8 && canAt(p.x + tx, p.z + tz)) { p.x += tx; p.z += tz; return true; }
+      }
+      if (canAt(ax, p.z)) { p.x = ax; return true; }
+      if (canAt(p.x, az)) { p.z = az; return true; }
+      return false;
+    };
+    let dirs = [1];
+    if (turnBlocked) {
+      // vor oder zurück: zuletzt erfolgreiche Richtung beibehalten, sonst zur breiteren Stelle (Abstandsfeld)
+      let d = this._fpDir;
+      if (!d) {
+        const clr = pf.clr;
+        const kF = t.cellIndex(p.x + fx * 3, p.z + fz * 3), kB = t.cellIndex(p.x - fx * 3, p.z - fz * 3);
+        const cF = clr && kF >= 0 ? clr[kF] : 0, cB = clr && kB >= 0 ? clr[kB] : 0;
+        d = cB > cF + 0.5 ? -1 : 1;
+      }
+      dirs = [d, -d];
     }
-    if (canAt(nx, p.z)) { p.x = nx; this._fpBlockT = 0; return; }
-    if (canAt(p.x, nz)) { p.z = nz; this._fpBlockT = 0; return; }
-    // Kein Durchkommen: Wegpunkt dicht vor dem Ziel als erreicht werten, sonst (gedrosselt) neu planen
+    for (const d of dirs) {
+      if (tryStep(d > 0 ? 1 : -0.6)) {
+        this._fpBlockT = 0; this._fpStuckT = 0;
+        this._fpDir = turnBlocked ? d : 0;
+        if (footPen(this, p.x, p.z, h, 0) <= FP_EPS) this._okH = h;
+        return;
+      }
+    }
+    this._fpDir = 0;
     this._fpBlockT = (this._fpBlockT || 0) + dt;
+    this._fpStuckT = (this._fpStuckT || 0) + dt;
+    // Länger verklemmt (z. B. von Nachbarn in eine Ecke gedrückt): kleinen Ausweichschritt mit minimaler Überlappung suchen
+    if (this._fpStuckT > 1) {
+      let bx = 0, bz = 0, bp = Infinity;
+      for (let a = 0; a < 8; a++) {
+        const x = p.x + Math.sin(a * Math.PI / 4) * 0.3, z = p.z + Math.cos(a * Math.PI / 4) * 0.3;
+        const k = t.cellIndex(x, z);
+        if (k < 0 || !pf.passable(k, 'ground', true)) continue;
+        const q = footPen(this, x, z, h, 0);
+        if (q < bp) { bp = q; bx = x; bz = z; }
+      }
+      if (bp <= cur + 0.03) { p.x = bx; p.z = bz; this._fpStuckT = 0.5; }
+    }
+    // Kein Durchkommen: letzter Wegpunkt → so nah wie möglich, Auftrag erfüllt; sonst (gedrosselt) neu planen
     if (this.path && this.path.length) {
-      const [wx, wz] = this.path[0];
-      if (this.path.length === 1 && Math.hypot(wx - p.x, wz - p.z) < this.radius * 2.2) { this.path.shift(); return; }
-      if (this._fpBlockT > 0.4) {
+      if (this.path.length === 1 && this._fpBlockT > 0.6) { this.path.shift(); return; }
+      if (this._fpBlockT > 0.4 && this.path.length > 1) {
         this._fpBlockT = 0; this.repathT = 0;
         if (this.order && this.order.type !== 'attack') this.computePath(this.order.x, this.order.z);
       }
     }
   }
-  // Aus harten Hindernissen herausdrücken (je Iteration höchstens 0,4 m, nur auf befahrbare Mittelpunktzellen)
+  // Aus harten Hindernissen herausdrücken (mit Sicherheitsabstand FP_M; je Iteration höchstens 0,4 m). Nur Schritte, die
+  // die Überlappung verringern, die exakte Wanne nicht tiefer hineinschieben und auf befahrbaren Mittelpunktzellen enden.
   _depenetrate(dt) {
-    const t = this.game.terrain, pf = this.game.pathfinder, p = this.pos;
+    const t = this.game.terrain, pf = this.game.pathfinder, p = this.pos, h = this.heading;
     for (let it = 0; it < 6; it++) {
-      const pen = footPen(this, p.x, p.z, this.heading);
+      const pen = footPen(this, p.x, p.z, h);
       if (pen <= FP_EPS) return;
+      const nx = _fp.nx, nz = _fp.nz;
+      const pen0 = footPen(this, p.x, p.z, h, 0);
       const step = Math.min(pen + 0.02, 0.4);
-      const x = p.x + _fp.nx * step, z = p.z + _fp.nz * step;
+      const x = p.x + nx * step, z = p.z + nz * step;
       const k = t.cellIndex(x, z), curK = t.cellIndex(p.x, p.z);
       if (k < 0 || (!pf.passable(k, 'ground', true) && curK >= 0 && pf.passable(curK, 'ground', true))) return;
+      if (footPen(this, x, z, h) >= pen - 1e-4 || footPen(this, x, z, h, 0) > Math.max(FP_EPS, pen0)) return;
       p.x = x; p.z = z;
     }
   }

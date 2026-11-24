@@ -191,26 +191,34 @@ export class Terrain {
   }
   inForest(x, z) { const k = this.cellIndex(x, z); return k >= 0 && this.gForest[k] === 1; }
   onRoad(x, z) { const k = this.cellIndex(x, z); return k >= 0 && this.gRoad[k] === 1; }
+  // gBlocked: Zellen, deren Mittelpunkt im (etwas vergrößerten) Objekt liegt – sperrt Mittelpunkte wie bisher.
+  // gHard: zusätzlich jede Zelle, deren Quadrat das Objekt tatsächlich schneidet (exakt) – für Fahrzeug-Grundfläche
+  // und Abstandsfeld, damit auch schräg stehende Hausecken vollständig abgedeckt sind.
   blockCircle(x, z, r, v = 1) {
     const [ci, cj] = this.cellOf(x, z);
-    const cr = Math.ceil(r / CELL);
+    const cr = Math.ceil(r / CELL) + 1, H = CELL / 2;
     for (let j = cj - cr; j <= cj + cr; j++) for (let i = ci - cr; i <= ci + cr; i++) {
       if (i < 0 || j < 0 || i >= this.gw || j >= this.gw) continue;
       const [cx, cz] = this.cellCenter(i, j);
-      if (Math.hypot(cx - x, cz - z) <= r) { const k = j * this.gw + i; this.gBlocked[k] = v; this.gHard[k] = v ? 1 : 0; }
+      const k = j * this.gw + i;
+      if (Math.hypot(cx - x, cz - z) <= r) { this.gBlocked[k] = v; this.gHard[k] = v ? 1 : 0; }
+      else if (v && Math.hypot(Math.max(0, Math.abs(cx - x) - H), Math.max(0, Math.abs(cz - z) - H)) < r - 0.05) this.gHard[k] = 1;
     }
   }
   blockRect(x, z, w, d, rot, v = 1) {
-    const c = Math.cos(rot), s = Math.sin(rot);
+    const c = Math.cos(rot), s = Math.sin(rot), ac = Math.abs(c), as = Math.abs(s), H = CELL / 2;
     const r = Math.hypot(w, d) / 2 + CELL;
     const [ci, cj] = this.cellOf(x, z);
     const cr = Math.ceil(r / CELL);
+    const ex = (w / 2) * ac + (d / 2) * as, ez = (w / 2) * as + (d / 2) * ac, E = 0.05;
     for (let j = cj - cr; j <= cj + cr; j++) for (let i = ci - cr; i <= ci + cr; i++) {
       if (i < 0 || j < 0 || i >= this.gw || j >= this.gw) continue;
       const [cx, cz] = this.cellCenter(i, j);
       const dx = cx - x, dz = cz - z;
       const lx = dx * c - dz * s, lz = dx * s + dz * c;
-      if (Math.abs(lx) <= w / 2 + 0.6 && Math.abs(lz) <= d / 2 + 0.6) { const k = j * this.gw + i; this.gBlocked[k] = v; this.gHard[k] = v ? 1 : 0; }
+      const k = j * this.gw + i;
+      if (Math.abs(lx) <= w / 2 + 0.6 && Math.abs(lz) <= d / 2 + 0.6) { this.gBlocked[k] = v; this.gHard[k] = v ? 1 : 0; }
+      else if (v && Math.abs(dx) < ex + H - E && Math.abs(dz) < ez + H - E && Math.abs(lx) < w / 2 + H * (ac + as) - E && Math.abs(lz) < d / 2 + H * (ac + as) - E) this.gHard[k] = 1;
     }
   }
 
