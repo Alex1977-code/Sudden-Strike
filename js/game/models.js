@@ -1094,130 +1094,984 @@ function patrolBoat() {
 }
 
 // ---------------- Gebäude & Ziele ----------------
-function gableG(w, rh) {
-  const k = `g${w},${rh}`;
-  if (geoCache[k]) return geoCache[k];
-  const sh = new THREE.Shape();
-  sh.moveTo(-w / 2, 0); sh.lineTo(w / 2, 0); sh.lineTo(0, rh); sh.closePath();
-  const g = new THREE.ShapeGeometry(sh);
-  const uv = g.attributes.uv;
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 0.25 * 1, uv.getY(i) * 0.25);
-  return (geoCache[k] = shared(g));
+// Alle Häuser teilen sich wenige neutrale Texturen (Putz, Ziegel, Bruchstein, Holz, Lehm, Platte, Wellblech,
+// Dachziegel, Schiefer, Falzblech, Schindeln, Bitumen). Die Farbe kommt über die Materialfarbe (Tönung), die
+// Detailteile (Fenster, Türen, Zubehör) sind einfarbig und werden von optimize() in 2–3 Meshes pro Haus vereint.
+const _bt = {};
+function bRot(c) { const [o, x] = mkCanvas(c.width, c.height); x.translate(c.width / 2, c.height / 2); x.rotate(Math.PI / 2); x.drawImage(c, -c.width / 2, -c.height / 2); return o; }
+function tSpeckle(x, r, S, n, a, big = 2) { for (let i = 0; i < n; i++) { x.fillStyle = `rgba(${r() < 0.5 ? '255,255,255' : '30,25,20'},${r() * a})`; x.fillRect(r() * S, r() * S, 1 + r() * big, 1 + r() * big); } }
+function tBlots(x, r, S, n, r0, r1, a, cols = ['255,250,235', '60,50,40']) {
+  for (let i = 0; i < n; i++) { x.fillStyle = `rgba(${cols[r() < 0.5 ? 0 : cols.length - 1]},${0.02 + r() * a})`; x.beginPath(); x.ellipse(r() * S, r() * S, r0 + r() * (r1 - r0), (r0 + r() * (r1 - r0)) * 0.7, r() * 3, 0, 6.3); x.fill(); }
+}
+function tStreaks(x, r, S, n, len, a, rgb = '40,35,30', y0 = null) {
+  for (let i = 0; i < n; i++) { const px = r() * S, py = y0 ?? r() * (S - len * 0.4), g = x.createLinearGradient(0, py, 0, py + len); g.addColorStop(0, `rgba(${rgb},${a * (0.5 + r() * 0.5)})`); g.addColorStop(1, `rgba(${rgb},0)`); x.fillStyle = g; x.fillRect(px, py, 1 + r() * 3, len * (0.5 + r() * 0.5)); }
+}
+function tCracks(x, r, S, n, a) {
+  x.strokeStyle = `rgba(40,32,26,${a})`; x.lineWidth = 1;
+  for (let i = 0; i < n; i++) { let px = r() * S, py = r() * S; x.beginPath(); x.moveTo(px, py); for (let k = 0; k < 6; k++) { px += (r() - 0.5) * 14; py += 5 + r() * 10; x.lineTo(px, py); } x.stroke(); }
+}
+const BTX = {
+  plaster() { // Kalkputz, Flecken, Risse, abgeplatzte Stellen mit Ziegel darunter
+    const S = 256, [c, x] = mkCanvas(S), r = mkRand(101);
+    x.fillStyle = '#ece8dc'; x.fillRect(0, 0, S, S);
+    tBlots(x, r, S, 46, 12, 46, 0.07); tSpeckle(x, r, S, 1100, 0.11);
+    for (let i = 0; i < 3; i++) {
+      const px = 20 + r() * 190, py = 20 + r() * 190, pw = 18 + r() * 30, ph = 12 + r() * 22;
+      x.fillStyle = 'rgba(0,0,0,0.22)'; x.fillRect(px - 1.5, py - 1.5, pw + 3, ph + 3);
+      x.fillStyle = '#9c5b47'; x.beginPath(); x.moveTo(px, py + 3); x.lineTo(px + pw * 0.4, py); x.lineTo(px + pw, py + 4); x.lineTo(px + pw - 3, py + ph); x.lineTo(px + 4, py + ph - 2); x.closePath(); x.fill();
+      x.fillStyle = 'rgba(190,175,150,0.8)'; for (let k = 3; k < ph; k += 6) x.fillRect(px + 1, py + k, pw - 2, 1.2);
+    }
+    tCracks(x, r, S, 5, 0.3); tStreaks(x, r, S, 9, 80, 0.16);
+    return finishTex(c);
+  },
+  brick() { // Läuferverband 8 x 16 Steine je Kachel (2 m)
+    const S = 256, [c, x] = mkCanvas(S), r = mkRand(202);
+    x.fillStyle = '#bdb5a4'; x.fillRect(0, 0, S, S);
+    for (let row = 0; row < 16; row++) for (let col = -1; col < 8; col++) {
+      const bx = col * 32 + (row % 2) * 16, by = row * 16, k = r();
+      const l = 30 + r() * 14 + (k < 0.06 ? -9 : k > 0.94 ? 9 : 0);
+      x.fillStyle = `hsl(${7 + r() * 11},${36 + r() * 16}%,${l}%)`; x.fillRect(bx + 1, by + 1, 30, 14);
+      x.fillStyle = 'rgba(255,225,205,0.10)'; x.fillRect(bx + 1, by + 1, 30, 1);
+      x.fillStyle = 'rgba(0,0,0,0.2)'; x.fillRect(bx + 1, by + 14, 30, 1);
+    }
+    tBlots(x, r, S, 30, 10, 40, 0.1, ['255,245,230', '25,20,15']); tSpeckle(x, r, S, 900, 0.12); tStreaks(x, r, S, 8, 90, 0.2);
+    for (let i = 0; i < 5; i++) { x.fillStyle = `rgba(235,235,225,${0.1 + r() * 0.12})`; x.fillRect(r() * S, r() * S, 12 + r() * 30, 2 + r() * 4); }
+    return finishTex(c);
+  },
+  stone() { // Bruchstein, unregelmäßige Lagen (3 m)
+    const S = 256, [c, x] = mkCanvas(S), r = mkRand(303);
+    x.fillStyle = '#6e6859'; x.fillRect(0, 0, S, S);
+    let y = 0;
+    while (y < S) {
+      let rh = Math.min(S - y, 24 + r() * 18); if (S - y - rh < 18) rh = S - y;
+      let xx = 0;
+      while (xx < S) {
+        let sw = Math.min(S - xx, 26 + r() * 36); if (S - xx - sw < 16) sw = S - xx;
+        x.fillStyle = `hsl(${30 + r() * 16},${10 + r() * 18}%,${50 + r() * 22}%)`; x.fillRect(xx + 1.5, y + 1.5, sw - 3, rh - 3);
+        x.fillStyle = 'rgba(255,255,255,0.18)'; x.fillRect(xx + 1.5, y + 1.5, sw - 3, 2);
+        x.fillStyle = 'rgba(0,0,0,0.22)'; x.fillRect(xx + 1.5, y + rh - 3.5, sw - 3, 2); x.fillRect(xx + sw - 3.5, y + 1.5, 2, rh - 3);
+        xx += sw;
+      }
+      y += rh;
+    }
+    tSpeckle(x, r, S, 1200, 0.14); tBlots(x, r, S, 30, 10, 40, 0.1); tStreaks(x, r, S, 6, 80, 0.16);
+    for (let i = 0; i < 14; i++) { x.fillStyle = `rgba(80,110,50,${0.12 + r() * 0.16})`; x.fillRect(r() * S, r() * S, 4 + r() * 10, 2 + r() * 4); } // Moos
+    return finishTex(c);
+  },
+  log() { // Rundholz-Blockbau (2,7 m = 8 Lagen)
+    const S = 256, [c, x] = mkCanvas(S), r = mkRand(404);
+    for (let row = 0; row < 8; row++) {
+      const y = row * 32, g = x.createLinearGradient(0, y, 0, y + 32);
+      g.addColorStop(0, '#4f361f'); g.addColorStop(0.2, '#a2815a'); g.addColorStop(0.5, '#8c6c46'); g.addColorStop(0.85, '#5f432a'); g.addColorStop(1, '#241709');
+      x.fillStyle = g; x.fillRect(0, y, S, 32);
+      for (let k = 0; k < 16; k++) { x.strokeStyle = `rgba(30,18,8,${0.12 + r() * 0.18})`; x.lineWidth = 1; const gy = y + 4 + r() * 24, gx = r() * S; x.beginPath(); x.moveTo(gx, gy); x.lineTo(gx + 40 + r() * 100, gy + (r() - 0.5) * 2); x.stroke(); }
+      if (r() < 0.6) { const kx = r() * S, ky = y + 8 + r() * 16; x.fillStyle = 'rgba(40,24,10,0.55)'; x.beginPath(); x.ellipse(kx, ky, 5, 3, 0, 0, 6.3); x.fill(); x.strokeStyle = 'rgba(40,24,10,0.35)'; x.stroke(); }
+    }
+    tBlots(x, r, S, 30, 8, 36, 0.1, ['200,195,180', '30,20,10']); tSpeckle(x, r, S, 500, 0.1);
+    return finishTex(c);
+  },
+  plank() { // senkrechte Bretter, verwittert (2,5 m = 8 Bretter)
+    const S = 256, [c, x] = mkCanvas(S), r = mkRand(505);
+    for (let i = 0; i < 8; i++) {
+      const px = i * 32; x.fillStyle = `hsl(${26 + r() * 10},${16 + r() * 14}%,${30 + r() * 16}%)`; x.fillRect(px, 0, 32, S);
+      for (let k = 0; k < 10; k++) { x.strokeStyle = `rgba(20,14,8,${0.1 + r() * 0.2})`; const gx = px + 3 + r() * 26, gy = r() * S; x.beginPath(); x.moveTo(gx, gy); x.lineTo(gx + (r() - 0.5) * 2, gy + 30 + r() * 90); x.stroke(); }
+      if (r() < 0.5) { x.fillStyle = 'rgba(25,15,8,0.5)'; x.beginPath(); x.ellipse(px + 8 + r() * 16, r() * S, 3, 5, 0, 0, 6.3); x.fill(); }
+      x.fillStyle = '#1b150f'; x.fillRect(px, 0, 2, S); x.fillStyle = 'rgba(255,240,210,0.12)'; x.fillRect(px + 2, 0, 1, S);
+      x.fillStyle = 'rgba(30,25,20,0.7)'; for (const ny of [30, 130, 226]) { x.fillRect(px + 7, ny, 2, 2); x.fillRect(px + 23, ny, 2, 2); }
+    }
+    tStreaks(x, r, S, 10, 110, 0.12, '190,185,170'); tBlots(x, r, S, 24, 8, 30, 0.08, ['200,195,180', '30,20,10']);
+    return finishTex(c);
+  },
+  mud() { // Lehmputz auf Lehmziegeln: Fleckung, Strohreste, Kellenspuren, Risse (3 m)
+    const S = 256, [c, x] = mkCanvas(S), r = mkRand(606);
+    x.fillStyle = '#d6c19c'; x.fillRect(0, 0, S, S);
+    tBlots(x, r, S, 80, 14, 52, 0.11, ['244,228,194', '110,85,52']);
+    for (let i = 0; i < 50; i++) { x.fillStyle = `rgba(${r() < 0.5 ? '250,236,205' : '120,95,60'},${0.06 + r() * 0.08})`; x.fillRect(r() * S, r() * S, 20 + r() * 60, 1 + r() * 3); }
+    for (let i = 0; i < 160; i++) { x.strokeStyle = `rgba(170,140,80,${0.2 + r() * 0.3})`; const sx = r() * S, sy = r() * S, a = r() * 6.3; x.beginPath(); x.moveTo(sx, sy); x.lineTo(sx + Math.cos(a) * 4, sy + Math.sin(a) * 4); x.stroke(); }
+    tSpeckle(x, r, S, 1500, 0.14); tCracks(x, r, S, 8, 0.3); tStreaks(x, r, S, 10, 90, 0.18, '90,65,40');
+    return finishTex(c);
+  },
+  panel() { // Betonplatte 3 x 3 m mit Fugen, Rostfahnen, Schmutz
+    const S = 256, [c, x] = mkCanvas(S), r = mkRand(707);
+    x.fillStyle = '#d0cdc3'; x.fillRect(0, 0, S, S);
+    tBlots(x, r, S, 40, 14, 50, 0.07); tSpeckle(x, r, S, 1200, 0.1);
+    x.strokeStyle = 'rgba(0,0,0,0.05)'; x.lineWidth = 6; x.strokeRect(14, 14, S - 28, S - 28);
+    tStreaks(x, r, S, 8, 100, 0.2, '45,42,38', 0);
+    for (let i = 0; i < 5; i++) tStreaks(x, r, S, 1, 50 + r() * 40, 0.3, '120,70,40', 3);
+    x.fillStyle = 'rgba(30,30,28,0.6)'; x.fillRect(0, 0, S, 3); x.fillRect(0, S - 1, S, 1); x.fillRect(0, 0, 3, S); x.fillRect(S - 1, 0, 1, S);
+    x.fillStyle = 'rgba(255,255,255,0.2)'; x.fillRect(0, 3, S, 2); x.fillRect(3, 0, 2, S);
+    return finishTex(c);
+  },
+  corr() { // Wellblech / Wellasbest, Rippen senkrecht (2 m)
+    const S = 256, [c, x] = mkCanvas(S), r = mkRand(808);
+    x.fillStyle = '#b1b6b0'; x.fillRect(0, 0, S, S);
+    for (let xi = 0; xi < S; xi++) { const v = Math.sin((xi % 16) / 16 * 6.283); x.fillStyle = v > 0 ? `rgba(255,255,255,${0.26 * v})` : `rgba(0,0,0,${-0.3 * v})`; x.fillRect(xi, 0, 1, S); }
+    tBlots(x, r, S, 20, 8, 30, 0.2, ['150,85,45', '110,70,40']); tBlots(x, r, S, 14, 10, 40, 0.1, ['90,120,60', '60,90,45']); tStreaks(x, r, S, 14, 110, 0.2, '70,45,30'); tSpeckle(x, r, S, 500, 0.1);
+    return finishTex(c);
+  },
+  tile() { // Biberschwanz-/Hohlziegel, Lagen quer zum Gefälle (gedreht)
+    const S = 256, [c, x] = mkCanvas(S), r = mkRand(909);
+    x.fillStyle = '#b8b2aa'; x.fillRect(0, 0, S, S);
+    for (let row = 0; row < 16; row++) for (let col = -1; col < 8; col++) {
+      const bx = col * 32 + (row % 2) * 16, by = row * 16, l = r();
+      x.fillStyle = l < 0.5 ? `rgba(0,0,0,${l * 0.34})` : `rgba(255,255,255,${(l - 0.5) * 0.2})`; x.fillRect(bx, by, 32, 16);
+      x.fillStyle = 'rgba(0,0,0,0.5)'; x.fillRect(bx, by + 13, 32, 3); x.fillRect(bx, by, 1, 16);
+      x.fillStyle = 'rgba(255,255,255,0.12)'; x.fillRect(bx + 1, by, 31, 1);
+    }
+    tBlots(x, r, S, 24, 8, 30, 0.1, ['110,140,70', '30,25,20']); tSpeckle(x, r, S, 500, 0.1);
+    return finishTex(bRot(c));
+  },
+  slate() { // Schiefer/Eternit-Schuppen
+    const S = 256, [c, x] = mkCanvas(S), r = mkRand(1001);
+    x.fillStyle = '#8f9399'; x.fillRect(0, 0, S, S);
+    for (let row = 0; row < 16; row++) for (let col = -1; col < 11; col++) {
+      const bx = col * 25.6 + (row % 2) * 12.8, by = row * 16, l = r();
+      x.fillStyle = `hsl(215,${4 + r() * 6}%,${28 + l * 22}%)`; x.fillRect(bx + 1, by, 23.6, 15);
+      x.fillStyle = 'rgba(0,0,0,0.4)'; x.fillRect(bx, by + 13, 25.6, 3);
+      x.fillStyle = 'rgba(255,255,255,0.08)'; x.fillRect(bx + 1, by, 23, 1);
+    }
+    tBlots(x, r, S, 20, 8, 30, 0.1); tSpeckle(x, r, S, 400, 0.1);
+    return finishTex(bRot(c));
+  },
+  seam() { // Falzblech, Falze entlang des Gefälles (gedreht)
+    const S = 256, [c, x] = mkCanvas(S), r = mkRand(1102);
+    x.fillStyle = '#aeb3b6'; x.fillRect(0, 0, S, S);
+    for (let k = 0; k < 8; k++) { x.fillStyle = 'rgba(255,255,255,0.3)'; x.fillRect(k * 32, 0, 2, S); x.fillStyle = 'rgba(0,0,0,0.4)'; x.fillRect(k * 32 + 2, 0, 3, S); x.fillStyle = 'rgba(0,0,0,0.06)'; x.fillRect(k * 32 + 5, 0, 27, S); }
+    tBlots(x, r, S, 18, 8, 30, 0.2, ['150,85,45', '110,70,40']); tStreaks(x, r, S, 12, 100, 0.2, '70,45,30'); tSpeckle(x, r, S, 400, 0.1);
+    return finishTex(bRot(c));
+  },
+  shingle() { // Holzschindeln
+    const S = 256, [c, x] = mkCanvas(S), r = mkRand(1203);
+    x.fillStyle = '#8a7a66'; x.fillRect(0, 0, S, S);
+    for (let row = 0; row < 12; row++) for (let col = -1; col < 14; col++) {
+      const bx = col * 19.7 + (row % 2) * 9.8 + r() * 2, by = row * 21.3;
+      x.fillStyle = `hsl(${24 + r() * 12},${10 + r() * 14}%,${30 + r() * 22}%)`; x.fillRect(bx + 0.5, by, 18.5, 20);
+      x.fillStyle = 'rgba(0,0,0,0.4)'; x.fillRect(bx, by + 17, 20, 4); x.fillRect(bx, by, 1, 21);
+    }
+    tStreaks(x, r, S, 10, 90, 0.15, '190,185,170'); tSpeckle(x, r, S, 500, 0.1);
+    return finishTex(bRot(c));
+  },
+  bitu() { // Bitumenbahnen mit Überlappung, Pfützenflecken, Kies
+    const S = 256, [c, x] = mkCanvas(S), r = mkRand(1304);
+    x.fillStyle = '#75736e'; x.fillRect(0, 0, S, S);
+    tBlots(x, r, S, 40, 10, 50, 0.12, ['150,148,140', '30,30,28']); tSpeckle(x, r, S, 1600, 0.16, 3);
+    for (const k of [0, 64, 128, 192]) { x.fillStyle = 'rgba(0,0,0,0.3)'; x.fillRect(k, 0, 2, S); x.fillStyle = 'rgba(255,255,255,0.1)'; x.fillRect(k + 2, 0, 1, S); }
+    return finishTex(c);
+  },
+};
+const btex = (n) => _bt[n] || (_bt[n] = BTX[n]());
+const _bmc = {};
+// Texturiertes Wand-/Dachmaterial (Textur geteilt, Farbe als Tönung)
+function wmat(tex, hex, rough = 0.92, metal = 0) {
+  const k = `${tex}|${hex}|${rough}|${metal}`;
+  return _bmc[k] || (_bmc[k] = applyFow(new THREE.MeshStandardMaterial({ map: btex(tex), color: hex, roughness: rough, metalness: metal })));
+}
+// Einfarbiges Detailmaterial (wird beim Merge als Vertexfarbe übernommen)
+function pm(hex, rough = 0.85, metal = 0, em = 0, emI = 1.2) {
+  const k = `p${hex}|${rough}|${metal}|${em}`;
+  return _bmc[k] || (_bmc[k] = applyFow(new THREE.MeshStandardMaterial(em ? { color: hex, roughness: rough, metalness: metal, emissive: em, emissiveIntensity: emI } : { color: hex, roughness: rough, metalness: metal })));
+}
+const ROOFS = { // Textur, UV-Maßstab, Rauheit, Metall
+  tile: ['tile', 3.2, 0.85, 0.04], slate: ['slate', 3.2, 0.7, 0.1], seam: ['seam', 2.5, 0.5, 0.45], shingle: ['shingle', 2.4, 0.95, 0],
+  corr: ['corr', 2.2, 0.6, 0.3], bitu: ['bitu', 4, 0.95, 0],
+};
+function rmat(kind, hex) { const r = ROOFS[kind]; return { mat: wmat(r[0], hex, r[2], r[3]), s: r[1] }; }
+
+// ---- Gebäude: Geometrie-Bausteine (gecacht, geteilt) ----
+const _bg = {};
+const _bgk = (k, f) => _bg[k] || (_bg[k] = shared(f()));
+const planeG = (w, h) => _bgk(`pl${w},${h}`, () => new THREE.PlaneGeometry(w, h));
+// Verbundgeometrie aus Quadern: fn(B, merger), B(w,h,d,x,y,z,ry,rx,rz)
+function comp(key, fn) {
+  return _bgk(key, () => { const m = new Merger(); fn((w, h, d, x, y, z, ry, rx, rz) => m.add(boxG(w, h, d), mat4(x, y, z, ry, rx, rz)), m); return m.build(); });
+}
+function triG(w, h, s = 4) { // Dreieck (Basis w, Höhe h) in der xy-Ebene, Basis bei y=0
+  return _bgk(`tr${w},${h},${s}`, () => {
+    const sh = new THREE.Shape(); sh.moveTo(-w / 2, 0); sh.lineTo(w / 2, 0); sh.lineTo(0, h); sh.closePath();
+    const g = new THREE.ShapeGeometry(sh); const uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / s, uv.getY(i) / s);
+    return g;
+  });
+}
+function rtriG(w, h, s = 4) { // rechtwinkliges Dreieck (Sheddach-Zahn): Basis 0..w, Höhe h an der Seite x=w
+  return _bgk(`rt${w},${h},${s}`, () => {
+    const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(w, 0); sh.lineTo(w, h); sh.closePath();
+    const g = new THREE.ShapeGeometry(sh); const uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / s, uv.getY(i) / s);
+    return g;
+  });
+}
+function gableG(w, rh, s = 4) { return triG(+w.toFixed(3), +rh.toFixed(3), s); }
+function onionG(r, h) { // Zwiebelkuppel (Drehkörper)
+  return _bgk(`on${r},${h}`, () => {
+    const P = [[0.55, 0], [0.5, 0.07], [0.8, 0.2], [1, 0.38], [0.94, 0.54], [0.64, 0.7], [0.3, 0.84], [0.09, 0.95], [0, 1]];
+    return new THREE.LatheGeometry(P.map(([a, b]) => new THREE.Vector2(a * r, b * h)), 14);
+  });
+}
+function archPlaneG(w, h) { // Fenster mit Rundbogen (Rechteck + Halbkreis)
+  return _bgk(`ar${w},${h}`, () => {
+    const sh = new THREE.Shape(); sh.moveTo(-w / 2, -h / 2); sh.lineTo(w / 2, -h / 2); sh.lineTo(w / 2, h / 2 - w / 2); sh.absarc(0, h / 2 - w / 2, w / 2, 0, Math.PI, false); sh.lineTo(-w / 2, -h / 2);
+    return new THREE.ShapeGeometry(sh, 8);
+  });
+}
+function gothG(w, h) { // Fenster mit Spitzbogen
+  return _bgk(`go${w},${h}`, () => {
+    const sh = new THREE.Shape(); sh.moveTo(-w / 2, -h / 2); sh.lineTo(w / 2, -h / 2); sh.lineTo(w / 2, h / 2 - w * 0.6); sh.lineTo(0, h / 2); sh.lineTo(-w / 2, h / 2 - w * 0.6); sh.closePath();
+    return new THREE.ShapeGeometry(sh);
+  });
+}
+// Fensterrahmen (Laibung, Kreuz, Bank, Sturz); Ursprung = Fenstermitte, Rückseite bei z=0, ragt nach +z
+const WIN_Z = [0.06, 0.05, 0.05, 0.05];
+function winG(ww, wh, v = 0) {
+  return comp(`w${ww},${wh},${v}`, (B) => {
+    if (v === 2) { B(ww + 0.16, wh + 0.16, 0.04, 0, 0, 0.02); B(0.05, wh, 0.03, 0, 0, 0.07); return; }
+    const t = v === 1 ? 0.06 : 0.08, dp = v === 1 ? 0.12 : 0.16;
+    B(ww + 2 * t, t, dp, 0, wh / 2 + t / 2, dp / 2); B(ww + 2 * t, t, dp, 0, -wh / 2 - t / 2, dp / 2);
+    B(t, wh, dp, -ww / 2 - t / 2, 0, dp / 2); B(t, wh, dp, ww / 2 + t / 2, 0, dp / 2);
+    if (v === 3) { for (const k of [-1, 0, 1]) B(0.04, wh, 0.06, k * ww / 4 * (k ? 1 : 0) + (k ? 0 : 0), 0, 0.09); B(ww, 0.04, 0.06, 0, wh / 6, 0.09); B(ww, 0.04, 0.06, 0, -wh / 6, 0.09); B(ww + 0.3, 0.07, 0.2, 0, -wh / 2 - t - 0.03, 0.1); return; }
+    B(0.045, wh, 0.07, 0, 0, dp / 2 - 0.02);
+    if (v === 0) { B(ww, 0.045, 0.07, 0, wh * 0.14, dp / 2 - 0.02); B(ww + 0.36, 0.08, 0.26, 0, -wh / 2 - t - 0.04, 0.13); B(ww + 0.24, 0.1, 0.12, 0, wh / 2 + t + 0.05, 0.06); } else B(ww + 0.2, 0.06, 0.18, 0, -wh / 2 - t - 0.03, 0.09);
+  });
+}
+const shutG = (ww, wh) => comp(`sh${ww},${wh}`, (B) => {
+  const sw = ww * 0.5;
+  for (const s of [-1, 1]) { const x = s * (ww / 2 + 0.08 + sw / 2); B(sw, wh + 0.16, 0.05, x, 0, 0.03); for (const k of [-1, 0, 1]) B(sw * 0.86, 0.035, 0.02, x, k * wh * 0.3, 0.06); }
+});
+const barsG = (ww, wh) => comp(`ba${ww},${wh}`, (B) => {
+  const n = Math.max(3, Math.round(ww / 0.14));
+  for (let i = 0; i < n; i++) B(0.022, wh + 0.12, 0.022, -ww / 2 + (i + 0.5) * ww / n, 0, 0.2);
+  B(ww + 0.12, 0.03, 0.03, 0, wh * 0.28, 0.2); B(ww + 0.12, 0.03, 0.03, 0, -wh * 0.28, 0.2);
+});
+const doorFrameG = (dw, dh) => comp(`df${dw},${dh}`, (B) => {
+  B(0.09, dh + 0.1, 0.14, -dw / 2 - 0.045, dh / 2 + 0.05, 0.07); B(0.09, dh + 0.1, 0.14, dw / 2 + 0.045, dh / 2 + 0.05, 0.07); B(dw + 0.18, 0.1, 0.16, 0, dh + 0.05, 0.08);
+  B(0.05, 0.05, 0.08, dw * 0.36, dh * 0.5, 0.12);
+});
+const doorLeafG = (dw, dh) => comp(`dl${dw},${dh}`, (B) => {
+  B(dw, dh, 0.06, 0, dh / 2, 0.05);
+  for (const sx of [-1, 1]) for (const sy of [0.28, 0.72]) B(dw * 0.36, dh * 0.3, 0.025, sx * dw * 0.22, dh * sy, 0.075);
+});
+const stoopG = (dw, dh, canopy) => comp(`st${dw},${dh},${canopy}`, (B) => {
+  B(dw + 0.8, 0.16, 0.6, 0, 0.08, 0.3); B(dw + 0.5, 0.16, 0.3, 0, 0.24, 0.15);
+  if (canopy) { B(dw + 1.2, 0.1, 1.0, 0, dh + 0.42, 0.5); for (const s of [-1, 1]) B(0.1, dh + 0.4, 0.1, s * (dw / 2 + 0.5), (dh + 0.4) / 2, 0.92); }
+});
+const tvAntG = () => comp('tv', (B) => { B(0.04, 2.4, 0.04, 0, 1.2, 0); B(0.03, 0.03, 1.0, 0, 2.3, 0.1); for (let i = 0; i < 6; i++) B(0.03, 0.03, 0.9 - i * 0.1, 0, 2.3 + (i % 2 ? 0.0 : 0), -0.4 + i * 0.17, 0); B(0.8, 0.03, 0.03, 0, 2.3, -0.4); B(0.7, 0.03, 0.03, 0, 1.8, -0.2); B(0.6, 0.03, 0.03, 0, 1.4, -0.2); });
+const dishG = () => comp('dish', (B, m) => {
+  m.add(cylG(0.36, 0.12, 0.1, 9), mat4(0, 0, 0.1, 0, Math.PI / 2 - 0.35));
+  B(0.04, 0.04, 0.5, 0, 0.09, 0.3, 0, -0.25); B(0.07, 0.07, 0.12, 0, 0.17, 0.52);
+  B(0.06, 0.3, 0.06, 0, -0.18, 0);
+});
+const balcSlabG = (bw, dp) => comp(`bs${bw},${dp}`, (B) => { B(bw, 0.16, dp, 0, 0, dp / 2); });
+const balcRailG = (bw, dp, rh) => comp(`br${bw},${dp},${rh}`, (B) => { B(bw, rh, 0.07, 0, rh / 2, dp - 0.035); B(0.07, rh, dp, -bw / 2 + 0.035, rh / 2, dp / 2); B(0.07, rh, dp, bw / 2 - 0.035, rh / 2, dp / 2); });
+const balcFrameG = (bw, dp, rh, gh) => comp(`bf${bw},${dp},${rh},${gh}`, (B) => { // Verglaste Loggia: Rahmen
+  for (const s of [-1, 1]) B(0.05, gh, 0.05, s * (bw / 2 - 0.03), rh + gh / 2, dp - 0.03); B(bw, 0.05, 0.06, 0, rh + gh, dp - 0.03); B(0.04, gh, 0.04, 0, rh + gh / 2, dp - 0.03); B(bw, 0.05, dp, 0, rh + gh + 0.02, dp / 2);
+});
+const fenceG = (len) => comp(`fe${len}`, (B) => {
+  const n = Math.max(2, Math.round(len / 0.22));
+  for (let i = 0; i < n; i++) B(0.07, 0.95 - (i % 2) * 0.0, 0.03, -len / 2 + (i + 0.5) * len / n, 0.5, 0);
+  B(len, 0.06, 0.05, 0, 0.35, -0.04); B(len, 0.06, 0.05, 0, 0.75, -0.04);
+  for (let i = 0; i <= Math.max(1, Math.round(len / 2.5)); i++) B(0.1, 1.05, 0.1, -len / 2 + i * len / Math.max(1, Math.round(len / 2.5)), 0.52, -0.02);
+});
+
+// ---- Gebäude: Kontext, Fassaden, Dächer, Zubehör ----
+const MODERN_KINDS = new Set(['khrushchyovka', 'panel_high', 'shop', 'kiosk', 'warehouse', 'industrial']);
+function bCtx(h, kind) {
+  const w = h.w, d = h.d, floors = Math.max(1, Math.round(h.floors || 1));
+  let sd = Math.floor(w * 977 + d * 131 + floors * 17 + (h.style | 0) * 7919 + (h.seed || 0)) % 2147483646; if (sd <= 0) sd += 12345;
+  const rnd = mkRand(sd); rnd(); rnd(); rnd();
+  const g = new THREE.Group();
+  return {
+    g, h, kind, w, d, floors, style: Math.abs(h.style | 0), rnd, lit: !!h.lit, snow: !!h.snow, modern: h.modern ?? MODERN_KINDS.has(kind),
+    faces: [{ ry: 0, cx: 0, cz: d / 2, len: w }, { ry: Math.PI, cx: 0, cz: -d / 2, len: w }, { ry: Math.PI / 2, cx: w / 2, cz: 0, len: d }, { ry: -Math.PI / 2, cx: -w / 2, cz: 0, len: d }],
+  };
+}
+// Teil an einer Fassade platzieren: fi = Seite, u = entlang der Seite, y = Höhe, out = vor der Wand
+function fput(c, geo, mat, fi, u, y, out = 0, ry2 = 0, parent = null) {
+  const f = c.faces[fi], cs = Math.cos(f.ry), sn = Math.sin(f.ry);
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(f.cx + cs * u + sn * out, y, f.cz - sn * u + cs * out);
+  m.rotation.y = f.ry + ry2; m.castShadow = true; m.receiveShadow = true;
+  (parent || c.g).add(m);
+  return m;
+}
+function glassFor(c) {
+  const r = c.rnd();
+  if (c.lit && r < 0.4) return c.rnd() < 0.78 ? M.windowLit : pm(0xcfe4ff, 0.3, 0, 0x8fb4e8, 1.1);
+  if (r < 0.7) return M.window;
+  if (r < 0.8) return pm(0x31404f, 0.15, 0.55);
+  if (r < 0.88) return pm(0xc2b9a4, 0.9);
+  if (r < 0.93) return pm(0xb48b86, 0.9);
+  if (r < 0.97) return pm(0x7d8f86, 0.9);
+  return pm(0x2a2f36, 0.2, 0.4);
+}
+// Fensterreihen. o: faces, fh, ww, wh, sill, bay, margin, v, frame, shut, bars, fl0, fl1, y0, skip(fi,fl,i,n,u)
+function facade(c, o) {
+  const { fh, ww, wh } = o;
+  for (const fi of o.faces) {
+    const len = fi < 2 ? c.w : c.d, mg = o.margin ?? 0.9;
+    const n = Math.max(1, Math.round((len - 2 * mg) / ((o.baysBy && o.baysBy[fi]) || o.bay))), st = (len - 2 * mg) / n;
+    for (let fl = o.fl0 ?? 0; fl < (o.fl1 ?? c.floors); fl++) for (let i = 0; i < n; i++) {
+      const u = -len / 2 + mg + (i + 0.5) * st, y = (o.y0 ?? 0) + fl * fh + o.sill + wh / 2;
+      if (o.skip && o.skip(fi, fl, i, n, u)) continue;
+      fput(c, winG(ww, wh, o.v || 0), o.frame, fi, u, y);
+      fput(c, planeG(ww, wh), glassFor(c), fi, u, y, WIN_Z[o.v || 0]);
+      if (o.shut && (!o.shutP || c.rnd() < o.shutP)) fput(c, shutG(ww, wh), o.shut, fi, u, y);
+      if (o.bars && (fl === 0 || o.barsAll)) fput(c, barsG(ww, wh), pm(0x2b2b2b, 0.6, 0.5), fi, u, y);
+      if (o.each) o.each(fi, fl, i, u, y);
+    }
+  }
+}
+function door(c, fi, u, o = {}) {
+  const dw = o.dw || 1.0, dh = o.dh || 2.15;
+  fput(c, doorFrameG(dw, dh), o.frame || pm(0xe6e2d6, 0.7), fi, u, 0);
+  fput(c, doorLeafG(dw, dh), o.mat || pm(0x4a3a2c, 0.85), fi, u, 0);
+  if (o.stoop !== false) fput(c, stoopG(dw, dh, !!o.canopy), o.stoopMat || M.concrete, fi, u, 0);
+}
+// Satteldach: First entlang z des lokalen Systems (Spannweite W, Länge D). Liefert Höhe/halbe Breite.
+function gableRoof(c, o) {
+  const p = o.parent || c.g, { W, D, y, rh } = o, ov = o.over ?? 0.45, ovz = o.overZ ?? 0.4, th = o.th ?? 0.14;
+  const half = W / 2 + ov, ls = Math.hypot(half, rh), ang = Math.atan2(rh, half), len = D + 2 * ovz;
+  const R = rmat(o.kind || 'tile', o.hex ?? 0xb55a40);
+  for (const s of [-1, 1]) add(p, tiledBoxG(+ls.toFixed(3), th, +len.toFixed(3), R.s), R.mat, s * half / 2, y + rh / 2 + 0.04, 0, 0, 0, -s * ang);
+  const trim = o.trim || pm(0xcfcbc0, 0.8);
+  add(p, boxG(0.3, 0.14, +(len + 0.04).toFixed(3)), o.ridge || pm(0x6b655c, 0.9), 0, y + rh + 0.07, 0);
+  if (o.walls !== false) for (const s of [-1, 1]) add(p, gableG(W, rh, o.ws || 4), o.wall, 0, y, s * (D / 2 + 0.01), 0, s > 0 ? 0 : Math.PI, 0);
+  const gap = rh * ov / half + 0.16;
+  for (const s of [-1, 1]) {
+    add(p, boxG(0.3, +gap.toFixed(3), +(D + 0.02).toFixed(3)), o.wall, s * (W / 2 + 0.05), y + gap / 2, 0); // Traufe
+    if (o.bargeboards !== false) for (const e of [-1, 1]) add(p, tiledBoxG(+ls.toFixed(3), 0.2, 0.05, 2), trim, s * half / 2, y + rh / 2 - 0.05, e * (len / 2 - 0.02), 0, 0, -s * ang);
+    if (o.gutter !== false) {
+      add(p, boxG(0.1, 0.09, +len.toFixed(3)), pm(0x9ea4a6, 0.5, 0.6), s * (half - 0.02), y - 0.08, 0);
+      add(p, cylG(0.035, 0.035, +(y - 0.3).toFixed(3), 5), pm(0x9ea4a6, 0.5, 0.6), s * (W / 2 + 0.1), (y - 0.1) / 2 + 0.1, s * (D / 2 - 0.25));
+    }
+  }
+  if (c.snow) for (const s of [-1, 1]) add(p, tiledBoxG(+(ls + 0.1).toFixed(3), 0.12, +(len - 0.1).toFixed(3), 3), pm(0xf2f5f8, 1), s * half / 2, y + rh / 2 + 0.15, 0, 0, 0, -s * ang, false);
+  return { rh, half, at: (u) => y + rh * (1 - Math.min(1, Math.abs(u) / half)) };
+}
+function roof(c, o) { // ridgeX: First entlang x
+  if (!o.ridgeX) return gableRoof(c, { ...o, W: c.w, D: c.d });
+  const rp = new THREE.Group(); rp.rotation.y = Math.PI / 2; c.g.add(rp);
+  return gableRoof(c, { ...o, parent: rp, W: c.d, D: c.w });
+}
+function chimney(c, x, z, y0, y1, o = {}) {
+  const sw = o.sw || 0.7, sd = o.sd || sw, mat = o.mat || pm(0x86483a, 0.95);
+  box(c.g, sw, y1 - y0, sd, mat, x, (y0 + y1) / 2, z);
+  box(c.g, sw + 0.2, 0.14, sd + 0.2, pm(0x777570, 0.9), x, y1 + 0.07, z);
+  if (o.pot !== false) { cyl(c.g, 0.11, 0.13, 0.3, pm(0x8a4a38, 0.9), x - sw * 0.2, y1 + 0.28, z, 0, 0, 0, 6); cyl(c.g, 0.11, 0.13, 0.3, pm(0x8a4a38, 0.9), x + sw * 0.2, y1 + 0.28, z, 0, 0, 0, 6); }
+}
+function tvAnt(c, x, y, z, ry = 0) { const m = add(c.g, tvAntG(), pm(0xb8bcbe, 0.5, 0.7), x, y, z, 0, ry, 0, false); return m; }
+function dish(c, x, y, z, ry = 0) { return add(c.g, dishG(), pm(0xe2e2dc, 0.5, 0.3), x, y, z, 0, ry, 0, false); }
+function gardenFence(c, z, len, mat) { add(c.g, fenceG(len), mat || pm(0xcfc8b6, 0.9), 0, 0, z, 0, 0, 0, false); }
+function baseWall(c, tex, hex, H, s = 4) { return add(c.g, tiledBoxG(c.w, H, c.d, s), wmat(tex, hex), 0, H / 2, 0); }
+function plinth(c, hh, mat, grow = 0.12) { add(c.g, boxG(+(c.w + grow).toFixed(3), hh, +(c.d + grow).toFixed(3)), mat || M.concreteDark, 0, hh / 2, 0); }
+
+// ---- Gebäudearten ----
+const KINDS = {};
+const pick = (a, s) => a[s % a.length];
+const TRIM = () => pm(0xf2f0e8, 0.7);
+function flatRoof(c, W, D, y, o = {}) { // Flachdach mit Bitumenbahn und Attika
+  add(c.g, tiledBoxG(+(W + 0.3).toFixed(3), 0.3, +(D + 0.3).toFixed(3), 4), wmat('bitu', o.hex ?? 0xffffff, 0.95), 0, y + 0.15, 0);
+  const ph = o.ph ?? 0.5, pt = 0.18, pm_ = o.pmat || M.concreteDark;
+  for (const s of [-1, 1]) { add(c.g, boxG(+(W + 0.3).toFixed(3), ph, pt), pm_, 0, y + 0.3 + ph / 2, s * (D / 2 + 0.06)); add(c.g, boxG(pt, ph, +(D + 0.3).toFixed(3)), pm_, s * (W / 2 + 0.06), y + 0.3 + ph / 2, 0); }
+  return y + 0.3;
+}
+function sub(c, x, y, z, ry = 0) { const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; c.g.add(g); return g; }
+function ventPipe(c, x, y, z, h = 0.8) { cyl(c.g, 0.14, 0.14, h, pm(0x8c9094, 0.6, 0.5), x, y + h / 2, z, 0, 0, 0, 6); cyl(c.g, 0.22, 0.14, 0.12, pm(0x8c9094, 0.6, 0.5), x, y + h + 0.06, z, 0, 0, 0, 6); }
+function acUnit(c, x, y, z) { box(c.g, 0.9, 0.6, 0.45, pm(0xdcdcd6, 0.6), x, y + 0.3, z); cyl(c.g, 0.2, 0.2, 0.04, pm(0x333333, 0.5), x, y + 0.3, z + 0.23, Math.PI / 2, 0, 0, 8); }
+
+KINDS.cottage = (c) => {
+  const { w, d, style: s } = c, fh = 2.8, nf = Math.min(2, c.floors), H = nf * fh;
+  const hex = pick([0xf1ede2, 0xcfe0e6, 0xeadfae, 0xd6dfc0, 0xe9cdb8], s), acc = pick([0x3c6fa8, 0x4d6b48, 0x2f4f7c, 0x7a4a36], s >> 1);
+  const body = baseWall(c, 'plaster', hex, H);
+  plinth(c, 0.65, pm(s % 2 ? 0x7b756b : acc, 0.9));
+  const doorU = (s % 2 ? -1 : 1) * w * 0.2, trim = TRIM();
+  facade(c, { faces: [0, 1, 2, 3], fh, ww: 0.85, wh: 1.15, sill: 0.95, bay: 2.6, v: 0, frame: trim, shut: s % 3 === 0 ? null : pm(acc, 0.8), skip: (fi, fl, i, n, u) => fi === 0 && fl === 0 && Math.abs(u - doorU) < 1.3 });
+  door(c, 0, doorU, { mat: pm(acc, 0.8), frame: trim, canopy: true, dw: 0.95 });
+  const ridgeX = w >= d * 1.05, span = ridgeX ? d : w, rh = Math.min(2.8, span * 0.38);
+  const [rk, rhex] = pick([['tile', 0xb55a40], ['corr', 0x8e9a90], ['seam', 0x62707a], ['tile', 0x8a5a44]], s);
+  const R = roof(c, { y: H, rh, ridgeX, kind: rk, hex: rhex, wall: wmat('plaster', hex), trim, over: 0.5, overZ: 0.45 });
+  chimney(c, ridgeX ? w * 0.22 : 0, ridgeX ? 0 : -d * 0.2, H, H + rh + 0.9);
+  const gf = ridgeX ? 2 : 0; // Giebelseite: Dachbodenfenster
+  fput(c, winG(0.6, 0.7, 1), trim, gf, 0, H + rh * 0.36, 0.015); fput(c, planeG(0.6, 0.7), glassFor(c), gf, 0, H + rh * 0.36, 0.07);
+  if (c.modern) { dish(c, ridgeX ? -w * 0.3 : w * 0.3, H - 0.7, d / 2 + 0.08); tvAnt(c, ridgeX ? -w * 0.25 : 0, H + rh * 0.9, ridgeX ? 0.4 : -d * 0.1); }
+  if (s % 4 >= 2) { // Veranda-Bank und Blumenkasten
+    box(c.g, 1.6, 0.06, 0.3, pm(0x7a5a3a), doorU + 1.5, 0.9, d / 2 + 0.2); box(c.g, 1.6, 0.14, 0.2, pm(0x5b7a3a), doorU + 1.5, 1.0, d / 2 + 0.05);
+  }
+  if (c.h.fence) gardenFence(c, d / 2 + 1.1, w + 1);
+  return { height: H + rh + 1, body };
+};
+
+KINDS.khrushchyovka = (c) => {
+  const { w, d, style: s } = c, fh = 2.9, nf = Math.min(6, Math.max(3, c.floors)), H = nf * fh;
+  const hex = pick([0xd2cfc4, 0xd9d1b6, 0xc7cfd0, 0xdcc9a6], s), trim = pm(0xe9e6dc, 0.8);
+  const body = baseWall(c, 'panel', hex, H, 3);
+  plinth(c, 0.9, pm(0x8d8a83, 0.95), 0.18);
+  const ne = Math.max(1, Math.round(w / 9)), eu = []; for (let k = 0; k < ne; k++) eu.push(-w / 2 + (k + 0.5) * w / ne);
+  const near = (u) => eu.some((e) => Math.abs(u - e) < 1.6);
+  facade(c, { faces: [0, 1], fh, ww: 1.35, wh: 1.4, sill: 0.85, bay: 3, margin: 0, v: 1, frame: trim, skip: (fi, fl, i, n, u) => near(u) });
+  facade(c, { faces: [2, 3], fh, ww: 0.9, wh: 1.2, sill: 0.8, bay: 99, margin: 0, v: 1, frame: trim, fl0: 0, skip: (fi, fl) => fl === 0 });
+  const acc = pick([0x3d6fa8, 0x4c8a5a, 0xb4513c, 0x6b7076], s >> 1), cols = [0xb9b3a6, 0x5f8a9c, 0xa4553f, 0x6e9a62, 0xd8c46a, 0xe8e6de];
+  for (const fi of [0, 1]) for (const e of eu) {
+    if (fi === 0) door(c, 0, e, { dw: 1.3, dh: 2.2, canopy: true, mat: pm(0x3d4a44, 0.6, 0.3), frame: pm(0x6d6a63, 0.9) });
+    else door(c, 1, e, { dw: 1.1, dh: 2.1, canopy: false, stoop: true, mat: pm(0x3d4a44, 0.6, 0.3), frame: pm(0x6d6a63, 0.9) });
+    for (let fl = 1; fl < nf; fl++) { // Treppenhausfenster
+      fput(c, winG(0.9, 1.0, 1), trim, fi, e, fl * fh + 0.3); fput(c, planeG(0.9, 1.0), glassFor(c), fi, e, fl * fh + 0.3, WIN_Z[1]);
+    }
+  }
+  // Loggien/Balkone zur Straße
+  const n = Math.max(1, Math.round(w / 3)), st = w / n;
+  for (let fl = 1; fl < nf; fl++) for (let i = 0; i < n; i++) {
+    const u = -w / 2 + (i + 0.5) * st; if (near(u) || i % 3 !== 1) continue;
+    const by = fl * fh + 0.06, bw = 2.1, dp = 0.95, rc = pm(pick(cols, Math.floor(c.rnd() * 6)), 0.9);
+    fput(c, balcSlabG(bw, dp), M.concrete, 0, u, by, 0); fput(c, balcRailG(bw, dp, 0.95), rc, 0, u, by);
+    if ((s + i + fl) % 3 === 0) { fput(c, balcFrameG(bw, dp, 0.95, 1.25), trim, 0, u, by); fput(c, planeG(bw - 0.1, 1.2), pm(0x7d9a96, 0.2, 0.5), 0, u, by + 0.95 + 0.62, dp - 0.04); }
+  }
+  // Dach: flach mit Attika oder flaches Satteldach (Wellasbest)
+  let top;
+  if (s % 4 < 2) {
+    const ridgeX = w >= d, span = ridgeX ? d : w, rh = Math.max(0.9, span * 0.13);
+    const R = roof(c, { y: H, rh, ridgeX, kind: s % 2 ? 'seam' : 'corr', hex: s % 2 ? 0x7c8a8f : 0x93a095, wall: wmat('panel', hex), ws: 3, trim, over: 0.5, overZ: 0.5 });
+    top = H + rh;
+    for (let k = 0; k < 2; k++) box(c.g, 0.7, 1.1, 0.7, M.concreteDark, (k ? 1 : -1) * w * 0.24 * (ridgeX ? 1 : 0), top + 0.3, (k ? 1 : -1) * d * 0.2 * (ridgeX ? 0 : 1));
+  } else {
+    top = flatRoof(c, w, d, H, { ph: 0.45 });
+    for (let k = 0; k < 3; k++) ventPipe(c, -w * 0.3 + k * w * 0.3, top, -d * 0.2, 1.0);
+    box(c.g, 1.6, 1.4, 1.4, M.concreteDark, w * 0.35, top + 0.7, d * 0.2);
+  }
+  const na = 2 + Math.floor(c.rnd() * 3);
+  for (let k = 0; k < na; k++) tvAnt(c, -w * 0.4 + (k + 0.5) * w * 0.8 / na, top - 0.2, (c.rnd() - 0.5) * d * 0.3, c.rnd() * 1.5);
+  if (c.modern) for (let k = 0; k < 5; k++) { const fi = c.rnd() < 0.7 ? 0 : 1, fl = Math.floor(c.rnd() * nf), u = -w / 2 + (Math.floor(c.rnd() * n) + 0.0) * st; if (near(u)) continue; fput(c, dishG(), pm(0xe2e2dc, 0.5, 0.3), fi, u, fl * fh + 1.45, 0.04); }
+  return { height: top + 1.5, body };
+};
+
+KINDS.panel_high = (c) => {
+  const { w, d, style: s } = c, fh = 3.0, nf = Math.min(16, Math.max(7, c.floors)), H = nf * fh;
+  const hex = pick([0xcdcac0, 0xd8cdb4, 0xbfc7ca, 0xd7c0b0], s), acc = pick([0x3d6fa8, 0xb4513c, 0x4c8a5a, 0x575d63], s >> 1), trim = pm(0xe9e6dc, 0.8);
+  const body = baseWall(c, 'panel', hex, H, 3);
+  plinth(c, 1.0, pm(0x7e7b74, 0.95), 0.2);
+  const ne = Math.max(1, Math.round(w / 12)), eu = []; for (let k = 0; k < ne; k++) eu.push(-w / 2 + (k + 0.5) * w / ne);
+  const near = (u) => eu.some((e) => Math.abs(u - e) < 1.7);
+  facade(c, { faces: [0, 1], fh, ww: 1.5, wh: 1.5, sill: 0.8, bay: 3, margin: 0, v: 2, frame: trim, skip: (fi, fl, i, n, u) => near(u) });
+  facade(c, { faces: [2, 3], fh, ww: 1.0, wh: 1.3, sill: 0.9, bay: 99, margin: 0, v: 2, frame: trim, fl0: 1 });
+  const n = Math.max(1, Math.round(w / 3)), st = w / n;
+  for (const fi of [0, 1]) for (const e of eu) {
+    door(c, fi, e, { dw: 1.6, dh: 2.3, canopy: fi === 0, mat: pm(0x3d4a44, 0.6, 0.3), frame: pm(0x6d6a63, 0.9) });
+    fput(c, boxG(0.9, +(H - 2.9).toFixed(2), 0.1), pm(acc, 0.8), fi, e, 2.9 + (H - 2.9) / 2, 0.02); // Farbband über dem Eingang (Treppenhaus)
+    for (let fl = 1; fl < nf; fl++) { fput(c, planeG(0.6, 0.9), glassFor(c), fi, e, fl * fh + 0.4, 0.075); }
+  }
+  for (let fl = 1; fl < nf; fl++) for (let i = 0; i < n; i++) { // verglaste Loggien
+    const u = -w / 2 + (i + 0.5) * st; if (near(u) || i % 2 !== 0) continue;
+    const by = fl * fh + 0.05, bw = 2.3, dp = 0.9;
+    for (const fi of [0, 1]) { if (fi === 1 && i % 4) continue; fput(c, balcSlabG(bw, dp), M.concrete, fi, u, by); fput(c, balcRailG(bw, dp, 0.9), pm(pick([0xb9b3a6, 0x5f8a9c, 0xe8e6de], i + fl), 0.9), fi, u, by); if ((fl + i) % 3) fput(c, planeG(bw - 0.1, 1.3), pm(0x7d9a96, 0.2, 0.5), fi, u, by + 0.9 + 0.65, dp - 0.04); }
+  }
+  add(c.g, boxG(+(w + 0.1).toFixed(2), 0.9, +(d + 0.1).toFixed(2)), pm(acc, 0.8), 0, H - 0.5, 0); // oberes Farbband
+  const top = flatRoof(c, w, d, H, { ph: 0.6 });
+  box(c.g, 3.0, 2.0, 2.6, M.concreteDark, -w * 0.2, top + 1.0, 0); box(c.g, 1.8, 1.6, 1.8, M.concreteDark, w * 0.25, top + 0.8, d * 0.15);
+  for (let k = 0; k < 4; k++) ventPipe(c, -w * 0.4 + k * 1.2, top, d * 0.3, 0.9);
+  cyl(c.g, 0.05, 0.05, 6, pm(0xb8bcbe, 0.5, 0.7), w * 0.4, top + 3, -d * 0.3, 0, 0, 0, 5);
+  if (nf > 10) box(c.g, 0.25, 0.25, 0.25, pm(0xff3020, 0.5, 0, 0xff2010, 2.5), w * 0.4, top + 6.1, -d * 0.3);
+  if (c.modern) for (let k = 0; k < Math.min(8, nf); k++) { const fi = c.rnd() < 0.6 ? 0 : 1, fl = 1 + Math.floor(c.rnd() * (nf - 1)); const u = -w / 2 + (Math.floor(c.rnd() * n)) * st; if (near(u)) continue; fput(c, dishG(), pm(0xe2e2dc, 0.5, 0.3), fi, u, fl * fh + 1.3, 0.04); }
+  return { height: top + 3, body };
+};
+
+KINDS.shop = (c) => {
+  const { w, d, style: s } = c, nf = Math.min(2, c.floors), H = 3.6 + (nf - 1) * 3.0, trim = TRIM();
+  const tex = s % 3 === 0 ? ['brick', 0xffffff] : s % 3 === 1 ? ['plaster', 0xe5d5b2] : ['plaster', 0xcfd5d3];
+  const body = baseWall(c, tex[0], tex[1], H, tex[0] === 'brick' ? 2 : 4);
+  plinth(c, 0.5, M.concreteDark, 0.14);
+  const sign = pick([0xb53a30, 0x2f5c9a, 0xe0b030, 0x3d7a4a], s);
+  const gw = w - 2.6, gx = -0.7; // Schaufenster
+  fput(c, planeG(gw, 2.1), M.window, 0, gx, 1.65, 0.06);
+  fput(c, comp(`sf${gw}`, (B) => { B(gw + 0.2, 0.1, 0.14, 0, 1.1, 0.07); B(gw + 0.2, 0.1, 0.14, 0, -1.05, 0.07); B(0.1, 2.2, 0.14, -gw / 2 - 0.05, 0, 0.07); B(0.1, 2.2, 0.14, gw / 2 + 0.05, 0, 0.07); for (let k = 1; k < Math.round(gw / 1.6); k++) B(0.07, 2.1, 0.1, -gw / 2 + k * gw / Math.round(gw / 1.6), 0, 0.07); }), pm(0x555a5e, 0.5, 0.6), 0, gx, 1.6);
+  door(c, 0, w / 2 - 1.0, { dw: 1.1, dh: 2.2, mat: pm(0x2b3a44, 0.2, 0.5), frame: pm(0x555a5e, 0.5, 0.6), canopy: false });
+  fput(c, boxG(+(w - 0.4).toFixed(2), 0.8, 0.22), pm(sign, 0.7, 0, c.lit ? sign : 0, 0.8), 0, 0, 3.15, 0.1); // Schild
+  const nst = Math.max(4, Math.round(gw / 0.8)); // gestreifte Markise
+  for (let k = 0; k < nst; k++) { const u = gx - gw / 2 + (k + 0.5) * gw / nst; fput(c, boxG(+(gw / nst).toFixed(3), 0.05, 1.0), pm(k % 2 ? 0xf0ece0 : sign, 0.9), 0, u, 2.82, 0.5, 0).rotation.x = 0.22; }
+  facade(c, { faces: [1, 2, 3], fh: 3.0, ww: 0.9, wh: 0.8, sill: 1.9, bay: 3.2, v: 1, frame: trim, fl0: 0, fl1: 1 });
+  if (nf > 1) facade(c, { faces: [0, 1, 2, 3], fh: 3.0, ww: 1.0, wh: 1.35, sill: 0.9, y0: 3.6 - 3.0 + 0.0, bay: 2.8, v: 0, frame: trim, fl0: 1, fl1: nf });
+  door(c, 1, -w * 0.25, { dw: 1.2, dh: 2.2, mat: pm(0x56616a, 0.6, 0.4), frame: pm(0x6d6a63, 0.9), canopy: false, stoop: true });
+  const top = flatRoof(c, w, d, H, { ph: 0.5 });
+  acUnit(c, -w * 0.3, top, -d * 0.2); acUnit(c, -w * 0.1, top, -d * 0.2);
+  if (s % 2) { box(c.g, w * 0.5, 1.0, 0.12, pm(sign, 0.7, 0, c.lit ? sign : 0, 0.8), 0, top + 1.4, d / 2 - 0.3); for (const k of [-1, 1]) box(c.g, 0.08, 0.9, 0.08, pm(0x555a5e, 0.5, 0.6), k * w * 0.22, top + 0.7, d / 2 - 0.3); }
+  if (c.modern) dish(c, w * 0.3, top + 0.2, d * 0.1, 0);
+  return { height: top + 1.5, body };
+};
+
+KINDS.kiosk = (c) => {
+  const { w, d, style: s } = c, H = 2.6, col = pick([0x3f6f5a, 0x2f5c9a, 0xb5442f, 0xc9a43a], s);
+  add(c.g, boxG(+(w + 0.3).toFixed(2), 0.12, +(d + 0.3).toFixed(2)), M.concrete, 0, 0.06, 0, 0, 0, 0, false);
+  const body = add(c.g, tiledBoxG(w, H, d, 2), wmat('corr', col, 0.55, 0.3), 0, 0.12 + H / 2, 0);
+  const trim = pm(0xe6e2d6, 0.7);
+  fput(c, planeG(w * 0.62, 0.95), M.window, 0, 0, 1.65, 0.04);
+  fput(c, comp(`kw${w}`, (B) => { const ww = w * 0.62; B(ww + 0.16, 0.08, 0.1, 0, 0.52, 0.05); B(ww + 0.16, 0.08, 0.1, 0, -0.52, 0.05); B(0.08, 1.1, 0.1, -ww / 2 - 0.04, 0, 0.05); B(0.08, 1.1, 0.1, ww / 2 + 0.04, 0, 0.05); }), trim, 0, 0, 1.65);
+  fput(c, boxG(+(w * 0.7).toFixed(2), 0.06, 0.4), pm(0x7a5a3a), 0, 0, 1.12, 0.2); // Ablage
+  for (let k = 0; k < 6; k++) fput(c, boxG(+(w * 0.7 / 6).toFixed(3), 0.05, 0.95), pm(k % 2 ? 0xf0ece0 : col, 0.9), 0, -w * 0.35 + (k + 0.5) * w * 0.7 / 6, 2.5, 0.45).rotation.x = 0.35;
+  fput(c, boxG(+(w * 0.8).toFixed(2), 0.5, 0.1), pm(0xf2efe6, 0.5, 0, c.lit ? 0xffe9b0 : 0, 0.9), 0, 0, 2.95, 0.05);
+  door(c, 2, 0, { dw: 0.8, dh: 1.9, mat: pm(0x56616a, 0.6, 0.4), frame: trim, canopy: false, stoop: true });
+  add(c.g, tiledBoxG(+(w + 0.4).toFixed(2), 0.12, +(d + 0.4).toFixed(2), 2), wmat('seam', 0x6a6e70, 0.5, 0.4), 0, 0.12 + H + 0.06, 0, 0.04, 0, 0);
+  if (c.modern) tvAnt(c, -w * 0.3, H + 0.2, -d * 0.1);
+  return { height: H + 1.2, body };
+};
+
+function hallWalls(c, H, tex, hex, s) { return add(c.g, tiledBoxG(c.w, H, c.d, s), wmat(tex, hex, tex === 'corr' ? 0.6 : 0.92, tex === 'corr' ? 0.25 : 0), 0, H / 2, 0); }
+KINDS.warehouse = (c) => {
+  const { w, d, style: s } = c, H = 5.0 + (c.floors - 1) * 1.8, hex = pick([0xaab2aa, 0x9aa6a8, 0x8f9c8c, 0xb4a89a], s);
+  const body = hallWalls(c, H, 'corr', hex, 2);
+  add(c.g, boxG(+(w + 0.16).toFixed(2), 1.1, +(d + 0.16).toFixed(2)), M.concrete, 0, 0.55, 0);
+  const trim = pm(0xc9c6bc, 0.8), ridgeX = w >= d, span = ridgeX ? d : w, rh = Math.max(1.0, span * 0.12);
+  roof(c, { y: H, rh, ridgeX, kind: 'corr', hex: pick([0x8f9892, 0x8a6a55, 0x7d8a84, 0x9a9a90], s >> 1), wall: wmat('corr', hex, 0.6, 0.25), ws: 2, trim, over: 0.35, overZ: 0.35 });
+  // Lichtband am First, Lüfter
+  const lg = ridgeX ? w - 3 : d - 3;
+  add(c.g, boxG(ridgeX ? lg : 0.7, 0.5, ridgeX ? 0.7 : lg), pm(0x7a96a5, 0.3, 0.5), 0, H + rh + 0.25, 0);
+  for (let k = 0; k < 3; k++) { const p = (k - 1) * (ridgeX ? w : d) * 0.28; ventPipe(c, ridgeX ? p : 0, H + rh * 0.5, ridgeX ? 0 : p, 0.6); }
+  // Tore und Fensterband
+  const ng = Math.max(1, Math.round(w / 8));
+  for (let k = 0; k < ng; k++) {
+    const u = -w / 2 + (k + 0.5) * w / ng - (k === ng - 1 ? 0 : 0);
+    if (k === 0 && ng > 1) { door(c, 0, u, { dw: 1.1, dh: 2.2, mat: pm(0x56616a, 0.6, 0.4), frame: pm(0x6d6a63, 0.9), canopy: false }); continue; }
+    fput(c, comp(`rd`, (B) => { B(3.5, 3.7, 0.12, 0, 1.85, 0.06); for (let i = 1; i < 9; i++) B(3.5, 0.04, 0.04, 0, i * 0.4, 0.14); B(3.9, 0.2, 0.2, 0, 3.8, 0.1); B(0.2, 3.7, 0.2, -1.85, 1.85, 0.1); B(0.2, 3.7, 0.2, 1.85, 1.85, 0.1); }), pm(pick([0x6e7f74, 0x7a6a55, 0x55657a], s + k), 0.6, 0.3), 0, u, 0.15);
+    fput(c, boxG(4.6, 0.5, 0.6), M.concreteDark, 0, u, 0.25, 0.32); // Rampe/Prellbock
+  }
+  for (const fi of [0, 1, 2, 3]) { const len = fi < 2 ? w : d; fput(c, planeG(len - 3, 0.9), M.window, fi, 0, H - 1.5, 0.04); fput(c, comp(`rb${len}`, (B) => { B(len - 2.8, 0.06, 0.1, 0, 0.47, 0.05); B(len - 2.8, 0.06, 0.1, 0, -0.47, 0.05); for (let k = 0; k <= Math.round((len - 3) / 3); k++) B(0.06, 0.9, 0.1, -(len - 3) / 2 + k * (len - 3) / Math.round((len - 3) / 3), 0, 0.05); }), trim, fi, 0, H - 1.5); }
+  for (const fi of [0, 1]) fput(c, boxG(0.3, 0.2, 0.3), pm(0xfff1c0, 0.3, 0, c.lit ? 0xffd890 : 0, 1.5), fi, -w * 0.4, H - 0.4, 0.2);
+  cyl(c.g, 0.1, 0.1, H - 1.4, pm(0x7a8084, 0.5, 0.6), w / 2 + 0.2, (H - 1.4) / 2 + 0.7, -d * 0.3, 0, 0, 0, 6);
+  if (s % 2) { cyl(c.g, 1.0, 1.0, 4.2, pm(0xa6abaf, 0.5, 0.6), -w / 2 - 0.9, 2.1, -d * 0.2, 0, 0, 0, 12); cyl(c.g, 1.0, 0.1, 0.5, pm(0xa6abaf, 0.5, 0.6), -w / 2 - 0.9, 4.45, -d * 0.2, 0, 0, 0, 12); }
+  return { height: H + rh + 1, body };
+};
+
+KINDS.industrial = (c) => {
+  const { w, d, style: s } = c, H = 7.0 + (c.floors > 1 ? 1.5 : 0), brickHex = pick([0xffffff, 0xe0cdb8, 0xd0b090, 0xc4a898], s);
+  const wallMat = wmat('brick', brickHex);
+  const body = add(c.g, tiledBoxG(w, H, d, 2), wallMat, 0, H / 2, 0);
+  add(c.g, boxG(+(w + 0.2).toFixed(2), 0.9, +(d + 0.2).toFixed(2)), M.concreteDark, 0, 0.45, 0);
+  const trim = pm(0xb9b5a8, 0.85), frame = pm(0x4a4f52, 0.6, 0.4);
+  // Pilaster und Gesims
+  for (const fi of [0, 1]) { const n = Math.max(2, Math.round(w / 3.6)); for (let k = 0; k <= n; k++) fput(c, tiledBoxG(0.55, H, 0.28, 2), wallMat, fi, -w / 2 + k * w / n, H / 2, 0.14); }
+  for (const fi of [2, 3]) { const n = Math.max(2, Math.round(d / 3.6)); for (let k = 0; k <= n; k++) fput(c, tiledBoxG(0.55, H, 0.28, 2), wallMat, fi, -d / 2 + k * d / n, H / 2, 0.14); }
+  add(c.g, boxG(+(w + 0.5).toFixed(2), 0.4, +(d + 0.5).toFixed(2)), M.concrete, 0, H + 0.2, 0);
+  facade(c, { faces: [0, 1, 2, 3], fh: 4.2, ww: 1.5, wh: 2.6, sill: 2.2, bay: 3.6, margin: 1.2, v: 3, frame, fl0: 0, fl1: 1, skip: (fi, fl, i, n, u) => fi === 0 && Math.abs(u) < 2.6 });
+  if (c.floors > 1) facade(c, { faces: [0, 1, 2, 3], fh: 4.2, ww: 1.5, wh: 1.2, sill: 0.7, y0: 0.7, bay: 3.6, margin: 1.2, v: 3, frame, fl0: 0, fl1: 1, skip: (fi, fl, i, n, u) => fi === 0 && Math.abs(u) < 2.6 });
+  fput(c, comp('ig', (B) => { B(4.0, 4.3, 0.14, 0, 2.15, 0.07); for (let i = 1; i < 11; i++) B(4.0, 0.04, 0.05, 0, i * 0.39, 0.16); B(4.5, 0.25, 0.25, 0, 4.4, 0.1); B(0.25, 4.3, 0.25, -2.1, 2.15, 0.1); B(0.25, 4.3, 0.25, 2.1, 2.15, 0.1); }), pm(0x5d6a62, 0.6, 0.3), 0, 0, 0.9);
+  // Sheddach: Zähne entlang x, Glasfront nach +x
+  const nt = Math.max(2, Math.round(w / 5)), tw = w / nt, th = Math.min(2.6, tw * 0.55);
+  const R = rmat('seam', 0x7e8588), ang = Math.atan2(th, tw), sl = Math.hypot(tw, th);
+  for (let k = 0; k < nt; k++) {
+    const x0 = -w / 2 + k * tw;
+    add(c.g, tiledBoxG(+(sl + 0.2).toFixed(3), 0.12, +(d + 0.3).toFixed(3), R.s), R.mat, x0 + tw / 2, H + 0.4 + th / 2, 0, 0, 0, ang);
+    add(c.g, triG2(tw, th, false), wallMat, x0, H + 0.4, d / 2 + 0.01);
+    add(c.g, triG2(tw, th, true), wallMat, x0 + tw, H + 0.4, -d / 2 - 0.01, 0, Math.PI, 0);
+    fput(c, planeG(+(d - 1).toFixed(2), +(th * 0.85).toFixed(2)), pm(0x7a96a5, 0.25, 0.5), 2, 0, H + 0.4 + th * 0.45, 0, 0).position.set(x0 + tw + 0.02, H + 0.4 + th * 0.45, 0);
+    for (let m = 0; m <= Math.round(d / 3); m++) add(c.g, boxG(0.06, +(th * 0.85).toFixed(2), 0.1), frame, x0 + tw + 0.04, H + 0.4 + th * 0.45, -d / 2 + 0.5 + m * (d - 1) / Math.round(d / 3));
+  }
+  // Schornstein
+  const hc = 15 + c.floors * 2.5 + (s % 3) * 2, cx = w / 2 - 1.9, cz = -d / 2 + 1.9, chm = pm(0x7a4234, 0.95);
+  cyl(c.g, 0.55, 0.95, hc, chm, cx, hc / 2, cz, 0, 0, 0, 10);
+  for (const f of [0.35, 0.7, 0.95]) cyl(c.g, 0.58 + (1 - f) * 0.4, 0.58 + (1 - f) * 0.4, 0.16, pm(0x3d3a37, 0.6, 0.6), cx, hc * f, cz, 0, 0, 0, 10);
+  cyl(c.g, 0.62, 0.52, 0.5, pm(0x3a3835, 0.8), cx, hc + 0.2, cz, 0, 0, 0, 10);
+  box(c.g, 0.1, 0.1, 1.2, pm(0x55585a, 0.5, 0.7), cx + 0.5, hc * 0.5, cz, 0, 0, 0);
+  // Rohre, Tank
+  cyl(c.g, 0.2, 0.2, d * 0.5, pm(0x7a6a58, 0.5, 0.6), -w / 2 - 0.3, 3.6, 0, Math.PI / 2, 0, 0, 8);
+  cyl(c.g, 0.16, 0.16, 3.6, pm(0x7a6a58, 0.5, 0.6), -w / 2 - 0.3, 1.8, d * 0.25, 0, 0, 0, 8);
+  cyl(c.g, 1.1, 1.1, 4.6, pm(0x8c9094, 0.5, 0.7), -w / 2 - 1.0, 2.3, -d * 0.3, 0, 0, 0, 12);
+  return { height: hc + 1, body };
+};
+function triG2(w, h, mir) { // Sheddach-Giebel: rechtwinkliges Dreieck, Spitze rechts (mir: links)
+  return _bgk(`t2${w},${h},${mir}`, () => {
+    const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(w, 0); if (mir) sh.lineTo(0, h); else sh.lineTo(w, h); sh.closePath();
+    const g = new THREE.ShapeGeometry(sh); const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 2, uv.getY(i) / 2);
+    return g;
+  });
 }
 
+const wput = (c, geo, mat, x, y, z, ry = 0, parent = null) => add(parent || c.g, geo, mat, x, y, z, 0, ry, 0, false);
+function cross(c, x, y, z, h = 1.4, mat = null) { // orthodoxes Kreuz
+  const m = mat || pm(0xd9ac2f, 0.35, 0.8);
+  box(c.g, 0.08, h, 0.08, m, x, y + h / 2, z); box(c.g, 0.6, 0.07, 0.07, m, x, y + h * 0.7, z); box(c.g, 0.4, 0.07, 0.07, m, x, y + h * 0.9, z); box(c.g, 0.4, 0.07, 0.07, m, x, y + h * 0.3, z, 0, 0, 0.35);
+}
+function dome(c, x, y, z, r, mat, drum = 1.0) { // Tambour + Zwiebelkuppel + Kreuz
+  cyl(c.g, r * 0.62, r * 0.7, drum, pm(0xf4f0e6, 0.8), x, y + drum / 2, z, 0, 0, 0, 10);
+  add(c.g, onionG(+r.toFixed(2), +(r * 1.85).toFixed(2)), mat, x, y + drum, z);
+  cross(c, x, y + drum + r * 1.85, z, r * 1.5);
+}
+
+KINDS.church_orthodox = (c) => {
+  const { w, d, style: s } = c;
+  const hex = pick([0xf1ede2, 0xe9dfb8, 0xf4f0e6, 0xdfe6ea], s), wall = wmat('plaster', hex), trim = pm(0xfaf8f0, 0.7), dark = pm(0x1f1a17, 0.4, 0.2);
+  const domeMat = pm(pick([0xd9ac2f, 0x2f5c9a, 0x3d7a4a, 0xc4c8cc], s), 0.3, 0.8), roofHex = pick([0x3f6b4f, 0x4a6f9a, 0x6b6f72, 0x3f6b4f], s);
+  const tw = Math.min(w * 0.5, 4.6), tzc = d / 2 - tw / 2, nw = w * 0.74, ra = nw * 0.34, zN0 = -d / 2 + ra, zN1 = d / 2 - tw, nd = zN1 - zN0, zc = (zN0 + zN1) / 2;
+  const Hn = 7.0 + Math.min(3, c.floors) * 0.6, Ht = Hn + 6.2, Ha = Hn * 0.72;
+  const body = add(c.g, tiledBoxG(+nw.toFixed(2), Hn, +nd.toFixed(2), 4), wall, 0, Hn / 2, zc);
+  add(c.g, boxG(+(nw + 0.24).toFixed(2), 0.8, +(nd + 0.24).toFixed(2)), M.concrete, 0, 0.4, zc);
+  add(c.g, tiledBoxG(tw, Ht, tw, 4), wall, 0, Ht / 2, tzc); add(c.g, boxG(+(tw + 0.24).toFixed(2), 0.8, +(tw + 0.24).toFixed(2)), M.concrete, 0, 0.4, tzc);
+  cyl(c.g, ra, ra, Ha, hex ? wmat('plaster', hex) : wall, 0, Ha / 2, zN0, 0, 0, 0, 12);
+  cyl(c.g, 0.2, ra * 1.12, 2.4, pm(roofHex, 0.5, 0.4), 0, Ha + 1.2, zN0, 0, 0, 0, 12); cross(c, 0, Ha + 2.4, zN0, 1.2);
+  const rg = sub(c, 0, 0, zc), rh = nw * 0.2;
+  gableRoof(c, { parent: rg, W: nw, D: nd, y: Hn, rh, kind: 'seam', hex: roofHex, wall, ws: 4, trim, over: 0.5, overZ: 0.45 });
+  const rd = nw * 0.24, y0 = Hn + rh * 0.35;
+  dome(c, 0, y0, zc, rd * 1.25, domeMat, rh * 0.65 + 3.0);
+  for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; wput(c, archPlaneG(0.5, 1.5), dark, Math.sin(a) * (rd * 0.7 * 1.25 + 0.02), y0 + (rh * 0.65 + 3.0) * 0.7, zc + Math.cos(a) * (rd * 0.7 * 1.25 + 0.02), a); }
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) dome(c, sx * nw * 0.34, Hn + rh * 0.3, zc + sz * nd * 0.3, 0.75, domeMat, 1.2);
+  // Glockenturm
+  add(c.g, boxG(+(tw + 0.3).toFixed(2), 0.3, +(tw + 0.3).toFixed(2)), M.concrete, 0, Ht + 0.15, tzc);
+  dome(c, 0, Ht + 0.3, tzc, tw * 0.36, domeMat, 1.6);
+  for (const [px, pz, ry] of [[0, tzc + tw / 2 + 0.03, 0], [0, tzc - tw / 2 - 0.03, Math.PI], [tw / 2 + 0.03, tzc, Math.PI / 2], [-tw / 2 - 0.03, tzc, -Math.PI / 2]]) {
+    wput(c, archPlaneG(1.0, 2.2), dark, px, Ht - 1.8, pz, ry); wput(c, archPlaneG(1.4, 2.6), trim, px, Ht - 1.7, pz - 0.0, ry).position.add(new THREE.Vector3(Math.sin(ry) * -0.01, 0, Math.cos(ry) * -0.01));
+  }
+  // Fenster
+  const nwin = Math.max(2, Math.round(nd / 3.4));
+  for (const sx of [-1, 1]) for (let k = 0; k < nwin; k++) { const z = zN0 + (k + 0.5) * nd / nwin; wput(c, archPlaneG(1.3, 2.8), trim, sx * (nw / 2 + 0.015), 4.2, z, sx * Math.PI / 2); wput(c, archPlaneG(0.9, 2.4), c.lit && c.rnd() < 0.5 ? M.windowLit : M.window, sx * (nw / 2 + 0.03), 4.1, z, sx * Math.PI / 2); }
+  for (const a of [-0.75, 0, 0.75]) { wput(c, archPlaneG(0.8, 1.9), M.window, Math.sin(a) * (ra + 0.02), 3.2, zN0 - Math.cos(a) * (ra + 0.02), Math.PI - a); }
+  // Portal
+  wput(c, archPlaneG(2.4, 3.6), trim, 0, 1.8, d / 2 + 0.03, 0); wput(c, archPlaneG(1.7, 2.9), pm(0x4a3a2c, 0.85), 0, 1.45, d / 2 + 0.05, 0);
+  add(c.g, boxG(3.0, 0.2, 1.3), M.concrete, 0, 0.1, d / 2 + 0.4); add(c.g, boxG(2.8, 0.14, 1.2), pm(roofHex, 0.5, 0.4), 0, 4.05, d / 2 + 0.55, 0.0);
+  for (const sx of [-1, 1]) add(c.g, boxG(0.16, 3.9, 0.16), trim, sx * 1.35, 2.0, d / 2 + 1.0);
+  return { height: Ht + tw * 0.36 * 1.85 + 3.5, body };
+};
+
+KINDS.church_west = (c) => {
+  const { w, d, style: s } = c;
+  const hex = pick([0xd4cdbd, 0xbdb7a8, 0xcbbfa6, 0xa9a79f], s), wall = wmat('stone', hex), H = Math.max(6.8, c.floors * 3.0 + 0.5), stoneT = pm(0xddd6c6, 0.9), dark = pm(0x201a16, 0.4, 0.2);
+  const cd = d * 0.22, cw = w * 0.6, Hc = H - 1.3, nd = d - cd, tw = w * 0.62, Ht = H + 6.5, tz = d / 2 - tw / 2 + 0.04;
+  const body = add(c.g, tiledBoxG(w, H, +nd.toFixed(2), 3), wall, 0, H / 2, cd / 2);
+  add(c.g, tiledBoxG(+cw.toFixed(2), Hc, +(cd + 0.3).toFixed(2), 3), wall, 0, Hc / 2, -d / 2 + cd / 2);
+  add(c.g, tiledBoxG(+tw.toFixed(2), Ht, +tw.toFixed(2), 3), wall, 0, Ht / 2, tz);
+  add(c.g, boxG(+(w + 0.2).toFixed(2), 0.7, +(nd + 0.2).toFixed(2)), M.concreteDark, 0, 0.35, cd / 2);
+  const slate = pick([0x4c5258, 0x565c62, 0x6a4a40, 0x4a4f55], s >> 1), nr = sub(c, 0, 0, cd / 2), cr = sub(c, 0, 0, -d / 2 + cd / 2 + 0.0);
+  gableRoof(c, { parent: nr, W: w, D: nd, y: H, rh: w * 0.55, kind: s % 4 === 2 ? 'tile' : 'slate', hex: s % 4 === 2 ? 0x9a5a44 : slate, wall, ws: 3, trim: stoneT, over: 0.3, overZ: 0.3 });
+  gableRoof(c, { parent: cr, W: cw, D: cd + 0.3, y: Hc, rh: cw * 0.5, kind: 'slate', hex: slate, wall, ws: 3, trim: stoneT, over: 0.25, overZ: 0.25 });
+  // Turm: Gesims, Schallöffnungen, Uhr, Spitzhelm
+  add(c.g, boxG(+(tw + 0.3).toFixed(2), 0.3, +(tw + 0.3).toFixed(2)), stoneT, 0, Ht + 0.15, tz);
+  const hs = tw * 1.7; add(c.g, cylG(0, +(tw * 0.5 * 1.414).toFixed(3), +hs.toFixed(2), 4), pm(slate, 0.7, 0.1), 0, Ht + 0.3 + hs / 2, tz, 0, Math.PI / 4, 0);
+  box(c.g, 0.08, 1.4, 0.08, pm(0xd9ac2f, 0.35, 0.8), 0, Ht + 0.3 + hs + 0.6, tz); box(c.g, 0.6, 0.07, 0.07, pm(0xd9ac2f, 0.35, 0.8), 0, Ht + 0.3 + hs + 0.9, tz);
+  for (const [px, pz, ry] of [[0, tz + tw / 2 + 0.03, 0], [0, tz - tw / 2 - 0.03, Math.PI], [tw / 2 + 0.03, tz, Math.PI / 2], [-tw / 2 - 0.03, tz, -Math.PI / 2]]) {
+    for (const k of [-1, 1]) { const ox = Math.cos(ry) * k * tw * 0.2, oz = -Math.sin(ry) * k * tw * 0.2; wput(c, gothG(0.8, 2.4), dark, px + ox, Ht - 1.9, pz + oz, ry); wput(c, gothG(1.1, 2.8), stoneT, px + ox - Math.sin(ry) * 0.01, Ht - 1.8, pz + oz - Math.cos(ry) * 0.01, ry); }
+  }
+  const cy = Ht - 5.2, cz = tz + tw / 2 + 0.05;
+  cyl(c.g, 0.86, 0.86, 0.08, dark, 0, cy, cz, Math.PI / 2, 0, 0, 14); cyl(c.g, 0.72, 0.72, 0.1, pm(0xf0ece0, 0.5), 0, cy, cz + 0.01, Math.PI / 2, 0, 0, 14);
+  box(c.g, 0.05, 0.5, 0.04, dark, 0, cy + 0.2, cz + 0.07); box(c.g, 0.4, 0.05, 0.04, dark, 0.15, cy, cz + 0.07);
+  // Portal und Rosette
+  wput(c, gothG(2.5, 4.0), stoneT, 0, 2.0, d / 2 + 0.03, 0); wput(c, gothG(1.8, 3.3), pm(0x4a3a2c, 0.85), 0, 1.65, d / 2 + 0.05, 0);
+  add(c.g, boxG(3.0, 0.2, 1.2), M.concrete, 0, 0.1, d / 2 + 0.4);
+  cyl(c.g, 0.95, 0.95, 0.08, stoneT, 0, H - 1.0, cz, Math.PI / 2, 0, 0, 14); cyl(c.g, 0.75, 0.75, 0.1, c.lit ? M.windowLit : M.window, 0, H - 1.0, cz + 0.01, Math.PI / 2, 0, 0, 14);
+  // Strebepfeiler + Spitzbogenfenster
+  const nb = Math.max(2, Math.floor((nd - tw) / 4.2));
+  for (let k = 0; k < nb; k++) {
+    const z = -d / 2 + cd + 1.2 + (k + 0.5) * (nd - tw - 1.2) / nb;
+    for (const sx of [-1, 1]) {
+      add(c.g, tiledBoxG(0.55, +(H * 0.85).toFixed(2), 0.9, 3), wall, sx * (w / 2 + 0.27), H * 0.425, z + 1.9); add(c.g, tiledBoxG(0.4, +(H * 0.5).toFixed(2), 0.8, 3), wall, sx * (w / 2 + 0.6), H * 0.25, z + 1.9);
+      const wz = z - 0.2; wput(c, gothG(1.5, 3.4), stoneT, sx * (w / 2 + 0.015), 4.3, wz, sx * Math.PI / 2); wput(c, gothG(1.1, 3.0), c.lit && c.rnd() < 0.6 ? M.windowLit : pm(pick([0x1b2a44, 0x26364a, 0x3a2a44], k + s), 0.2, 0.5), sx * (w / 2 + 0.035), 4.2, wz, sx * Math.PI / 2);
+      wput(c, boxG(0.05, 2.8, 0.06), stoneT, sx * (w / 2 + 0.05), 4.0, wz, 0);
+    }
+  }
+  for (const k of [-1, 0, 1]) { wput(c, gothG(1.2, 2.8), stoneT, k * cw * 0.3, 3.4, -d / 2 - 0.17, Math.PI); wput(c, gothG(0.8, 2.4), M.window, k * cw * 0.3, 3.3, -d / 2 - 0.19, Math.PI); }
+  box(c.g, 0.08, 1.2, 0.08, stoneT, 0, H + w * 0.55 + 0.6, -d / 2 + cd + 0.2); box(c.g, 0.5, 0.07, 0.07, stoneT, 0, H + w * 0.55 + 0.9, -d / 2 + cd + 0.2);
+  return { height: Ht + hs + 2, body };
+};
+
+function dormer(c, x, z0, yBase, wallMat, trim, kind, hex) {
+  const g = sub(c, x, 0, z0 - 0.5);
+  add(g, tiledBoxG(1.3, 1.3, 1.0, 3), wallMat, 0, yBase + 0.65, 0);
+  add(g, winG(0.6, 0.8, 1), trim, 0, yBase + 0.65, 0.5, 0, 0, 0, false); add(g, planeG(0.6, 0.8), glassFor(c), 0, yBase + 0.65, 0.55, 0, 0, 0, false);
+  gableRoof(c, { parent: g, W: 1.3, D: 1.0, y: yBase + 1.3, rh: 0.6, kind, hex, wall: wallMat, ws: 3, trim, over: 0.15, overZ: 0.2, gutter: false, bargeboards: false });
+}
+
+KINDS.farmhouse_eu = (c) => {
+  const { w, d, style: s } = c, fh = 2.8, nf = Math.min(2, c.floors), H = nf * fh + 0.4;
+  const hex = pick([0xd2bf9c, 0xbab6a6, 0xd6c8a8, 0xc2ab8c], s), stone = wmat('stone', hex), trim = pm(0xe4dece, 0.85), shut = pm(pick([0x8fa3ae, 0xf0eee6, 0x5f7a5a, 0x6a7f94], s >> 1), 0.8);
+  const body = add(c.g, tiledBoxG(w, H, d, 3), stone, 0, H / 2, 0);
+  add(c.g, boxG(+(w + 0.12).toFixed(2), 0.45, +(d + 0.12).toFixed(2)), pm(0x8f8a7c, 0.95), 0, 0.225, 0);
+  const doorU = s % 2 ? 0 : -w * 0.18;
+  facade(c, { faces: [0, 1, 2, 3], fh, ww: 0.95, wh: 1.3, sill: 0.9, y0: 0.2, bay: 2.8, v: 0, frame: trim, shut, shutP: 0.9, skip: (fi, fl, i, n, u) => fi === 0 && fl === 0 && Math.abs(u - doorU) < 1.4 });
+  door(c, 0, doorU, { dw: 1.1, dh: 2.2, mat: pm(0x5a4030, 0.85), frame: trim, canopy: false });
+  fput(c, boxG(1.7, 0.3, 0.28), trim, 0, doorU, 2.4, 0.1);
+  const ridgeX = w >= d, span = ridgeX ? d : w, rh = span * 0.55;
+  const [rk, rhex] = pick([['slate', 0x565c62], ['tile', 0xa05a44], ['slate', 0x4a5056], ['tile', 0x8a5a48]], s);
+  const R = roof(c, { y: H, rh, ridgeX, kind: rk, hex: rhex, wall: stone, ws: 3, trim, over: 0.4, overZ: 0.3 });
+  for (const sg of [-1, 1]) chimney(c, ridgeX ? sg * (w / 2 - 0.5) : 0, ridgeX ? 0 : sg * (d / 2 - 0.5), H - 0.2, H + rh + 0.8, { sw: 0.9, sd: 0.8, mat: stone, pot: true });
+  if (ridgeX) for (const sg of [-1, 1]) dormer(c, sg * w * 0.22, d / 2 - 0.9, R.at(d / 2 - 0.9) - 0.25, stone, trim, rk, rhex);
+  if (nf === 2 && s % 4 === 3) { // Fachwerk im Obergeschoss
+    const tb = pm(0x3a2a1e, 0.9);
+    for (const fi of [0, 1]) { const len = w, n = Math.round(len / 1.3); for (let k = 0; k <= n; k++) fput(c, boxG(0.14, fh - 0.1, 0.1), tb, fi, -len / 2 + k * len / n, fh + fh / 2 + 0.4, 0.02); fput(c, boxG(+len.toFixed(2), 0.16, 0.12), tb, fi, 0, fh + 0.4, 0.03); }
+  }
+  if (c.h.fence) gardenFence(c, d / 2 + 1.1, w + 1, pm(0xb5ad9a, 0.95));
+  return { height: H + rh + 1.2, body };
+};
+
+KINDS.barn = (c) => {
+  const { w, d, style: s } = c, Hw = 4.2 + (c.floors - 1) * 1.0, hex = pick([0x8a7a68, 0x9a5a40, 0xa89168, 0x7a6a58], s);
+  const plank = wmat('plank', hex), body = add(c.g, tiledBoxG(w, Hw, d, 2.5), plank, 0, Hw / 2, 0), dk = pm(0x3f2f22, 0.9);
+  add(c.g, boxG(+(w + 0.14).toFixed(2), 0.6, +(d + 0.14).toFixed(2)), pm(0x8f897c, 0.95), 0, 0.3, 0);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) add(c.g, boxG(0.3, Hw, 0.3), dk, sx * (w / 2 + 0.02), Hw / 2, sz * (d / 2 + 0.02));
+  for (const fi of [0, 1, 2, 3]) { const len = fi < 2 ? w : d; fput(c, boxG(+len.toFixed(2), 0.18, 0.1), dk, fi, 0, Hw * 0.5, 0.05); fput(c, boxG(+len.toFixed(2), 0.18, 0.1), dk, fi, 0, Hw - 0.12, 0.05); }
+  const rh = w * 0.42, [rk, rhex] = pick([['corr', 0x8a4b36], ['shingle', 0x8a7a66], ['tile', 0x9a5040], ['seam', 0x6a7378]], s >> 1);
+  roof(c, { y: Hw, rh, ridgeX: false, kind: rk, hex: rhex, wall: plank, ws: 2.5, trim: dk, over: 0.6, overZ: 0.6 });
+  fput(c, comp('bdoor', (B) => { B(1.8, 3.5, 0.1, -0.9, 1.75, 0.05); B(1.8, 3.5, 0.1, 0.9, 1.75, 0.05); for (const sx of [-1, 1]) for (const r of [-1, 1]) B(0.14, 3.84, 0.06, sx * 0.9, 1.75, 0.11, 0, 0, r * 0.48); B(4.4, 0.2, 0.2, 0, 3.7, 0.12); B(0.2, 3.7, 0.2, -1.95, 1.85, 0.1); B(0.2, 3.7, 0.2, 1.95, 1.85, 0.1); }), pm(0x5b4332, 0.9), 0, 0, 0.0);
+  fput(c, comp('loft', (B) => { B(1.1, 1.2, 0.08, 0, 0, 0.04); B(1.3, 0.12, 0.1, 0, 0.66, 0.06); B(1.3, 0.12, 0.1, 0, -0.66, 0.06); B(0.12, 1.3, 0.1, -0.6, 0, 0.06); B(0.12, 1.3, 0.1, 0.6, 0, 0.06); B(0.14, 0.14, 1.2, 0, 1.2, 0.5); }), pm(0x4a3a2c, 0.9), 0, 0, Hw + 1.2);
+  facade(c, { faces: [2, 3], fh: 4, ww: 0.6, wh: 0.5, sill: 2.4, bay: 4.5, margin: 1.5, v: 1, frame: dk, fl0: 0, fl1: 1 });
+  for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) wput(c, planeG(0.12, 0.9), pm(0x1a1510, 1), sx * (w / 2 + 0.02), Hw - 0.9, -d * 0.3 + k * d * 0.3, sx * Math.PI / 2); // Lüftungsschlitze
+  // Schleppdach / offener Schuppen mit Heuballen
+  const sy = Hw * 0.7;
+  add(c.g, tiledBoxG(1.3, 0.1, +(d * 0.6).toFixed(2), 2.4), wmat('corr', 0x8a8e88, 0.6, 0.3), w / 2 + 0.55, sy - 0.2, -d * 0.1, 0, 0, -0.3);
+  for (const k of [-0.35, 0, 0.35]) box(c.g, 0.14, sy - 0.4, 0.14, dk, w / 2 + 1.05, (sy - 0.4) / 2, -d * 0.1 + k * d * 0.55);
+  for (let k = 0; k < 4; k++) box(c.g, 0.9, 0.55, 0.6, pm(0xc9b25a, 1), w / 2 + 0.5, 0.28 + (k > 1 ? 0.55 : 0), -d * 0.3 + (k % 2) * 0.95 + (k > 1 ? 0.4 : 0) + 0.3);
+  return { height: Hw + rh + 1, body };
+};
+
+KINDS.townhouse_eu = (c) => {
+  const { w, d, style: s } = c, nf = Math.min(4, Math.max(2, c.floors)), fh = 3.1, H = nf * fh + 0.2;
+  const tex = pick([['brick', 0xffffff], ['plaster', 0xe3d3b0], ['brick', 0xe8d0b0], ['plaster', 0xcfd6c4]], s), wall = wmat(tex[0], tex[1]), trim = pm(0xece8dc, 0.8), dk = pm(0x3a3a3a, 0.5, 0.5);
+  const body = add(c.g, tiledBoxG(w, H, d, tex[0] === 'brick' ? 2 : 4), wall, 0, H / 2, 0);
+  add(c.g, boxG(+(w + 0.14).toFixed(2), 1.0, +(d + 0.14).toFixed(2)), pm(0x8f8a80, 0.95), 0, 0.5, 0);
+  const shop = s % 4 === 3, doorU = shop ? w * 0.3 : (s % 2 ? -w * 0.22 : w * 0.0 + (w > 7 ? -w * 0.2 : 0));
+  const shutters = s % 2 ? pm(pick([0x4d6b48, 0x394f6d, 0x7a4a36], s), 0.8) : null;
+  facade(c, { faces: [0, 1, 2, 3], fh, ww: 1.0, wh: 1.75, sill: 0.95, bay: 2.7, v: 0, frame: trim, shut: shutters, skip: (fi, fl, i, n, u) => fi === 0 && fl === 0 && (shop || Math.abs(u - doorU) < 1.3) });
+  door(c, 0, doorU, { dw: 1.15, dh: 2.35, mat: pm(pick([0x3d4a44, 0x5a3a2a, 0x2f4f7c], s), 0.8), frame: trim, canopy: false });
+  if (shop) { fput(c, planeG(w * 0.5, 2.1), M.window, 0, -w * 0.15, 1.5, 0.06); fput(c, boxG(+(w * 0.5 + 0.2).toFixed(2), 0.12, 0.14), dk, 0, -w * 0.15, 2.6, 0.07); fput(c, boxG(+(w - 0.6).toFixed(2), 0.6, 0.15), pm(0x7a2a2a, 0.7, 0, c.lit ? 0x7a2a2a : 0, 0.6), 0, 0, 3.05, 0.08); }
+  if (nf > 2 || s % 2 === 0) { // schmiedeeiserner Balkon im 1. OG
+    const bu = (w > 7 ? 0 : 0); fput(c, comp('ibal', (B) => { B(1.7, 0.1, 0.7, 0, 0, 0.35); B(1.7, 0.04, 0.04, 0, 0.9, 0.68); for (let k = 0; k < 9; k++) B(0.025, 0.9, 0.025, -0.8 + k * 0.2, 0.45, 0.68); B(0.04, 0.9, 0.7, -0.84, 0.45, 0.35); B(0.04, 0.9, 0.7, 0.84, 0.45, 0.35); }), dk, 0, bu, fh + 0.1);
+  }
+  // Gesims mit Zahnschnitt
+  add(c.g, boxG(+(w + 0.5).toFixed(2), 0.28, +(d + 0.5).toFixed(2)), trim, 0, H - 0.14, 0);
+  const nd = Math.round(w / 0.36); for (let k = 0; k < nd; k++) fput(c, boxG(0.16, 0.14, 0.14), trim, 0, -w / 2 + (k + 0.5) * w / nd, H - 0.4, 0.04);
+  if (tex[0] === 'brick') for (const sx of [-1, 1]) for (let k = 0; k < Math.floor(H / 0.7); k++) if (k > 1) fput(c, boxG(0.5 + (k % 2) * 0.2, 0.3, 0.12), pm(0xd8d0bc, 0.9), 0, sx * (w / 2 - 0.2), 0.5 + k * 0.7, 0.04);
+  const front = s % 4 < 2, [rk, rhex] = pick([['slate', 0x4c5258], ['tile', 0xa05a44], ['tile', 0x8a5a48], ['slate', 0x5a6066]], s >> 1);
+  let top;
+  if (front) { // First parallel zur Straße, Gauben
+    const rh = Math.min(4.4, d * 0.5), R = roof(c, { y: H, rh, ridgeX: true, kind: rk, hex: rhex, wall, ws: 3, trim, over: 0.35, overZ: 0.3 });
+    const ndm = w > 7.4 ? 3 : 2; for (let k = 0; k < ndm; k++) dormer(c, -w / 2 + (k + 0.5) * w / ndm, d / 2 - 0.9, R.at(d / 2 - 0.9) - 0.25, wall, trim, rk, rhex);
+    for (const sg of [-1, 1]) chimney(c, sg * (w / 2 - 0.6), 0, H - 0.2, H + rh + 0.8, { sw: 0.8, sd: 0.7 });
+    top = H + rh;
+  } else { // Giebel zur Straße
+    const rh = Math.min(5.0, w * 0.7);
+    roof(c, { y: H, rh, ridgeX: false, kind: rk, hex: rhex, wall, ws: 3, trim, over: 0.3, overZ: 0.35 });
+    cyl(c.g, 0.45, 0.45, 0.1, trim, 0, H + rh * 0.4, d / 2 + 0.05, Math.PI / 2, 0, 0, 12); cyl(c.g, 0.33, 0.33, 0.12, M.window, 0, H + rh * 0.4, d / 2 + 0.06, Math.PI / 2, 0, 0, 12);
+    chimney(c, w * 0.2, -d * 0.2, H, H + rh + 0.5, { sw: 0.8, sd: 0.7 });
+    top = H + rh;
+  }
+  if (c.modern) dish(c, w * 0.3, H - 0.6, d / 2 + 0.08);
+  return { height: top + 1, body };
+};
+
+KINDS.izba = (c) => {
+  const { w, d, style: s } = c, fh = 2.7, nf = Math.min(2, c.floors), H = nf * fh + 0.8, y0 = 0.6;
+  const hex = pick([0xe0b88a, 0xb89a70, 0x8a7a68, 0xc9a070], s);
+  const body = add(c.g, tiledBoxG(w, H - y0, d, 2.7), wmat('log', hex), 0, y0 + (H - y0) / 2, 0);
+  add(c.g, boxG(+(w + 0.14).toFixed(2), y0, +(d + 0.14).toFixed(2)), pm(0x8d867a, 0.95), 0, y0 / 2, 0);
+  const lg = comp(`clog${H.toFixed(1)}`, (B) => { for (let r = 0; r < Math.floor((H - y0) / 0.34); r++) { if (r % 2) B(0.36, 0.28, 0.76, 0, y0 + 0.17 + r * 0.34, 0); else B(0.76, 0.28, 0.36, 0, y0 + 0.17 + r * 0.34, 0); } });
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) add(c.g, lg, pm(0xb58d5c, 0.9), sx * w / 2, 0, sz * d / 2);
+  const col = pick([0x3b6ea5, 0xf0eee6, 0x4d6b48, 0xd8b24a], s), fr = pm(pick([0xf0eee6, 0x3b6ea5, 0xf0eee6, 0x7a4a36], s), 0.75), sh = pm(col, 0.8);
+  const doorU = (s % 2 ? 1 : -1) * w * 0.28;
+  facade(c, { faces: [0, 1, 2, 3], fh, ww: 0.8, wh: 1.1, sill: 0.95, y0: y0 + 0.05, bay: 2.3, margin: 1.0, v: 0, frame: fr, shut: sh, skip: (fi, fl, i, n, u) => fi === 0 && fl === 0 && Math.abs(u - doorU) < 1.5 });
+  // Krylzo: überdachte Vortreppe
+  fput(c, comp('porch', (B) => { B(1.9, 0.18, 1.3, 0, 0.09, 0.65); for (const sx of [-1, 1]) { B(0.14, 2.4, 0.14, sx * 0.85, 1.3, 1.15); B(0.05, 0.8, 1.2, sx * 0.9, 0.95, 0.6); } B(2.2, 0.1, 1.6, 0, 2.55, 0.8); B(2.0, 0.28, 0.08, 0, 2.38, 1.55); B(1.5, 0.14, 0.4, 0, 0.0, 1.5); }), pm(pick([0x7a5a3a, 0x3b6ea5], s >> 1), 0.85), 0, doorU, 0.4);
+  door(c, 0, doorU, { dw: 0.95, dh: 2.0, mat: pm(0x5a4030, 0.85), frame: fr, stoop: false });
+  const ridgeX = d < w * 0.8 ? true : false, span = ridgeX ? d : w, rh = span * 0.38;
+  const [rk, rhex] = pick([['shingle', 0x8a7a66], ['corr', 0x6f8a6a], ['seam', 0x7a4a3a], ['slate', 0x5a6066]], s >> 1);
+  const R = roof(c, { y: H, rh, ridgeX, kind: rk, hex: rhex, wall: wmat('log', hex), ws: 2.7, trim: sh, over: 0.6, overZ: 0.55 });
+  chimney(c, ridgeX ? -w * 0.2 : 0, ridgeX ? 0 : -d * 0.2, H, H + rh + 0.9, { sw: 0.6 });
+  if (c.modern) { dish(c, w * 0.3, H - 0.8, d / 2 + 0.08); tvAnt(c, ridgeX ? w * 0.3 : 0, H + rh * 0.9, 0.3); }
+  if (c.h.fence) gardenFence(c, d / 2 + 1.1, w + 1, pm(0x8a6a44, 0.9));
+  return { height: H + rh + 1, body };
+};
+
+KINDS.qalat = (c) => {
+  const { w, d, style: s } = c, Hw = 4.4, t = 0.9, hex = pick([0xffffff, 0xe8d4b0, 0xd9b98f, 0xc9a77c], s), mud = wmat('mud', hex), nf = Math.min(2, c.floors), Hi = nf * 3.0 + 0.3;
+  add(c.g, boxG(+(w - 0.5).toFixed(2), 0.06, +(d - 0.5).toFixed(2)), pm(0xb9a37c, 1), 0, 0.03, 0, 0, 0, 0, false);
+  const front = add(c.g, tiledBoxG(w, Hw, t, 3), mud, 0, Hw / 2, d / 2 - t / 2), back = add(c.g, tiledBoxG(w, Hw, t, 3), mud, 0, Hw / 2, -d / 2 + t / 2);
+  for (const sx of [-1, 1]) add(c.g, tiledBoxG(t, Hw, +(d - 2 * t).toFixed(2), 3), mud, sx * (w / 2 - t / 2), Hw / 2, 0);
+  for (const sz of [-1, 1]) add(c.g, tiledBoxG(+(w + 0.3).toFixed(2), 1.0, 0.25, 3), mud, 0, 0.5, sz * (d / 2 + 0.05)); // Wandfuß
+  for (const sx of [-1, 1]) add(c.g, tiledBoxG(0.25, 1.0, +d.toFixed(2), 3), mud, sx * (w / 2 + 0.05), 0.5, 0);
+  // Zinnen
+  const mer = (len, f) => { const n = Math.floor(len / 1.4); for (let k = 0; k < n; k++) f(-len / 2 + (k + 0.5) * len / n); };
+  for (const sz of [-1, 1]) mer(w - 3.4, (u) => add(c.g, boxG(0.6, 0.55, 0.45), mud, u, Hw + 0.27, sz * (d / 2 - t * 0.78)));
+  for (const sx of [-1, 1]) mer(d - 3.4, (u) => add(c.g, boxG(0.45, 0.55, 0.6), mud, sx * (w / 2 - t * 0.78), Hw + 0.27, u));
+  // Ecktürme
+  const Ht = 6.2;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const x = sx * (w / 2 - 1.0), z = sz * (d / 2 - 1.0);
+    if (s % 2 === 0) {
+      add(c.g, cylG(1.15, 1.45, Ht, 12), mud, x, Ht / 2, z); add(c.g, cylG(1.4, 1.2, 0.5, 12), mud, x, Ht + 0.25, z);
+      for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; add(c.g, boxG(0.5, 0.4, 0.5), mud, x + Math.cos(a) * 1.25, Ht + 0.7, z + Math.sin(a) * 1.25, 0, -a, 0); }
+      for (let k = 0; k < 3; k++) { const a = Math.atan2(sz, sx) + (k - 1) * 0.55; wput(c, boxG(0.16, 0.5, 0.1), pm(0x1a1510, 1), x + Math.cos(a) * 1.4, Ht - 1.2, z + Math.sin(a) * 1.4, -a + Math.PI / 2); }
+    } else {
+      add(c.g, tiledBoxG(2.5, Ht, 2.5, 3), mud, x, Ht / 2, z); add(c.g, tiledBoxG(2.9, 0.4, 2.9, 3), mud, x, Ht + 0.2, z);
+      for (let k = 0; k < 4; k++) for (const q of [-1, 1]) { add(c.g, boxG(0.5, 0.45, 0.5), mud, x + (k % 2 ? q * 1.2 : (k - 1.5) * 0.8), Ht + 0.62, z + (k % 2 ? (k - 1.5) * 0.8 : q * 1.2)); }
+      wput(c, boxG(0.16, 0.5, 0.1), pm(0x1a1510, 1), x + sx * 1.26, Ht - 1.2, z, sx * Math.PI / 2); wput(c, boxG(0.16, 0.5, 0.1), pm(0x1a1510, 1), x, Ht - 1.2, z + sz * 1.26, sz > 0 ? 0 : Math.PI);
+    }
+  }
+  // Tor mit Torhaus
+  add(c.g, tiledBoxG(4.0, 5.2, 0.6, 3), mud, 0, 2.6, d / 2 + 0.1);
+  wput(c, archPlaneG(2.5, 3.6), pm(0x5a4028, 1), 0, 1.8, d / 2 + 0.42, 0); wput(c, archPlaneG(2.1, 3.3), pm(0x3f2c1c, 0.9), 0, 1.65, d / 2 + 0.43, 0);
+  for (const k of [-0.8, 0, 0.8]) box(c.g, 0.1, 3.0, 0.06, pm(0x2b2b2b, 0.6, 0.5), k, 1.5, d / 2 + 0.44);
+  // Innenbauten
+  const iw = (w - 2 * t) * 0.64, id = (d - 2 * t) * 0.34, ix = -(w - 2 * t) * 0.16, iz = -d / 2 + t + id / 2;
+  const body = add(c.g, tiledBoxG(+iw.toFixed(2), Hi, +id.toFixed(2), 3), wmat('mud', 0xf0e0c0), ix, Hi / 2, iz);
+  add(c.g, tiledBoxG(+(iw + 0.2).toFixed(2), 0.25, +(id + 0.2).toFixed(2), 3), mud, ix, Hi + 0.12, iz);
+  for (let k = 0; k < Math.round(iw / 0.8); k++) cyl(c.g, 0.07, 0.07, 0.6, pm(0x6a4a30, 1), ix - iw / 2 + 0.4 + k * 0.8, Hi - 0.35, iz + id / 2, Math.PI / 2, 0, 0, 5);
+  const wz = iz + id / 2 + 0.02;
+  for (let k = 0; k < nf; k++) for (const u of [-iw * 0.32, iw * 0.32]) { box(c.g, 0.7, 0.95, 0.12, pm(0x2a2118, 1), ix + u, 1.9 + k * 3.0, wz); box(c.g, 0.9, 0.12, 0.2, pm(0x6a4a30, 1), ix + u, 2.45 + k * 3.0, wz + 0.04); }
+  box(c.g, 1.0, 2.0, 0.12, pm(0x5a4028, 0.9), ix, 1.0, wz); box(c.g, 1.3, 0.14, 0.2, pm(0x6a4a30, 1), ix, 2.1, wz + 0.04);
+  const bw = 3.2, bd = 2.8, bx = (w - 2 * t) * 0.3, bz = -d / 2 + t + 1.8;
+  add(c.g, tiledBoxG(bw, 2.8, bd, 3), mud, bx, 1.4, bz); add(c.g, tiledBoxG(bw + 0.2, 0.2, bd + 0.2, 3), mud, bx, 2.9, bz);
+  box(c.g, 0.9, 1.9, 0.1, pm(0x5a4028, 0.9), bx, 0.95, bz + bd / 2 + 0.02);
+  cyl(c.g, 0.0, 1.0, 1.4, pm(0xc9b25a, 1), (w - 2 * t) * 0.25, 0.7, d * 0.08, 0, 0, 0, 8); // Heuhaufen
+  cyl(c.g, 0.55, 0.55, 0.7, M.concrete, -(w - 2 * t) * 0.2, 0.35, d * 0.1, 0, 0, 0, 10); cyl(c.g, 0.42, 0.42, 0.72, pm(0x15120f, 1), -(w - 2 * t) * 0.2, 0.36, d * 0.1, 0, 0, 0, 10); // Brunnen
+  if (c.modern) dish(c, ix + iw * 0.3, Hi + 0.3, iz, 0);
+  return { height: Ht + 2, body };
+};
+
+KINDS.mud_house = (c) => {
+  const { w, d, style: s } = c, nf = Math.min(2, c.floors), H = nf * 2.9, hex = pick([0xffffff, 0xe8d4b0, 0xd9b98f, 0xc9a77c], s), mud = wmat('mud', hex), wood = pm(0x5a3f2a, 0.9);
+  const body = add(c.g, tiledBoxG(w, H, d, 3), mud, 0, H / 2, 0);
+  add(c.g, tiledBoxG(+(w + 0.1).toFixed(2), 0.3, +(d + 0.1).toFixed(2), 3), wmat('mud', 0xb89a70), 0, 0.15, 0);
+  // Dach: Lehmschicht, niedrige Brüstung, Balkenköpfe
+  add(c.g, tiledBoxG(+(w + 0.1).toFixed(2), 0.3, +(d + 0.1).toFixed(2), 3), wmat('mud', 0xc8b088), 0, H + 0.15, 0);
+  for (const sz of [-1, 1]) { add(c.g, tiledBoxG(+(w + 0.1).toFixed(2), 0.35, 0.3, 3), mud, 0, H + 0.45, sz * (d / 2 - 0.1)); add(c.g, tiledBoxG(0.3, 0.35, +(d - 0.2).toFixed(2), 3), mud, sz * (w / 2 - 0.1), H + 0.45, 0); }
+  const nb = Math.max(3, Math.round(w / 0.75));
+  for (let k = 0; k < nb; k++) for (const sz of [-1, 1]) cyl(c.g, 0.07, 0.07, 0.55, wood, -w / 2 + (k + 0.5) * w / nb, H - 0.2, sz * (d / 2 + 0.12), Math.PI / 2, 0, 0, 5);
+  // Anbau (L-Form)
+  const aw = w * 0.42, ad = d * 0.42, ah = H * 0.7 + 0.2;
+  const ax = w / 2 - aw / 2, az = -d / 2 + ad / 2;
+  add(c.g, tiledBoxG(+aw.toFixed(2), ah, +ad.toFixed(2), 3), wmat('mud', hex === 0xffffff ? 0xece0c4 : hex), ax, ah / 2, az);
+  add(c.g, tiledBoxG(+(aw + 0.1).toFixed(2), 0.25, +(ad + 0.1).toFixed(2), 3), wmat('mud', 0xc8b088), ax, ah + 0.1, az);
+  // Öffnungen
+  const doorU = (s % 2 ? -1 : 1) * w * 0.18;
+  facade(c, { faces: [0, 1, 2, 3], fh: 2.9, ww: 0.55, wh: 0.7, sill: 1.2, bay: 3.0, margin: 1.2, v: 1, frame: wood, bars: s % 2 === 0, barsAll: true, skip: (fi, fl, i, n, u) => (fi === 0 && fl === 0 && Math.abs(u - doorU) < 1.2) || (fi === 1 && ax - aw / 2 < 0 && false) });
+  door(c, 0, doorU, { dw: 0.9, dh: 1.85, mat: pm(0x6a4a30, 0.9), frame: wood, canopy: false });
+  if (nf === 2) for (let k = 0; k < 9; k++) box(c.g, 0.9, 0.3, 0.45 + 0.0, wmat('mud', 0xd9c9a4), -w / 2 - 0.45, 0.15 + k * 0.3, d * 0.5 - 0.6 - k * 0.0 - 0.0 - k * (d - 1.2) / 9 * 0.9); // Außentreppe
+  cyl(c.g, 0.3, 0.3, 0.7, pm(0x2f5c9a, 0.6, 0.4), -w * 0.3, H + 0.9, d * 0.1, 0, 0, 0, 8);
+  box(c.g, 1.0, 0.5, 0.5, pm(0xb89a50, 1), w * 0.15, H + 0.8, -d * 0.2);
+  if (c.modern) dish(c, w * 0.25, H + 0.4, d / 2 - 0.5, 0);
+  if (s % 2) { // Hofmauer mit Tor
+    const hw = 1.5, gu = -doorU * 0.0;
+    add(c.g, tiledBoxG(+(w * 0.5 - 0.5).toFixed(2), hw, 0.4, 3), mud, -w * 0.25 - 0.25, hw / 2, d / 2 + 0.9); add(c.g, tiledBoxG(+(w * 0.5 - 0.5).toFixed(2), hw, 0.4, 3), mud, w * 0.25 + 0.25, hw / 2, d / 2 + 0.9);
+    box(c.g, 1.0, 1.35, 0.1, wood, 0, 0.7, d / 2 + 0.9);
+  }
+  return { height: H + 1.5, body };
+};
+
+KINDS.bazaar = (c) => {
+  const { w, d, style: s } = c, rnd = c.rnd, cloth = [0xa83a30, 0x2f5c9a, 0x3d7a4a, 0xd2a93a, 0xe6e1d3, 0xc86a2a, 0x7a3a7a];
+  add(c.g, boxG(+(w - 0.3).toFixed(2), 0.05, +(d - 0.3).toFixed(2)), pm(0xa8946f, 1), 0, 0.025, 0, 0, 0, 0, false);
+  const hex = pick([0xffffff, 0xe8d4b0, 0xd9b98f], s), bh = 3.1, bd = 2.6, bz = -d / 2 + bd / 2 + 0.2;
+  const body = add(c.g, tiledBoxG(w - 0.4, bh, bd, 3), s % 2 ? wmat('mud', hex) : wmat('plaster', 0xe0d0b0), 0, bh / 2, bz);
+  add(c.g, tiledBoxG(+(w - 0.2).toFixed(2), 0.25, +(bd + 0.3).toFixed(2), 3), wmat('mud', 0xc8b088), 0, bh + 0.12, bz);
+  const ns = Math.max(3, Math.round(w / 3.4)), sw = (w - 0.6) / ns, zf = bz + bd / 2;
+  for (let k = 0; k < ns; k++) {
+    const u = -w / 2 + 0.3 + (k + 0.5) * sw, cc = cloth[Math.floor(rnd() * cloth.length)], cc2 = cloth[Math.floor(rnd() * cloth.length)];
+    box(c.g, sw - 0.5, 2.2, 0.1, pm(0x2a2118, 1), u, 1.2, zf + 0.04); // Ladenöffnung
+    box(c.g, sw - 0.2, 0.2, 0.14, wood2(), u, 2.4, zf + 0.06); // Sturz
+    if (rnd() < 0.7) box(c.g, sw * 0.6, 1.2, 0.05, pm(cc, 1), u, 1.2, zf + 0.12); // hängender Teppich/Stoff
+    // Tisch + Pfosten + Stoffdach davor
+    const zt = zf + 1.8;
+    box(c.g, sw - 0.8, 0.8, 1.0, wood2(), u, 0.4, zt); box(c.g, sw - 0.6, 0.05, 1.2, pm(cc2, 0.95), u, 0.82, zt);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(c.g, 0.09, 2.3, 0.09, wood2(), u + sx * (sw / 2 - 0.3), 1.15, zt + sz * 0.85);
+    box(c.g, sw - 0.1, 0.06, 2.0, pm(cc, 0.95), u, 2.45, zt, 0.12, 0, 0); box(c.g, sw - 0.1, 0.35, 0.05, pm(cc, 0.95), u, 2.25, zt + 1.0);
+    for (let g = 0; g < 4 + Math.floor(rnd() * 4); g++) { const gx = u + (rnd() - 0.5) * (sw - 1.0), gz = zt + (rnd() - 0.5) * 0.6, gc = cloth[Math.floor(rnd() * cloth.length)]; if (rnd() < 0.5) cyl(c.g, 0.17, 0.17, 0.22, pm(gc, 0.8), gx, 0.96, gz, 0, 0, 0, 6); else box(c.g, 0.3, 0.2, 0.25, pm(gc, 0.9), gx, 0.95, gz); }
+    if (c.lit) box(c.g, 0.12, 0.12, 0.12, pm(0xffe9b0, 0.3, 0, 0xffd890, 2.2), u, 2.2, zt);
+  }
+  for (let k = 0; k < 3; k++) box(c.g, 0.7, 0.6, 0.6, wood2(), -w * 0.3 + k * w * 0.3, 0.3 + (k % 2) * 0.6, d / 2 - 0.5);
+  if (c.modern) dish(c, w * 0.3, bh + 0.5, bz, 0);
+  return { height: bh + 1, body };
+};
+function wood2() { return pm(0x7a5d3a, 0.9); }
+
+KINDS.watchtower = (c) => {
+  const { w, d, style: s } = c, nf = Math.max(2, Math.min(7, c.floors)), fh = 3.0, H = nf * fh, dk = pm(0x4a3624, 0.9), metal = pm(0x55595b, 0.5, 0.6);
+  let body, top;
+  if (s % 2 === 0) { // Holz-/Stahlgitterturm
+    const ox = w / 2 - 0.15, oz = d / 2 - 0.15;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) body = body || box(c.g, 0.22, H, 0.22, dk, sx * ox, H / 2, sz * oz);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) if (!(sx === -1 && sz === -1)) box(c.g, 0.22, H, 0.22, dk, sx * ox, H / 2, sz * oz);
+    for (let k = 0; k < nf; k++) {
+      const y = k * fh + fh / 2, la = Math.hypot(2 * ox, fh), a = Math.atan2(2 * ox, fh), lb = Math.hypot(2 * oz, fh), b = Math.atan2(2 * oz, fh);
+      for (const sz of [-1, 1]) for (const r of [-1, 1]) box(c.g, 0.1, la, 0.1, dk, 0, y, sz * oz, 0, 0, r * a);
+      for (const sx of [-1, 1]) for (const r of [-1, 1]) box(c.g, 0.1, lb, 0.1, dk, sx * ox, y, 0, r * b, 0, 0);
+      for (const sz of [-1, 1]) box(c.g, 2 * ox, 0.14, 0.14, dk, 0, k * fh + 0.1, sz * oz); for (const sx of [-1, 1]) box(c.g, 0.14, 0.14, 2 * oz, dk, sx * ox, k * fh + 0.1, 0);
+    }
+    // Leiter
+    const lh = H; box(c.g, 0.05, lh, 0.05, metal, -0.2, lh / 2, d / 2 + 0.2); box(c.g, 0.05, lh, 0.05, metal, 0.2, lh / 2, d / 2 + 0.2);
+    for (let k = 0; k < Math.floor(lh / 0.4); k++) box(c.g, 0.4, 0.03, 0.03, metal, 0, 0.3 + k * 0.4, d / 2 + 0.2);
+    // Plattform + Kabine
+    add(c.g, boxG(+(w + 0.9).toFixed(2), 0.2, +(d + 0.9).toFixed(2)), dk, 0, H + 0.1, 0);
+    const rail = comp(`rl${w},${d}`, (B) => { for (const sz of [-1, 1]) { B(w + 0.9, 0.06, 0.06, 0, 0.5, sz * (d / 2 + 0.43)); B(w + 0.9, 0.06, 0.06, 0, 1.0, sz * (d / 2 + 0.43)); } for (const sx of [-1, 1]) { B(0.06, 0.06, d + 0.9, sx * (w / 2 + 0.43), 0.5, 0); B(0.06, 0.06, d + 0.9, sx * (w / 2 + 0.43), 1.0, 0); } for (const sx of [-1, 1]) for (const sz of [-1, 1]) B(0.08, 1.0, 0.08, sx * (w / 2 + 0.43), 0.5, sz * (d / 2 + 0.43)); });
+    add(c.g, rail, dk, 0, H + 0.2, 0);
+    const cw = w * 0.9, cdp = d * 0.9, ch = 2.2;
+    add(c.g, tiledBoxG(+cw.toFixed(2), ch, +cdp.toFixed(2), 2.5), wmat('plank', 0x9a8a72), 0, H + 0.2 + ch / 2, 0);
+    for (const fi of [0, 1, 2, 3]) { const len = fi < 2 ? cw : cdp; const f = c.faces[fi]; const m = fput(c, planeG(+(len * 0.7).toFixed(2), 0.7), M.window, fi, 0, H + 1.5, (fi < 2 ? cdp : cw) / 2 - (fi < 2 ? d : w) / 2 + 0.03); }
+    roof(c, { y: H + 0.2 + ch, rh: 0.9, ridgeX: false, kind: 'seam', hex: 0x6a7378, wall: wmat('plank', 0x9a8a72), ws: 2.5, trim: dk, over: 0.5, overZ: 0.5 });
+    // Suchscheinwerfer
+    cyl(c.g, 0.22, 0.28, 0.4, metal, w / 2 + 0.3, H + 1.5, d / 2 + 0.3, Math.PI / 2 - 0.3, 0.6, 0, 8); box(c.g, 0.3, 0.3, 0.1, pm(0xfff1c0, 0.2, 0, c.lit ? 0xfff0b0 : 0, 2.5), w / 2 + 0.38, H + 1.45, d / 2 + 0.52);
+    cyl(c.g, 0.03, 0.03, 2.2, metal, -w * 0.3, H + ch + 1.9, -d * 0.2, 0, 0, 0, 4);
+    top = H + ch + 1.2;
+  } else { // gemauerter Turm mit Zinnenplattform
+    const stone = wmat(s % 4 === 1 ? 'mud' : 'stone', s % 4 === 1 ? 0xe0cba4 : 0xc8bfa8);
+    body = add(c.g, tiledBoxG(w, H, d, 3), stone, 0, H / 2, 0);
+    add(c.g, tiledBoxG(+(w + 0.6).toFixed(2), 1.0, +(d + 0.6).toFixed(2), 3), stone, 0, 0.5, 0);
+    add(c.g, tiledBoxG(+(w + 0.9).toFixed(2), 0.5, +(d + 0.9).toFixed(2), 3), stone, 0, H + 0.25, 0);
+    for (const sz of [-1, 1]) for (let k = 0; k < Math.max(2, Math.round(w / 0.9)); k++) add(c.g, boxG(0.5, 0.55, 0.4), stone, -w / 2 + 0.1 + (k + 0.5) * (w - 0.2) / Math.max(2, Math.round(w / 0.9)), H + 0.78, sz * (d / 2 + 0.3));
+    for (const sx of [-1, 1]) for (let k = 0; k < Math.max(2, Math.round(d / 0.9)); k++) add(c.g, boxG(0.4, 0.55, 0.5), stone, sx * (w / 2 + 0.3), H + 0.78, -d / 2 + 0.1 + (k + 0.5) * (d - 0.2) / Math.max(2, Math.round(d / 0.9)));
+    for (let k = 1; k < nf; k++) for (const fi of [0, 1, 2, 3]) fput(c, boxG(0.16, 0.6, 0.1), pm(0x1a1510, 1), fi, 0, k * fh + 0.8, 0.02);
+    door(c, 0, 0, { dw: 0.9, dh: 1.9, mat: pm(0x4a3a2c, 0.9), frame: pm(0x6d6a63, 0.9), canopy: false });
+    if (s % 4 === 3) { for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(c.g, 0.14, 2.0, 0.14, dk, sx * (w / 2 + 0.2), H + 1.5, sz * (d / 2 + 0.2)); add(c.g, cylG(0, +(Math.hypot(w, d) * 0.62).toFixed(2), 1.4, 4), wmat('tile', 0x9a5a44), 0, H + 3.2, 0, 0, Math.PI / 4, 0); top = H + 4; }
+    else { cyl(c.g, 0.04, 0.04, 2.6, metal, w * 0.3, H + 1.8, d * 0.3, 0, 0, 0, 4); box(c.g, 0.9, 0.5, 0.03, pm(s % 2 ? 0xb53a30 : 0x2f6a3a, 0.9), w * 0.3 + 0.45, H + 2.7, d * 0.3); top = H + 3.2; }
+  }
+  return { height: top, body };
+};
+
+// ---- Öffentliche API: house(h), rubble(w, d, kind) ----
+const _kindByDims = new Map();
+const dimKey = (w, d) => `${(+w).toFixed(3)},${(+d).toFixed(3)}`;
+export const HOUSE_KINDS = Object.keys(KINDS);
 export function house(h) {
   initMats();
-  const g = new THREE.Group();
-  const big = h.floors > 2;
-  const wall = big ? M.panels[h.style % M.panels.length] : M.walls[h.style % M.walls.length];
-  const roofMat = M.roofs[h.style % M.roofs.length];
-  const fh = 3.0, H = h.floors * fh, w = h.w, d = h.d;
-  const body = add(g, tiledBoxG(w, H, d, big ? 6 : 4), wall, 0, H / 2, 0);
-  add(g, boxG(w + 0.2, 0.5, d + 0.2), M.concreteDark, 0, 0.25, 0); // Sockel
-
-  const frame = new Merger(), glass = new Merger(), lit = new Merger(), shut = new Merger(), trim = new Merger(), doorM = new Merger();
-  const faces = [
-    { ry: 0, cx: 0, cz: d / 2, len: w }, { ry: Math.PI, cx: 0, cz: -d / 2, len: w },
-    { ry: Math.PI / 2, cx: w / 2, cz: 0, len: d }, { ry: -Math.PI / 2, cx: -w / 2, cz: 0, len: d },
-  ];
-  const put = (m, geo, f, u, y, out) => {
-    const c = Math.cos(f.ry), s = Math.sin(f.ry);
-    m.add(geo, mat4(f.cx + c * u + s * out, y, f.cz - s * u + c * out, f.ry));
-  };
-  const ww = big ? 1.3 : 0.9, wh = big ? 1.3 : 1.2;
-  const doorsAt = big ? (w > 14 ? [-w / 4, w / 4] : [0]) : [0];
-  const shutterOn = !big && h.style % 2 === 1;
-  faces.forEach((f, fi) => {
-    const nx = Math.max(1, Math.floor(f.len / (big ? 2.6 : 2.4)));
-    for (let fl = 0; fl < h.floors; fl++) {
-      const y = fl * fh + 1.7;
-      for (let i = 0; i < nx; i++) {
-        const u = -f.len / 2 + (i + 0.5) * (f.len / nx);
-        if (fi === 0 && fl === 0 && doorsAt.some((dx) => Math.abs(u - dx) < 1.3)) continue;
-        put(frame, boxG(ww + 0.2, wh + 0.2, 0.08), f, u, y, 0.02);
-        put(frame, boxG(ww + 0.35, 0.08, 0.22), f, u, y - wh / 2 - 0.12, 0.1); // Fensterbank
-        put(h.lit && Math.random() < 0.35 ? lit : glass, boxG(ww, wh, 0.1), f, u, y, 0.05);
-        put(frame, boxG(0.05, wh, 0.12), f, u, y, 0.08); // Fensterkreuz
-        if (shutterOn) { put(shut, boxG(ww * 0.5, wh + 0.2, 0.06), f, u - ww * 0.78, y, 0.06); put(shut, boxG(ww * 0.5, wh + 0.2, 0.06), f, u + ww * 0.78, y, 0.06); }
-        if (big && fi === 0 && fl >= 1 && i % 2 === 0) { // Balkone
-          const by = fl * fh;
-          put(trim, boxG(1.8, 0.14, 1.0), f, u, by + 0.75, 0.5);
-          put(trim, boxG(1.8, 0.5, 0.06), f, u, by + 1.07, 1.0);
-          put(trim, boxG(0.06, 0.5, 1.0), f, u - 0.87, by + 1.07, 0.5);
-          put(trim, boxG(0.06, 0.5, 1.0), f, u + 0.87, by + 1.07, 0.5);
-        }
-      }
-    }
-  });
-  // Türen
-  const f0 = faces[0];
-  for (const dx of doorsAt) {
-    const dw = big ? 1.5 : 1.0;
-    put(frame, boxG(dw + 0.3, 2.35, 0.08), f0, dx, 1.2, 0.02);
-    put(doorM, boxG(dw, 2.2, 0.1), f0, dx, 1.15, 0.05);
-    put(trim, boxG(dw + 0.8, 0.2, 0.8), f0, dx, 0.1, 0.4); // Stufe
-    put(trim, boxG(dw + 0.8, 0.12, 0.9), f0, dx, 2.6, 0.45); // Vordach
-  }
-  flushMerged(g, frame, M.frame);
-  flushMerged(g, glass, M.window, false);
-  flushMerged(g, lit, M.windowLit, false);
-  flushMerged(g, shut, M.shutters[h.style % 2]);
-  flushMerged(g, doorM, M.door);
-
-  if (!big) {
-    // Satteldach mit Ziegel-/Blechtextur, Giebel, First, Kamin
-    const rh = Math.min(3, w * 0.35);
-    const half = w / 2 + 0.4, ls = Math.hypot(half, rh), ang = Math.atan2(rh, half);
-    for (const s of [-1, 1]) add(g, tiledBoxG(ls, 0.16, d + 0.8, 2), roofMat, s * half / 2, H + rh / 2 + 0.04, 0, 0, 0, -s * ang);
-    box(g, 0.3, 0.2, d + 0.9, M.concreteDark, 0, H + rh + 0.06, 0);
-    add(g, gableG(w, rh), wall, 0, H, d / 2 + 0.01);
-    add(g, gableG(w, rh), wall, 0, H, -d / 2 - 0.01, 0, Math.PI, 0);
-    const hc = rh * 0.7 + 1.0;
-    box(g, 0.6, hc, 0.6, M.brick, w * 0.18, H + rh * 0.3 + hc / 2, -d * 0.2);
-    box(g, 0.8, 0.12, 0.8, M.concreteDark, w * 0.18, H + rh + 1.0, -d * 0.2);
-    if (h.floors === 2 && w > 9) { // Gaube
-      add(g, tiledBoxG(1.6, 1.0, 1.4, 4), wall, -w * 0.22, H + rh * 0.35, d * 0.3);
-      box(g, 0.7, 0.6, 0.06, M.window, -w * 0.22, H + rh * 0.35, d * 0.3 + 0.72);
-    }
-  } else {
-    // Flachdach mit Attika, Treppenhaus, Aufbauten
-    const tr = new Merger();
-    box(g, w + 0.3, 0.4, d + 0.3, M.concreteDark, 0, H + 0.2, 0);
-    tr.add(boxG(w + 0.3, 0.5, 0.15), mat4(0, H + 0.65, d / 2 + 0.07)); tr.add(boxG(w + 0.3, 0.5, 0.15), mat4(0, H + 0.65, -d / 2 - 0.07));
-    tr.add(boxG(0.15, 0.5, d + 0.3), mat4(w / 2 + 0.07, H + 0.65, 0)); tr.add(boxG(0.15, 0.5, d + 0.3), mat4(-w / 2 - 0.07, H + 0.65, 0));
-    for (const dx of doorsAt) tr.add(boxG(1.8, 1.6, 1.8), mat4(dx, H + 1.2, 0)); // Treppenhaus-Aufbauten
-    for (let i = 0; i < 3; i++) tr.add(boxG(0.8, 0.6, 0.8), mat4(-w * 0.3 + i * 1.3, H + 0.7, d * 0.25));
-    tr.add(boxG(0.06, 2.4, 0.06), mat4(-w * 0.35, H + 1.6, -d * 0.2));
-    flushMerged(g, tr, M.concreteDark);
-  }
-  flushMerged(g, trim, M.concrete);
-  const merged = optimize(g); // Einzelhaus (Zufallsfenster) → nicht gecacht
-  addBlob(g, w + 5, d + 5);
-  return { root: g, height: H + 2, body: merged.get(body) || body };
+  const kind = KINDS[h.kind] ? h.kind : (h.floors >= 6 ? 'panel_high' : h.floors > 2 ? 'khrushchyovka' : 'cottage');
+  const c = bCtx(h, kind);
+  const r = KINDS[kind](c);
+  const merged = optimize(c.g); // Einzelhaus → nicht gecacht
+  addBlob(c.g, h.w + 5, h.d + 5);
+  _kindByDims.set(dimKey(h.w, h.d), kind);
+  c.g.userData.houseKind = kind;
+  return { root: c.g, height: r.height, body: merged.get(r.body) || r.body, kind };
 }
 
-export function rubble(w, d) {
+const RUBBLE_CLASS = {
+  qalat: 'mud', mud_house: 'mud', bazaar: 'mud', watchtower: 'mud',
+  khrushchyovka: 'concrete', panel_high: 'concrete', warehouse: 'concrete', kiosk: 'concrete',
+  izba: 'wood', barn: 'wood', cottage: 'wood',
+  farmhouse_eu: 'brick', townhouse_eu: 'brick', church_west: 'brick', church_orthodox: 'brick', industrial: 'brick', shop: 'brick',
+};
+export function rubble(w, d, kind) {
   initMats();
-  const g = new THREE.Group();
-  const rnd = Math.random;
-  const base = box(g, w * 0.9, 0.5, d * 0.9, M.rubble, 0, 0.25, 0);
-  base.scale.y = 1;
-  for (let i = 0; i < 12; i++) {
-    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6 + rnd() * 1.2, 0), i % 3 === 0 ? M.concreteDark : M.rubble);
-    m.position.set((rnd() - 0.5) * w * 0.8, 0.4 + rnd() * 0.5, (rnd() - 0.5) * d * 0.8);
-    m.scale.y = 0.5; m.rotation.set(rnd(), rnd(), rnd());
-    m.castShadow = true; m.receiveShadow = true;
-    g.add(m);
+  kind = kind || _kindByDims.get(dimKey(w, d)) || 'cottage';
+  const cls = RUBBLE_CLASS[kind] || 'brick', g = new THREE.Group(), rnd = Math.random;
+  const base = { mud: 0xb59a72, brick: 0x7a5548, concrete: 0x8a8780, wood: 0x4a3a2c }[cls];
+  const cols = { mud: [0xb59a72, 0xc9b088, 0x9a8260], brick: [0x7a5548, 0x8a5a48, 0x5a4a42, 0x9a9488], concrete: [0x8a8780, 0x6a6862, 0xa09d95], wood: [0x4a3a2c, 0x5a5048, 0x7a7266, 0x2a2420] }[cls];
+  const wallTex = { mud: ['mud', 0xffffff], brick: ['brick', 0xd8c8b8], concrete: ['panel', 0xb0aca2], wood: ['plaster', 0xd9d2c0] }[cls];
+  add(g, boxG(+(w * 0.92).toFixed(2), 0.45, +(d * 0.92).toFixed(2)), pm(base, 1), 0, 0.22, 0);
+  const dod = (r) => _bgk(`dod${r}`, () => new THREE.DodecahedronGeometry(r, 0));
+  for (let i = 0; i < 16; i++) {
+    const r = [0.5, 0.8, 1.1][i % 3];
+    const m = add(g, dod(r), pm(cols[i % cols.length], 1), (rnd() - 0.5) * w * 0.85, 0.35 + rnd() * 0.45, (rnd() - 0.5) * d * 0.85, rnd(), rnd() * 3, rnd());
+    m.scale.set(1 + rnd() * 0.6, 0.45 + rnd() * 0.3, 1 + rnd() * 0.6);
   }
-  // stehengebliebene Wandreste
-  for (let i = 0; i < 3; i++) {
-    const wl = 2 + rnd() * 3, hh = 0.8 + rnd() * 2.0;
-    const side = i % 2 ? 1 : -1;
-    add(g, boxG(wl, hh, 0.4), M.walls[i % M.walls.length], side * w * 0.3 + (rnd() - 0.5), hh / 2 + 0.3, (rnd() - 0.5) * d * 0.7, (rnd() - 0.5) * 0.25, rnd() * 3, (rnd() - 0.5) * 0.25);
+  // stehengebliebene Wandreste (Putz/Ziegel/Platte/Lehm) mit ausgebrochener Oberkante
+  const maxH = { mud: 2.0, brick: 3.4, concrete: 2.6, wood: 1.2 }[cls], tm = wmat(wallTex[0], wallTex[1]);
+  for (let i = 0; i < 4; i++) {
+    const side = i % 2 ? 1 : -1, zside = i < 2 ? 1 : -1, len = 2 + rnd() * 3;
+    const x = side * (w * 0.3 + (rnd() - 0.5)), z = zside * d * 0.34 + (rnd() - 0.5), ry = i < 2 ? (rnd() - 0.5) * 0.3 : Math.PI / 2 + (rnd() - 0.5) * 0.3;
+    let acc = 0;
+    for (let k = 0; k < 3; k++) { const sl = len / 3, hh = 0.6 + rnd() * (maxH - 0.6) * (1 - k * 0.25); const lx = (k - 1) * sl; add(g, tiledBoxG(+sl.toFixed(2), +hh.toFixed(2), 0.4, 3), tm, x + Math.cos(ry) * lx, hh / 2 + 0.3, z - Math.sin(ry) * lx, (rnd() - 0.5) * 0.08, ry, (rnd() - 0.5) * 0.12); acc += hh; }
   }
-  // verkohlte Balken und Deckenplatten
-  for (let i = 0; i < 5; i++) add(g, boxG(0.25, 0.25, 2.5 + rnd() * 2.5), i % 2 ? M.charred : M.wood, (rnd() - 0.5) * w * 0.7, 0.9 + rnd() * 0.6, (rnd() - 0.5) * d * 0.7, (rnd() - 0.5) * 0.6, rnd() * 3, (rnd() - 0.5) * 0.6);
-  add(g, boxG(w * 0.45, 0.25, d * 0.4), M.concrete, (rnd() - 0.5) * 2, 0.9, (rnd() - 0.5) * 2, 0.2, rnd(), 0.15);
+  if (cls === 'concrete') { // Deckenplatten + Bewehrung
+    add(g, tiledBoxG(+(w * 0.4).toFixed(2), 0.25, +(d * 0.36).toFixed(2), 3), wmat('panel', 0xb8b4aa), (rnd() - 0.5) * 2, 0.9, (rnd() - 0.5) * 2, 0.22, rnd(), 0.15);
+    add(g, tiledBoxG(+(w * 0.3).toFixed(2), 0.25, +(d * 0.3).toFixed(2), 3), wmat('panel', 0xb8b4aa), (rnd() - 0.5) * 3, 1.5, (rnd() - 0.5) * 3, -0.3, rnd(), -0.2);
+    for (let i = 0; i < 16; i++) add(g, cylG(0.025, 0.025, 1.0 + rnd() * 1.4, 4), pm(0x6a4a32, 0.8, 0.5), (rnd() - 0.5) * w * 0.7, 1.2 + rnd() * 0.9, (rnd() - 0.5) * d * 0.7, (rnd() - 0.5) * 1.2, rnd() * 3, (rnd() - 0.5) * 1.2);
+  } else if (cls === 'wood' || cls === 'brick') {
+    for (let i = 0; i < 6; i++) add(g, boxG(0.25, 0.25, +(2.5 + rnd() * 2.5).toFixed(2)), i % 2 ? pm(0x25221f, 1) : pm(0x6b5236, 0.9), (rnd() - 0.5) * w * 0.7, 0.9 + rnd() * 0.6, (rnd() - 0.5) * d * 0.7, (rnd() - 0.5) * 0.6, rnd() * 3, (rnd() - 0.5) * 0.6);
+    if (cls === 'brick') for (let i = 0; i < 10; i++) add(g, tiledBoxG(0.6 + rnd() * 0.5, 0.35, 0.4, 2), wmat('brick', 0xffffff), (rnd() - 0.5) * w * 0.8, 0.5 + rnd() * 0.5, (rnd() - 0.5) * d * 0.8, rnd(), rnd() * 3, rnd());
+  } else { // Lehm: Balkenreste (Vigas) und Mauerbrocken
+    for (let i = 0; i < 5; i++) add(g, cylG(0.07, 0.07, +(1.4 + rnd() * 1.4).toFixed(2), 5), pm(0x5a3f2a, 1), (rnd() - 0.5) * w * 0.7, 0.8 + rnd() * 0.6, (rnd() - 0.5) * d * 0.7, 0, rnd() * 3, Math.PI / 2 + (rnd() - 0.5) * 0.6);
+  }
   optimize(g);
   return g;
 }
