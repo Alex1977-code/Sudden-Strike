@@ -940,9 +940,24 @@ export class Game {
         if (Math.abs(dx) > r || Math.abs(dz) > r) continue;
         const d2 = dx * dx + dz * dz;
         if (d2 >= r * r || d2 < 1e-6) continue;
-        const d = Math.sqrt(d2), push = (r - d) * 0.5;
+        const d = Math.sqrt(d2);
         const nx = dx / d, nz = dz / d;
-        const wa = a.type.vehicle && !b.type.vehicle ? 0.1 : b.type.vehicle && !a.type.vehicle ? 0.9 : 0.5;
+        // Massebasiertes Ausweichen: schwere und stehende Einheiten lassen sich kaum schieben,
+        // die bewegte/leichtere Einheit weicht aus. Fahrzeug gegen Fahrzeug nur sanft auflösen.
+        const ma = this._sepMass(a), mb = this._sepMass(b);
+        let wa = mb / (ma + mb);
+        // Fährt ein Fahrzeug an einem stehenden vorbei, weicht nur das fahrende aus (sofern es Platz hat)
+        if (a.type.vehicle && b.type.vehicle && a.moving !== b.moving) {
+          const moverA = a.moving;
+          const sx = moverA ? a.pos.x - nx * (r - d) * 0.6 : b.pos.x + nx * (r - d) * 0.6;
+          const sz = moverA ? a.pos.z - nz * (r - d) * 0.6 : b.pos.z + nz * (r - d) * 0.6;
+          const mover = moverA ? a : b;
+          // Nach ~1,5 s Dauerkontakt (festgefahren) wieder massebasiert drängeln, sonst blockieren Lücken dauerhaft
+          if (!mover._sepT0 || this.time - (mover._sepLast || 0) > 0.6) mover._sepT0 = this.time;
+          mover._sepLast = this.time;
+          if (this.time - mover._sepT0 < 1.5 && this._canStand(mover, sx, sz)) wa = moverA ? 1 : 0;
+        }
+        const push = (r - d) * (a.type.vehicle && b.type.vehicle ? 0.3 : 0.5);
         const pa = this._canStand(a, a.pos.x - nx * push * wa * 2, a.pos.z - nz * push * wa * 2);
         const pb = this._canStand(b, b.pos.x + nx * push * (1 - wa) * 2, b.pos.z + nz * push * (1 - wa) * 2);
         if (pa) { a.pos.x -= nx * push * wa * 2 * 0.5; a.pos.z -= nz * push * wa * 2 * 0.5; }
@@ -950,6 +965,11 @@ export class Game {
       }
       }
     }
+  }
+  _sepMass(u) {
+    let m = u.type.vehicle || u.type.naval ? Math.max(8, (u.maxHp || 300) / 10) * (u.type.armor === 'heavy' ? 1.6 : 1) : 1;
+    if (!u.moving) m *= u.type.vehicle ? 20 : 3; // stehende Einheiten sind „verankert"
+    return m;
   }
   _canStand(u, x, z) {
     const k = this.terrain.cellIndex(x, z);

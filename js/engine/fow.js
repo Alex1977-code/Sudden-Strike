@@ -127,15 +127,35 @@ const FOW_APPLY_GLSL = `
 //   terrain – Geländemodus: mehrskaliges Rauschen, hangabhängige Fels-Tönung; Alpha der Map = Unebenheitsmaske
 //   bump    – (mit terrain) Mikro-Normalenstörung aus Rauschgradienten
 //   wind    – Vertex-Wiegen für Gras/Halme (Instanzen, lokale y-Achse = Höhe)
-export function applyFow(material, { detail = false, terrain = false, bump = false, wind = false } = {}) {
+//   tree    – (Zahl > 0 = Stärke) Vegetation: Wiegen von Stamm/Krone mit der Höhe + Blattflattern; Instanzfarbe wirkt nur
+//             gewichtet über das Vertex-Attribut aTint (0 = Stamm/Schnee behält die Vertexfarbe, 1 = Laub wird eingefärbt)
+export function applyFow(material, { detail = false, terrain = false, bump = false, wind = false, tree = 0 } = {}) {
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, fowUniforms);
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>
         varying vec3 vFowWorld;
         ${terrain ? 'varying vec3 vFowN;' : ''}
-        ${wind ? 'uniform float uTime;' : ''}`)
+        ${wind || tree ? 'uniform float uTime;' : ''}
+        ${tree ? 'attribute float aTint;' : ''}`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
+        ${tree ? `
+        {
+          vec3 ip = vec3(0.0);
+          #ifdef USE_INSTANCING
+            ip = instanceMatrix[3].xyz;
+          #endif
+          float ph = uTime * 0.9 + ip.x * 0.071 + ip.z * 0.053;
+          float gust = 0.75 + 0.25 * sin(uTime * 0.23 + ip.x * 0.011 - ip.z * 0.007);
+          float hh = max(transformed.y - 0.6, 0.0);
+          float k = hh * hh * 0.0011 * ${(+tree).toFixed(3)} * gust;
+          transformed.x += (sin(ph) * 0.55 + sin(ph * 2.31 + 1.3) * 0.18) * k;
+          transformed.z += (cos(ph * 0.83 + 0.4) * 0.38) * k;
+          float fl = aTint * ${(+tree).toFixed(3)} * 0.035 * gust;
+          transformed += fl * vec3(sin(uTime * 4.7 + position.x * 3.1 + position.y * 2.3 + ip.x),
+                                   0.6 * sin(uTime * 5.3 + position.z * 2.7 + ip.z),
+                                   cos(uTime * 4.1 + position.y * 3.7 + position.z * 1.9));
+        }` : ''}
         ${wind ? `
         {
           vec3 ip = vec3(0.0);
@@ -212,6 +232,23 @@ export function applyFow(material, { detail = false, terrain = false, bump = fal
         }`);
     }
   };
-  material.customProgramCacheKey = () => 'fow' + (terrain ? 't' : '') + (bump ? 'b' : '') + (detail ? 'd' : '') + (wind ? 'w' : '');
+  if (tree) {
+    // Instanzfarbe nur auf Laub (aTint), Stamm/Schnee behalten ihre Vertexfarbe
+    const ob = material.onBeforeCompile;
+    material.onBeforeCompile = (shader) => {
+      ob(shader);
+      shader.vertexShader = shader.vertexShader.replace('#include <color_vertex>', `
+        #if defined( USE_COLOR ) || defined( USE_INSTANCING_COLOR )
+          vColor = vec3( 1.0 );
+        #endif
+        #ifdef USE_COLOR
+          vColor *= color;
+        #endif
+        #ifdef USE_INSTANCING_COLOR
+          vColor.xyz *= mix( vec3( 1.0 ), instanceColor.xyz, aTint );
+        #endif`);
+    };
+  }
+  material.customProgramCacheKey = () => 'fow' + (terrain ? 't' : '') + (bump ? 'b' : '') + (detail ? 'd' : '') + (wind ? 'w' : '') + (tree ? 'T' + tree : '');
   return material;
 }

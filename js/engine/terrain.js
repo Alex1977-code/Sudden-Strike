@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { Noise2D, mulberry32, smoothstep, clamp, lerp, distToPolyline, distToSegment, pointInPoly } from './util.js';
 import { applyFow, fowUniforms, FOW_NOISE_GLSL } from './fow.js';
+import { expandSettlements } from './settlement.js';
 
 const PALETTES = {
   summer: { grass: [0.36, 0.45, 0.20], dry: [0.55, 0.52, 0.30], dirt: [0.42, 0.34, 0.24], rock: [0.45, 0.43, 0.40], sand: [0.70, 0.64, 0.48], road: [0.30, 0.29, 0.28], dirtroad: [0.45, 0.37, 0.27] },
@@ -20,17 +21,23 @@ export const CELL = 2; // Pfadfindungsraster (Meter)
 
 export class Terrain {
   constructor(def, quality) {
+    def = expandSettlements(def); // Siedlungsgenerator: 'settlement'-Features → road/house/field/… (settlement.js)
     this.def = def;
     this.size = def.size || 240;
     this.half = this.size / 2;
     this.seaLevel = def.seaLevel ?? 0;
-    this.season = def.season || 'summer';
-    this.pal = PALETTES[this.season];
+    // Palette (Boden/Vegetation): def.palette oder def.season; Basisjahreszeit (Modelle, Licht) bleibt summer/autumn/winter
+    const seasonIn = def.season || 'summer';
+    this.palette = TEX_PAL[def.palette] ? def.palette : TEX_PAL[seasonIn] ? seasonIn : 'summer';
+    this.season = BASE_SEASON[def.season ? seasonIn : this.palette] || 'summer';
+    this.pal = PALETTES[this.palette] || PALETTES[this.season];
+    this.style = STYLE_RELIEF[def.terrainStyle] !== undefined ? def.terrainStyle : 'plains';
     this.noise = new Noise2D(def.seed || 1);
     this.rnd = mulberry32((def.seed || 1) * 7919);
-    this.features = def.features || [];
+    this.features = this._expandFeatures(def.features || []);
     this.hasWater = this.features.some((f) => f.type === 'water' || f.type === 'river');
     this.quality = quality;
+    this._prepRelief();
     this._buildHeightfield();
     this._buildGrid();
     this.objects = { houses: [], trees: [] };
@@ -38,20 +45,49 @@ export class Terrain {
   }
 
   // ---------- Höhen ----------
-  _rawHeight(x, z) {
+  // Höhe ohne Straßen/Wasser: Grundrauschen je terrainStyle, Hügel/Ebenen, neue Reliefformen (Berg, Höhenzug, Tal, …)
+  _reliefHeight(x, z) {
     const d = this.def;
     const relief = d.relief ?? 5;
-    let h = (d.baseHeight ?? 3) + relief * this.noise.fbm(x / 70, z / 70, 4);
-    h += relief * 0.25 * this.noise.fbm(x / 18 + 50, z / 18 - 30, 3);
+    let h;
+    if (this.style === 'plains') {
+      h = (d.baseHeight ?? 3) + relief * this.noise.fbm(x / 70, z / 70, 4);
+      h += relief * 0.25 * this.noise.fbm(x / 18 + 50, z / 18 - 30, 3);
+    } else h = this._styleHeight(x, z);
+    const R = this._rel;
+    // Täler: Relief zur Talsohle hin ausblenden (m), Sohle eintiefen (carve)
+    let m = 1, carve = 0, vfl = 0;
+    if (R && R.valleys.length) {
+      for (const v of R.valleys) {
+        if (x < v.bx0 || x > v.bx1 || z < v.bz0 || z > v.bz1) continue;
+        const dd = distToPolyline(x, z, v.f.pts) + this.noise.get(x / 23 + v.k, z / 23 - v.k) * v.wob;
+        const t = 1 - smoothstep(v.inner, v.outer, dd);
+        if (t <= 0) continue;
+        m = Math.min(m, 1 - t);
+        if (t > carve) { carve = t; vfl = v.floor; } // stärkstes Tal bestimmt die Sohlenhöhe
+      }
+      if (m < 1) { const b = d.baseHeight ?? 3; h = b + (h - b) * m; }
+    }
     for (const f of this.features) {
       if (f.type === 'hill') {
         const dd = Math.hypot(x - f.x, z - f.z);
-        h += f.h * (1 - smoothstep(0, f.r, dd));
+        h += f.h * (1 - smoothstep(0, f.r, dd)) * m;
       } else if (f.type === 'flat') {
         const dd = Math.hypot(x - f.x, z - f.z);
         h = lerp(h, f.h ?? 3, 1 - smoothstep(f.r * 0.6, f.r, dd));
       }
     }
+    if (R) h = this._reliefFeatures(h, x, z, m);
+    // Talsohle: auf Sohlenhöhe ziehen, nur noch leicht gewellt
+    if (carve > 0) h = lerp(h, vfl + (h - vfl) * 0.15 + this.noise.fbm(x / 30 + 9, z / 30, 2) * 0.6, carve);
+    return h;
+  }
+
+  // Altbestand: Straßen glätten (punktweise), danach Wasser
+  _rawHeight(x, z) {
+    const d = this.def;
+    const relief = d.relief ?? 5;
+    let h = this._reliefHeight(x, z);
     // Straßen glätten
     for (const f of this.features) {
       if (f.type === 'road') {
@@ -63,6 +99,26 @@ export class Terrain {
         }
       }
     }
+    return this._waterHeight(this._hedgeHeight(h, x, z), x, z);
+  }
+
+  // Heckenwälle (Erdwall unter der Hecke; Lücken und Straßen bleiben frei)
+  _hedgeHeight(h, x, z) {
+    const R = this._rel;
+    if (!R || !R.hedges.length) return h;
+    for (const e of R.hedges) {
+      if (x < e.bx0 || x > e.bx1 || z < e.bz0 || z > e.bz1) continue;
+      const dd = distToPolyline(x, z, e.pts);
+      if (dd >= e.hw) continue;
+      const g = e.gapAt(x, z);
+      if (g >= 1) continue;
+      h += e.wall * (1 - smoothstep(e.hw * 0.25, e.hw, dd)) * (1 - g) * (0.85 + 0.3 * this.noise.get(x / 5 + 3, z / 5));
+    }
+    return h;
+  }
+
+  // Wasser, Inseln, Dämme
+  _waterHeight(h, x, z) {
     // Wasser
     for (const f of this.features) {
       if (f.type === 'river') {
@@ -105,11 +161,38 @@ export class Terrain {
     const n = this.size + 1;
     this.hn = n;
     this.heights = new Float32Array(n * n);
-    for (let j = 0; j < n; j++) {
-      for (let i = 0; i < n; i++) {
-        this.heights[j * n + i] = this._rawHeight(i - this.half, j - this.half);
+    const t0 = performance.now();
+    if (!this.modernRelief) {
+      // Altbestand (ebenes Grundrauschen ohne neue Reliefformen): unverändert punktweise
+      for (let j = 0; j < n; j++) {
+        for (let i = 0; i < n; i++) {
+          this.heights[j * n + i] = this._rawHeight(i - this.half, j - this.half);
+        }
+      }
+    } else {
+      // Relief → Straßen als Rasterfilter (folgen dem geglätteten Gelände statt Gräben in Berge zu schneiden) → Hecken/Wasser
+      const A = this.heights, half = this.half;
+      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) A[j * n + i] = this._reliefHeight(i - half, j - half);
+      const roads = this.features.filter((f) => f.type === 'road');
+      if (roads.length) {
+        const B = boxBlur(boxBlur(A, n, 6), n, 6);
+        for (const f of roads) {
+          const w = (f.width || 5) * 0.5, M = w + 8;
+          const [x0, z0, x1, z1] = polyBox(f.pts);
+          const i0 = Math.max(0, Math.floor(x0 - M + half)), i1 = Math.min(n - 1, Math.ceil(x1 + M + half));
+          const j0 = Math.max(0, Math.floor(z0 - M + half)), j1 = Math.min(n - 1, Math.ceil(z1 + M + half));
+          for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+            const dd = distToPolyline(i - half, j - half, f.pts);
+            if (dd < M) { const k = j * n + i; A[k] = lerp(A[k], B[k], (1 - smoothstep(w, M, dd)) * 0.92); }
+          }
+        }
+      }
+      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+        const x = i - half, z = j - half, k = j * n + i;
+        A[k] = this._waterHeight(this._hedgeHeight(A[k], x, z), x, z);
       }
     }
+    this.heightMs = Math.round(performance.now() - t0);
   }
 
   height(x, z) {
@@ -247,7 +330,7 @@ export class Terrain {
       }
     }
     // explizite Gebäude
-    for (const f of this.features) if (f.type === 'house') this.objects.houses.push({ x: f.x, z: f.z, rot: f.rot || 0, w: f.w || 7, d: f.d || 6, floors: f.floors || 1, style: f.style ?? 0 });
+    for (const f of this.features) if (f.type === 'house') this.objects.houses.push({ x: f.x, z: f.z, rot: f.rot || 0, w: f.w || 7, d: f.d || 6, floors: f.floors || 1, style: f.style ?? 0, kind: f.kind, modern: f.modern, snow: f.snow, lit: f.lit, name: f.name });
 
     // Wälder
     for (const f of this.features) {

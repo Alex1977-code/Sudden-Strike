@@ -673,7 +673,7 @@ function jet(side, type, ctx) {
     for (const s of [-1, 1]) { box(g, 4.0, 0.08, 3.0, c, s * 2.2, 0, -0.8, 0, s * 0.45, 0); box(g, 1.8, 0.08, 1.0, c, s * 1.2, 0, -3.2); cyl(g, 0.12, 0.12, 1.5, a.black, s * 3.3, -0.25, -0.3, Math.PI / 2, 0, 0, 6); }
     box(g, 0.1, 1.8, 1.8, c, 0, 1.0, -3.0, -0.3, 0, 0);
     add(g, sphG(0.3, 8, 6), M.engineGlow, 0, 0, -3.6, 0, 0, 0, false);
-    for (const s of [-1, 1]) bwCross(ctx, g, 'BW', s * 3.2, 0.06, -0.8, '+y', 0.7);
+    for (const s of [-1, 1]) bwCross(ctx, g, s * 3.2, 0.06, -0.8, '+y', 0.7);
   }
   const muzzle = new THREE.Object3D(); g.add(muzzle);
   return { root: g, muzzle, height: 1.6 };
@@ -684,7 +684,7 @@ reg('af_luna', (side, type, ctx) => {
   const { add, box, cyl, sphG, M } = ctx; const a = mats(ctx); const g = noBlobGroup();
   cyl(g, 0.16, 0.12, 2.0, a.bwTan, 0, 0, 0, Math.PI / 2, 0, 0, 8); add(g, sphG(0.16, 8, 6), a.bwTan, 0, 0, 1.0).scale.set(1, 1, 0.9);
   box(g, 4.0, 0.05, 0.45, a.bwTan, 0, 0.1, 0.2); box(g, 1.3, 0.04, 0.3, a.bwTan, 0, 0.1, -0.9); box(g, 0.04, 0.45, 0.28, a.bwTan, 0, 0.25, -0.95);
-  cyl(g, 0.05, 0.05, 0.14, M.glass, 0, -0.16, 0.5, 0, 0, 0, 6); bwCross(ctx, g, 'BW', 1.3, 0.13, 0.2, '+y', 0.25);
+  cyl(g, 0.05, 0.05, 0.14, M.glass, 0, -0.16, 0.5, 0, 0, 0, 6); bwCross(ctx, g, 1.3, 0.13, 0.2, '+y', 0.25);
   const rot = add(g, ctx.cylG(0.35, 0.35, 0.02, 12), M.rotor, 0, 0.0, -1.1, Math.PI / 2, 0, 0, false); rot.userData.noWreck = true;
   const muzzle = new THREE.Object3D(); g.add(muzzle); g.scale.setScalar(1.5);
   return { root: g, muzzle, height: 0.6, rotors: [rot] };
@@ -693,7 +693,7 @@ reg('af_heron', (side, type, ctx) => {
   const { add, box, cyl, sphG, M } = ctx; const a = mats(ctx); const g = noBlobGroup();
   cyl(g, 0.3, 0.2, 3.2, a.white, 0, 0, 0, Math.PI / 2, 0, 0, 8); add(g, sphG(0.3, 8, 6), a.white, 0, 0, 1.6).scale.set(1, 1, 1.2); add(g, sphG(0.2, 8, 6), M.optic, 0, -0.3, 1.2);
   box(g, 8.0, 0.07, 0.6, a.white, 0, 0.2, 0.2); for (const s of [-1, 1]) { cyl(g, 0.07, 0.07, 2.6, a.white, s * 0.8, 0.1, -1.8, Math.PI / 2, 0, 0, 6); box(g, 0.05, 0.6, 0.5, a.white, s * 0.8, 0.45, -3.0); } box(g, 1.8, 0.05, 0.4, a.white, 0, 0.4, -3.1);
-  bwCross(ctx, g, 'BW', 0, 0.26, 0.2, '+y', 0.35);
+  bwCross(ctx, g, 0, 0.26, 0.2, '+y', 0.35);
   const rot = add(g, ctx.cylG(0.4, 0.4, 0.02, 12), M.rotor, 0, 0.0, -1.7, Math.PI / 2, 0, 0, false); rot.userData.noWreck = true;
   const muzzle = new THREE.Object3D(); g.add(muzzle);
   return { root: g, muzzle, height: 0.8, rotors: [rot] };
