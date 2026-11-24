@@ -425,18 +425,61 @@ export class Input {
     if ((k === 'a' || k === 'A') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); g.select(g.playerUnits()); return; }
     if (k === 's' && !e.ctrlKey && own.length && !this.keys.has('w')) { /* S = Halt nur mit Auswahl, sonst Kamera */ g.issueCommand({ t: 'stop', ids: own.map((u) => u.id) }); this.stopPressed = true; return; }
     if (k === 'h') { if (own.length) { g.issueCommand({ t: 'hold', ids: own.map((u) => u.id), value: !own.every((u) => u.holdFire) }); this.hud.refreshSelection(); } return; }
-    if (/^[1-9]$/.test(k)) {
-      if (e.ctrlKey || e.metaKey) { e.preventDefault(); g.groups[k] = [...own]; g.alert(`Gruppe ${k} gespeichert (${own.length})`, 1.5); }
-      else if (g.groups[k]) {
-        const list = g.groups[k].filter((u) => u.alive);
-        if (this.lastGroupKey === k && performance.now() - this.lastGroupT < 400 && list.length) g.camera.focus(list[0].pos.x, list[0].pos.z);
-        g.select(list); this.lastGroupKey = k; this.lastGroupT = performance.now();
-      }
+    // Schnellwahlgruppen: Strg+Ziffer speichern, Strg+Umschalt+Ziffer ergänzen, Ziffer wählen (2× = Kamera), Umschalt+Ziffer zur Auswahl hinzufügen
+    const digit = /^Digit[1-9]$/.test(e.code || '') ? e.code.slice(5) : (/^[1-9]$/.test(k) ? k : null);
+    if (digit) {
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) this.storeGroup(digit, { add: e.shiftKey });
+      else this.selectGroup(digit, { add: e.shiftKey });
       return;
     }
     if (k === 'f' && own.length) { g.camera.focus(own[0].pos.x, own[0].pos.z); return; }
     if (k === '+' ) g.camera.zoom(0.85);
     if (k === '-') g.camera.zoom(1.15);
+  }
+
+  // ---------- Schnellwahlgruppen ----------
+  groupUnits(k) {
+    const g = this.game;
+    const list = (g.groups[k] || []).filter((u) => u.alive && u.owner === g.localPlayerId);
+    if (g.groups[k]) g.groups[k] = list;
+    return list;
+  }
+  storeGroup(k, { add = false } = {}) {
+    const g = this.game;
+    const own = this.ownSelected();
+    if (!own.length && !add) {
+      if (g.groups[k]) { delete g.groups[k]; g.alert(`Gruppe ${k} aufgelöst`, 1.5); g.emit('groups'); }
+      return;
+    }
+    // Eine Einheit gehört höchstens einer Gruppe an (wie im Klassiker) – aus anderen Gruppen entfernen
+    for (const key of Object.keys(g.groups)) if (key !== k) g.groups[key] = g.groups[key].filter((u) => !own.includes(u));
+    const base = add ? this.groupUnits(k) : [];
+    g.groups[k] = [...new Set([...base, ...own])];
+    for (const key of Object.keys(g.groups)) if (!g.groups[key].length) delete g.groups[key];
+    g.alert(`Gruppe ${k} ${add ? 'ergänzt' : 'gespeichert'} (${g.groups[k]?.length || 0})`, 1.5);
+    g.audio.ui('ack');
+    g.emit('groups');
+  }
+  storeNextFreeGroup() {
+    const g = this.game;
+    for (let i = 1; i <= 9; i++) { const k = String(i); if (!this.groupUnits(k).length) { this.storeGroup(k); return k; } }
+    g.alert('Alle 9 Gruppen belegt – Gruppe gedrückt halten bzw. Strg+Klick zum Überschreiben', 2.5);
+    return null;
+  }
+  selectGroup(k, { add = false, focus = false } = {}) {
+    const g = this.game;
+    const list = this.groupUnits(k);
+    if (!list.length) return;
+    const now = performance.now();
+    const dbl = this.lastGroupKey === k && now - (this.lastGroupT || 0) < 400;
+    if (focus || dbl) {
+      const cx = list.reduce((s, u) => s + u.pos.x, 0) / list.length, cz = list.reduce((s, u) => s + u.pos.z, 0) / list.length;
+      g.camera.focus(cx, cz);
+    }
+    g.select(list, add);
+    g.audio.ui('click');
+    this.lastGroupKey = k; this.lastGroupT = now;
   }
 
   update(dt) {

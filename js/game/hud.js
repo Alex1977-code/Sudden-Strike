@@ -42,7 +42,10 @@ export class HUD {
 
     game.minimapReady = (img) => { this.mmBg = img; };
     game.on('objectives', () => this.refreshObjectives());
-    game.on('selection', () => { this.refreshSelection(); this.refreshBuildbar(); });
+    game.on('selection', () => { this.refreshSelection(); this.refreshBuildbar(); this.refreshGroups(); });
+    game.on('groups', () => this.refreshGroups());
+    game.on('kill', () => { this._groupsDirty = true; });
+    this._initGroupBar();
     game.on('vehicleCaptured', () => this.refreshBuildbar());
     game.on('bailout', () => this.refreshBuildbar());
     game.on('abilities', () => this.refreshAbilities());
@@ -50,7 +53,7 @@ export class HUD {
     game.on('alert', (t, d) => this.showAlert(t, d));
     game.on('localPlayer', () => { this.refreshSelection(); this.refreshAbilities(); });
     game.on('players', () => { this.refreshSelection(); this.refreshAbilities(); });
-    game.on('loaded', () => { this.refreshObjectives(); this.refreshSelection(); this.refreshAbilities(); this.sayQueue = []; this.subEl.classList.add('hidden'); this.alertEl.classList.add('hidden'); this.setupSkirmish(); });
+    game.on('loaded', () => { this.refreshGroups(); this.refreshObjectives(); this.refreshSelection(); this.refreshAbilities(); this.sayQueue = []; this.subEl.classList.add('hidden'); this.alertEl.classList.add('hidden'); this.setupSkirmish(); });
     game.on('cpCaptured', () => { this.skDirty = true; });
     game.on('playerDefeated', () => { this.skDirty = true; });
     game.on('underAttack', (u) => {
@@ -380,7 +383,60 @@ export class HUD {
       this.fpsEl.textContent = `${Math.round(gr.fps)} FPS · ${gr.intW}×${gr.intH} → ${gr.outW}×${gr.outH} (${Math.round(gr.renderScale * 100)} %)`;
     } else this.fpsEl.textContent = '';
   }
+  // ---------- Schnellwahlgruppen ----------
+  _initGroupBar() {
+    const el = document.getElementById('groups');
+    if (!el) return;
+    this.groupsEl = el;
+    let press = null;
+    const slotOf = (t) => t.closest && t.closest('[data-group]');
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+    el.addEventListener('pointerdown', (e) => {
+      const b = slotOf(e.target); if (!b) return;
+      const k = b.dataset.group;
+      press = { k, t: performance.now(), long: false, button: e.button, x: e.clientX, y: e.clientY };
+      clearTimeout(this._grpTimer);
+      // Gedrückt halten (Touch oder Maus): aktuelle Auswahl in diese Gruppe speichern / leere Auswahl löst Gruppe auf
+      if (k !== '+') this._grpTimer = setTimeout(() => { if (press && press.k === k) { press.long = true; this.input.storeGroup(k); if (navigator.vibrate) navigator.vibrate(25); } }, 550);
+    });
+    el.addEventListener('pointerup', (e) => {
+      clearTimeout(this._grpTimer);
+      const b = slotOf(e.target); const p = press; press = null;
+      if (!b || !p || p.long || b.dataset.group !== p.k) return;
+      const k = p.k;
+      if (k === '+') { this.input.storeNextFreeGroup(); return; }
+      if (p.button === 2 || e.ctrlKey || e.metaKey) { this.input.storeGroup(k, { add: e.shiftKey }); return; }
+      this.input.selectGroup(k, { add: e.shiftKey });
+    });
+    el.addEventListener('pointerleave', () => { clearTimeout(this._grpTimer); press = null; });
+  }
+  refreshGroups() {
+    const el = this.groupsEl; const g = this.game; const inp = this.input;
+    if (!el || !inp || !g.active) { if (el) el.innerHTML = ''; return; }
+    this._groupsDirty = false;
+    const own = inp.ownSelected ? inp.ownSelected() : [];
+    let html = '';
+    for (let i = 1; i <= 9; i++) {
+      const k = String(i);
+      const list = inp.groupUnits(k);
+      if (!list.length) continue;
+      // häufigster Typ als Symbol
+      const cnt = new Map(); for (const u of list) cnt.set(u.type, (cnt.get(u.type) || 0) + 1);
+      const main = [...cnt.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      const hp = list.reduce((s, u) => s + u.hp / u.maxHp, 0) / list.length;
+      const col = hp > 0.6 ? 'var(--green)' : hp > 0.3 ? '#e5b93e' : 'var(--red)';
+      const active = own.length && list.length === own.length && list.every((u) => own.includes(u));
+      html += `<button class="grp${active ? ' active' : ''}" data-group="${k}" title="Gruppe ${k}: ${list.length} Einheit(en) – Klick wählen, Doppelklick Kamera, Strg+Klick/gedrückt halten überschreiben, Umschalt+Klick hinzufügen">`
+        + `<b class="gk">${k}</b>${icon(unitIconKey(main))}<span class="gc">${list.length}</span><i class="gh" style="width:${Math.round(hp * 100)}%;background:${col}"></i></button>`;
+    }
+    if (own.length) html += `<button class="grp add" data-group="+" title="Auswahl als neue Gruppe speichern (Strg+1…9)">${icon('team')}<span class="gc">+</span></button>`;
+    if (html === this._lastGroupsHtml) return; // nur bei Änderung neu aufbauen (stabile Knöpfe für Klick/Halten)
+    this._lastGroupsHtml = html;
+    el.innerHTML = html;
+    el.classList.toggle('hidden', !html);
+  }
   _refreshSelHp() {
+    if (this._groupsDirty || (this._grpT = (this._grpT || 0) + 1) % 4 === 0) this.refreshGroups();
     // Lebensbalken in Auswahl aktualisieren, ohne DOM komplett neu aufzubauen
     const sel = this.game.selected;
     if (sel.length === 1) {

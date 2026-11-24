@@ -2107,7 +2107,7 @@ function dmInit() {
   });
   DM.black = pm(0x070606, 1); DM.char = pm(0x1c1713, 1); DM.ember = pm(0xff5a1a, 0.6, 0, 0xff4a10, 2.2); DM.rafter = pm(0x3a2a1c, 0.95); DM.rebar = pm(0x6a4a32, 0.8, 0.5); DM.glass = pm(0x040404, 0.25, 0.3);
 }
-const DMG_CLASS_COL = { mud: [0xc9b088, 0xa88f68], brick: [0x7a5548, 0x5a4a42], concrete: [0xa09d95, 0x77746d], wood: [0x4a3a2c, 0x2a2420] };
+const DMG_CLASS_COL = { mud: [0xc9b088, 0xa88f68], brick: [0x7a5548, 0x5a4a42], concrete: [0xa09d95, 0x77746d], wood: [0x6a5a48, 0x3a2e24] };
 const _dm = new THREE.Object3D();
 function dmMatrix(c, fi, u, y, out, sx, sy, rz = 0) {
   const f = c.faces[fi], cs = Math.cos(f.ry), sn = Math.sin(f.ry);

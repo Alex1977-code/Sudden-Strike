@@ -48,8 +48,8 @@ function veh(key, fac, o) { T[key] = { ...ERA, faction: fac, icon: '🛡️', cl
 const SUPPLY = { fuel: 1500, supply: { ammo: 1500, fuel: 3000, material: 12, radius: 15 } };
 
 // US
-veh('ww2_sherman', 'US', { name: 'M4A1 Sherman', hp: 560, speed: 8, radius: 2.9, weapons: ['ww2_m3_75', 'ww2_m1919'], desc: 'Zuverlässiger Mittlerer Panzer, 75 mm. Stark in Zahl.' });
-veh('ww2_sherman76', 'US', { name: 'M4A3E8 Sherman (76)', hp: 590, speed: 8, radius: 2.9, weapons: ['ww2_m1_76', 'ww2_m1919'], desc: 'Verbesserte Kanone, breite Ketten.' });
+veh('ww2_sherman', 'US', { name: 'M4A1 Sherman', hp: 600, speed: 8, radius: 2.9, weapons: ['ww2_m3_75', 'ww2_m1919'], desc: 'Zuverlässiger Mittlerer Panzer, 75 mm. Stark in Zahl.' });
+veh('ww2_sherman76', 'US', { name: 'M4A3E8 Sherman (76)', hp: 620, speed: 8, radius: 2.9, weapons: ['ww2_m1_76', 'ww2_m1919'], desc: 'Verbesserte Kanone, breite Ketten.' });
 veh('ww2_m10', 'US', { name: 'M10 Wolverine', hp: 430, armor: 'light', speed: 9.5, radius: 2.9, turretRate: 1.8, weapons: ['ww2_m1_76', 'ww2_browning50'], desc: 'Jagdpanzer mit offenem Turm: schnell, dünn gepanzert.' });
 veh('ww2_m3ht', 'US', { name: 'M3 Halbkette', icon: '🚙', hp: 330, armor: 'light', speed: 10, radius: 2.8, sight: 34, turnRate: 2, weapons: ['ww2_browning50'], transport: 10, desc: 'Mannschaftstransporter mit .50-Cal-MG.' });
 veh('ww2_jeep', 'US', { name: 'Jeep Willys', icon: '🚙', hp: 110, armor: 'light', speed: 14, radius: 1.6, sight: 40, turnRate: 3, weapons: ['ww2_m1919'], desc: 'Leichtes Aufklärungs- und Zugfahrzeug.' });
