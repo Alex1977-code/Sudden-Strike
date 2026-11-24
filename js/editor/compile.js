@@ -246,9 +246,10 @@ export function compileMission(docIn, opts = {}) {
   const brief = doc.briefing.trim() || doc.meta.description.trim() || 'Keine weiteren Informationen. Erfüllt die Einsatzziele.';
   const mission = {
     id, custom: true, fromEditor: !!opts.fromEditor, source: opts.source || null, doc,
-    title: escapeHtml(doc.meta.title),
-    place: escapeHtml(`Eigene Karte${doc.meta.author ? ' · von ' + doc.meta.author : ''}`),
-    date: escapeHtml(doc.meta.era === 'ww2' ? '1939–1945' : doc.meta.era === 'afghan' ? 'Afghanistan' : 'Gegenwart'),
+    // title/place/date werden per textContent angezeigt (Briefing, Ladeanzeige); HTML-Felder unten sind escaped
+    title: doc.meta.title,
+    place: `Eigene Karte${doc.meta.author ? ' · von ' + doc.meta.author : ''}`,
+    date: doc.meta.era === 'ww2' ? '1939–1945' : doc.meta.era === 'afghan' ? 'Afghanistan' : 'Gegenwart',
     briefing: brief.split(/\n{2,}/).slice(0, 12).map((p, i) => ({ s: i === 0 ? 'Lage' : '…', t: escapeHtml(p).replace(/\n/g, '<br>') })),
     objectivesPreview: objs.map((o) => escapeHtml(objectiveText(o) + (o.kind === 'timelimit' && !timeOnly ? ' (danach gescheitert)' : o.kind === 'timelimit' ? ' – so lange durchhalten' : ''))),
     forces: countBy(P).map(escapeHtml),
@@ -264,8 +265,8 @@ export function compileMission(docIn, opts = {}) {
       const tgt = { [P]: teamCenter(doc, E), [E]: teamCenter(doc, P) };
       for (const p of doc.points) {
         const u = g.spawn('cp_' + p.kind, 'N', p.x, p.z, { invulnerable: true, noBlock: p.kind !== 'zeppelin' && p.kind !== 'aerostat' });
-        u.name = p.name;
-        this.markers.push({ x: p.x, z: p.z, r: p.radius, label: p.name, color: '#8c9096' });
+        u.name = escapeHtml(p.name); // HUD zeigt Namen per innerHTML
+        this.markers.push({ x: p.x, z: p.z, r: p.radius, label: escapeHtml(p.name), color: '#8c9096' });
       }
       for (const u of doc.units) {
         const opt = { heading: u.heading, tags: u.target ? ['target'] : [] };
@@ -283,7 +284,7 @@ export function compileMission(docIn, opts = {}) {
           });
         }
       }
-      g.later(1, () => g.say('Stab', `${doc.meta.title}: ${objs.filter((o) => o.kind !== 'timelimit').map(objectiveText).join(' · ') || 'Durchhalten!'}`, 6));
+      g.later(1, () => g.say('Stab', escapeHtml(`${doc.meta.title}: ${objs.filter((o) => o.kind !== 'timelimit').map(objectiveText).join(' · ') || 'Durchhalten!'}`), 6)); // HUD nutzt innerHTML
     },
     update(g, dt) {
       const rt = this.rt;
@@ -330,7 +331,7 @@ export function compilePreview(doc, cam) {
   const map = { ...world.map, noFog: true };
   return {
     id: 'editor_preview', editorPreview: true, title: doc.meta.title, map, env: world.env,
-    camera: cam || { x: 0, z: 0, dist: Math.min(150, doc.map.size * 0.45), yaw: 0 },
+    camera: cam || { x: 0, z: 0, dist: Math.round(doc.map.size * 0.6), yaw: 0 },
     noDefaultDefeat: true, markers: [],
     world,
     setup(g) { world.decorate(g); },
@@ -348,14 +349,15 @@ export function compileSkirmishGen(docIn) {
   for (const t of ['UA', 'RU']) if (!spawns[t].length) spawns[t].push({ x: 0, z: t === 'UA' ? S / 2 - 30 : -S / 2 + 30 });
   const dist = Math.min(155, 80 + S * 0.12);
   const cam = (t) => { const c = spawns[t][0]; const yaw = Math.hypot(c.x, c.z) > 10 ? Math.atan2(c.x, c.z) : (t === 'UA' ? 0 : Math.PI); return { x: c.x, z: c.z, dist, yaw }; };
-  const capturePoints = doc.points.map((p, i) => ({ id: `cp${i + 1}`, x: p.x, z: p.z, kind: p.kind, name: p.name, value: p.value, radius: p.radius }));
+  const capturePoints = doc.points.map((p, i) => ({ id: `cp${i + 1}`, x: p.x, z: p.z, kind: p.kind, name: escapeHtml(p.name), value: p.value, radius: p.radius }));
   return {
     id: 'skirmish', preset: 'custom', custom: true,
-    title: doc.meta.title, place: `Eigene Karte${doc.meta.author ? ' · von ' + doc.meta.author : ''}`,
+    // Gefechtstitel landen in innerHTML (Pause-Info) → escaped
+    title: escapeHtml(doc.meta.title), place: escapeHtml(`Eigene Karte${doc.meta.author ? ' · von ' + doc.meta.author : ''}`),
     recommendedSize: S <= 260 ? 'small' : S <= 380 ? 'medium' : 'large',
     map: world.map, env: world.env, spawns, capturePoints,
     camera: { UA: cam('UA'), RU: cam('RU') },
-    description: (doc.meta.description || `Eigene Karte (${S} m)`) + ` – ${capturePoints.length} Eroberungspunkte.`,
+    description: escapeHtml(doc.meta.description || `Eigene Karte (${S} m)`) + ` – ${capturePoints.length} Eroberungspunkte.`,
     meta: { features: world.map.features.length, players: Math.max(spawns.UA.length, spawns.RU.length), custom: true },
     decorate: (g) => world.decorate(g),
   };

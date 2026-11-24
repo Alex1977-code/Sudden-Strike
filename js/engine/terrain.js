@@ -157,6 +157,231 @@ export class Terrain {
     return h;
   }
 
+  // ---------- Relief: Grundrauschen je terrainStyle ----------
+  _styleHeight(x, z) {
+    const d = this.def, N = this.noise, st = this.style;
+    const relief = d.relief ?? STYLE_RELIEF[st], base = d.baseHeight ?? 3;
+    if (st === 'hills') {
+      const wx = x + 30 * N.fbm(x / 160 + 7, z / 160 - 3, 2), wz = z + 30 * N.fbm(x / 160 - 11, z / 160 + 5, 2);
+      return base + relief * (1.1 * N.fbm(wx / 120, wz / 120, 5) + 0.18 * N.fbm(x / 32 + 50, z / 32 - 30, 3));
+    }
+    if (st === 'mountains') {
+      // Ridged-Multifractal: scharfe Grate, breite Talböden
+      const wx = x + 40 * N.fbm(x / 220 + 3, z / 220, 2), wz = z + 40 * N.fbm(x / 220 - 6, z / 220 + 4, 2);
+      const r = ridgedNoise(N, wx / 190, wz / 190, 5);
+      return base + relief * (r * r * 1.35 + 0.1 * N.fbm(x / 40 + 20, z / 40, 3));
+    }
+    if (st === 'desert') {
+      // Dünen: lange Luv-, steile Leeseite quer zur Windrichtung, fleckig verteilt
+      const a = d.windDir ?? 0.5, ca = Math.cos(a), sa = Math.sin(a), lam = d.duneWave ?? 44, amp = d.dunes ?? 3.2;
+      const warp = 22 * N.fbm(x / 110 + 3, z / 110 - 8, 2);
+      const u = (x * ca + z * sa + warp) / lam, p = u - Math.floor(u);
+      const prof = p < 0.7 ? smoothstep(0, 0.7, p) : 1 - smoothstep(0.7, 1, p);
+      const v = -x * sa + z * ca;
+      const patch = smoothstep(-0.2, 0.3, N.fbm(x / 170 + 40, z / 170 + 9, 2)) * (0.65 + 0.35 * Math.sin(v / 31 + warp * 0.08));
+      return base + relief * N.fbm(x / 130, z / 130, 3) + amp * prof * patch + 0.25 * N.fbm(x / 9, z / 9, 2);
+    }
+    if (st === 'bocage') return base + relief * N.fbm(x / 85, z / 85, 4) + relief * 0.22 * N.fbm(x / 22 + 50, z / 22 - 30, 2);
+    // steppe: weit und flach
+    return base + relief * N.fbm(x / 160, z / 160, 3) + relief * 0.12 * N.fbm(x / 30 + 50, z / 30 - 30, 2);
+  }
+
+  // ---------- Relief: neue Formen (Berg, Höhenzug, Plateau, Steilhang, Kraterfeld) ----------
+  _reliefFeatures(h, x, z, m) {
+    const R = this._rel, N = this.noise, base = this.def.baseHeight ?? 3;
+    for (const o of R.mountains) {
+      const dx = x - o.x, dz = z - o.z, d2 = dx * dx + dz * dz;
+      if (d2 >= o.r * o.r) continue;
+      const t = 1 - Math.sqrt(d2) / o.r, sh = t * t * (3 - 2 * t);
+      const rn = ridgedNoise(N, (x + o.sx) / o.sc, (z + o.sz) / o.sc, 5);
+      h += o.H * m * (0.5 * sh + 0.25 * sh * sh + 0.4 * sh * rn * o.rough);
+    }
+    for (const o of R.ridges) {
+      if (x < o.bx0 || x > o.bx1 || z < o.bz0 || z > o.bz1) continue;
+      const dd = distToPolyline(x, z, o.pts);
+      if (dd >= o.hw) continue;
+      const t = 1 - dd / o.hw, sh = t * t * (3 - 2 * t);
+      const crest = 0.8 + 0.45 * N.fbm(x / 45 + o.k, z / 45 - o.k, 2);
+      const rn = ridgedNoise(N, x / 28 + o.k, z / 28, 3);
+      h += o.H * m * (sh * crest + 0.22 * sh * (rn - 0.5) * o.rough);
+    }
+    for (const o of R.plateaus) {
+      let dd;
+      if (o.poly) { const e = polyEdgeDist(x, z, o.poly); dd = o.r - (pointInPoly(x, z, o.poly) ? e : -e); } else dd = Math.hypot(x - o.x, z - o.z);
+      if (dd >= o.r + o.edge) continue;
+      const t = 1 - smoothstep(o.r - o.edge, o.r, dd + N.get(x / 17 + o.k, z / 17) * o.edge * 0.45);
+      if (t > 0) h = lerp(h, base + o.H + (h - base) * 0.2, t * m);
+    }
+    for (const o of R.cliffs) {
+      if (x < o.bx0 || x > o.bx1 || z < o.bz0 || z > o.bz1) continue;
+      const P = o.pts;
+      let best = Infinity, sgn = 1, beyond = 0;
+      for (let i = 0; i < P.length - 1; i++) {
+        const ax = P[i][0], az = P[i][1], dx = P[i + 1][0] - ax, dz = P[i + 1][1] - az, l2 = dx * dx + dz * dz || 1;
+        const tr = ((x - ax) * dx + (z - az) * dz) / l2, tc = tr < 0 ? 0 : tr > 1 ? 1 : tr;
+        const ex = x - ax - tc * dx, ez = z - az - tc * dz, dd = Math.sqrt(ex * ex + ez * ez);
+        if (dd < best) {
+          best = dd; sgn = dx * (z - az) - dz * (x - ax) >= 0 ? 1 : -1;
+          beyond = (i === 0 && tr < 0) ? -tr * Math.sqrt(l2) : (i === P.length - 2 && tr > 1) ? (tr - 1) * Math.sqrt(l2) : 0;
+        }
+      }
+      const s = o.side * sgn * best + N.get(x / 9 + o.k, z / 9) * 1.6;
+      const prof = smoothstep(-o.w / 2, o.w / 2, s) * (1 - smoothstep(o.reach * 0.6, o.reach, s)) * (1 - smoothstep(0, o.w * 4 + 10, beyond));
+      if (prof > 0) h += o.H * m * prof;
+    }
+    if (R.craters) h += this._craterHeight(x, z);
+    return h;
+  }
+
+  // Granattrichter (Mulde mit Auswurfwall), räumlicher Hash
+  _craterHeight(x, z) {
+    const C = R_CRATER_CELL, cr = this._rel.craters, gw = cr.gw;
+    const ci = Math.floor((x + this.half) / C), cj = Math.floor((z + this.half) / C);
+    let s = 0;
+    for (let j = cj - 1; j <= cj + 1; j++) {
+      if (j < 0 || j >= gw) continue;
+      for (let i = ci - 1; i <= ci + 1; i++) {
+        if (i < 0 || i >= gw) continue;
+        const L = cr.cells[j * gw + i];
+        if (!L) continue;
+        for (const c of L) {
+          const dx = x - c.x, dz = z - c.z, d2 = dx * dx + dz * dz, r2 = c.r * c.r;
+          if (d2 > 4.4 * r2) continue;
+          const u = Math.sqrt(d2) / c.r;
+          if (u < 1) s -= c.d * (1 - u * u);
+          const q = (u - 1) / 0.32;
+          s += c.d * 0.4 * Math.exp(-q * q);
+        }
+      }
+    }
+    return s < -2.6 ? -2.6 : s;
+  }
+
+  // Abgeleitete Features: Fluss im Tal, Bocage-Flurnetz (Hecken + Felder)
+  _expandFeatures(list) {
+    const out = [];
+    for (const f of list) {
+      if (f.type === 'bocage') { out.push(...this._bocageFeatures(f)); continue; }
+      out.push(f);
+      if (f.type === 'valley' && f.river) out.push({ type: 'river', pts: f.pts, width: f.river, depth: f.riverDepth ?? 2.5, bank: f.riverBank ?? 5, green: f.green });
+    }
+    return out;
+  }
+
+  // Normandie-Bocage: unregelmäßiges Netz kleiner Felder, Heckenwälle mit Toren (jedes Feld hat mindestens eine Lücke)
+  _bocageFeatures(f) {
+    const rnd = mulberry32((this.def.seed || 1) * 313 + (f.seed || 0) * 7 + 5);
+    const x0 = f.x0 ?? -this.half + 10, z0 = f.z0 ?? -this.half + 10, x1 = f.x1 ?? this.half - 10, z1 = f.z1 ?? this.half - 10;
+    const cell = f.cell ?? 50, jit = f.jitter ?? 0.28;
+    const nx = Math.max(1, Math.round((x1 - x0) / cell)), nz = Math.max(1, Math.round((z1 - z0) / cell));
+    const cw = (x1 - x0) / nx, cd = (z1 - z0) / nz;
+    const P = [];
+    for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
+      const bi = i === 0 || i === nx, bj = j === 0 || j === nz;
+      P.push([x0 + i * cw + (bi ? 0 : (rnd() - 0.5) * 2 * jit * cw), z0 + j * cd + (bj ? 0 : (rnd() - 0.5) * 2 * jit * cd)]);
+    }
+    const node = (i, j) => P[j * (nx + 1) + i];
+    const edges = new Map(), mk = (a, b) => {
+      const m = [(a[0] + b[0]) / 2 + (rnd() - 0.5) * 6, (a[1] + b[1]) / 2 + (rnd() - 0.5) * 6];
+      return { pts: [a, m, b], gaps: [] };
+    };
+    const gapOn = (e) => {
+      const t = 0.2 + rnd() * 0.6, [a, m, b] = e.pts;
+      const p = t < 0.5 ? [lerp(a[0], m[0], t * 2), lerp(a[1], m[1], t * 2)] : [lerp(m[0], b[0], t * 2 - 1), lerp(m[1], b[1], t * 2 - 1)];
+      e.gaps.push(p);
+    };
+    const gapP = f.gaps ?? 0.55;
+    const edge = (key, a, b) => { if (!edges.has(key)) { const e = mk(a, b); if (rnd() < gapP) gapOn(e); edges.set(key, e); } return edges.get(key); };
+    const out = [];
+    const crops = f.crops || ['green', 'wheat', 'plowed', 'stubble', null, null, null];
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      const es = [edge(`h${i},${j}`, node(i, j), node(i + 1, j)), edge(`h${i},${j + 1}`, node(i, j + 1), node(i + 1, j + 1)),
+        edge(`v${i},${j}`, node(i, j), node(i, j + 1)), edge(`v${i + 1},${j}`, node(i + 1, j), node(i + 1, j + 1))];
+      if (!es.some((e) => e.gaps.length)) gapOn(es[Math.floor(rnd() * 4)]);
+      // Feld (etwas eingerückt, damit der Heckensaum Wiese bleibt)
+      const q = [node(i, j), node(i + 1, j), node(i + 1, j + 1), node(i, j + 1)];
+      const cx = q.reduce((s, p) => s + p[0], 0) / 4, cz = q.reduce((s, p) => s + p[1], 0) / 4;
+      const poly = q.map(([px, pz]) => { const dx = cx - px, dz = cz - pz, l = Math.hypot(dx, dz) || 1; return [px + dx / l * 4, pz + dz / l * 4]; });
+      const r = rnd();
+      if (r < (f.orchards ?? 0.1)) out.push({ type: 'forest', poly, kind: 'orchard', spacing: 8 });
+      else { const crop = crops[Math.floor(rnd() * crops.length)]; if (crop) out.push({ type: 'field', poly, crop, angle: rnd() * 3.14 }); }
+    }
+    for (const e of edges.values()) out.push({ type: 'hedgerow', pts: e.pts, gaps: e.gaps, gapWidth: f.gapWidth, width: f.hedgeWidth, h: f.wall, trees: f.trees ?? 0.3 });
+    return out;
+  }
+
+  // Vorberechnung der Reliefformen (Boxen, Kraterliste, Heckenlücken)
+  _prepRelief() {
+    const F = this.features, rnd = mulberry32((this.def.seed || 1) * 6271 + 11), base = this.def.baseHeight ?? 3;
+    this.modernRelief = this.style !== 'plains' || F.some((f) => RELIEF_TYPES.has(f.type));
+    const R = { valleys: [], mountains: [], ridges: [], plateaus: [], cliffs: [], craters: null, hedges: [], craterList: [] };
+    const box = (o, pts, m) => { const b = polyBox(pts); o.bx0 = b[0] - m; o.bz0 = b[1] - m; o.bx1 = b[2] + m; o.bz1 = b[3] + m; return o; };
+    const roads = F.filter((f) => f.type === 'road');
+    let snow = this.def.snowLine ?? null;
+    for (const f of F) {
+      if (f.type === 'valley') {
+        const width = f.width ?? 40, outer = width / 2, wob = width * 0.06;
+        let floor = base - (f.depth ?? 4);
+        if (this.hasWater && !f.wet) floor = Math.max(floor, this.seaLevel + 0.9);
+        R.valleys.push(box({ f, outer, inner: outer * (f.flat ?? 0.42), wob, floor, k: rnd() * 100 }, f.pts, outer + wob));
+      } else if (f.type === 'mountain') {
+        R.mountains.push({ x: f.x, z: f.z, r: f.r ?? 80, H: f.h ?? 30, rough: f.rough ?? 1, sc: (f.r ?? 80) * 0.42, sx: rnd() * 400, sz: rnd() * 400 });
+        if (f.snow !== undefined && f.snow !== false) snow = Math.min(snow ?? Infinity, f.snow === true ? base + (f.h ?? 30) * 0.75 : f.snow);
+      } else if (f.type === 'ridge') {
+        const hw = (f.width ?? 50) / 2;
+        R.ridges.push(box({ pts: f.pts, hw, H: f.h ?? 15, rough: f.rough ?? 1, k: rnd() * 100 }, f.pts, hw));
+      } else if (f.type === 'plateau') {
+        const poly = f.poly || null;
+        let r = f.r ?? 40, x = f.x, z = f.z;
+        if (poly) r = 0;
+        R.plateaus.push({ poly, x, z, r, edge: f.edge ?? 14, H: f.h ?? 10, k: rnd() * 100 });
+      } else if (f.type === 'cliff') {
+        const reach = f.reach ?? 70;
+        R.cliffs.push(box({ pts: f.pts, H: f.h ?? 10, w: f.width ?? 6, reach, side: f.side ?? 1, k: rnd() * 100 }, f.pts, reach + (f.width ?? 6) * 4 + 12));
+      } else if (f.type === 'crater_field') {
+        const area = f.poly ? this._polyArea(f.poly) : Math.PI * f.r * f.r;
+        const cnt = Math.min(6000, Math.round(area * (f.density ?? 0.015)));
+        const rmin = f.rmin ?? 1.5, rmax = f.rmax ?? 5.5, dep = f.depth ?? 0.3;
+        const [bx0, bz0, bx1, bz1] = f.poly ? polyBox(f.poly) : [f.x - f.r, f.z - f.r, f.x + f.r, f.z + f.r];
+        for (let c = 0, tries = 0; c < cnt && tries < cnt * 4; tries++) {
+          const x = bx0 + rnd() * (bx1 - bx0), z = bz0 + rnd() * (bz1 - bz0);
+          const inside = f.poly ? pointInPoly(x, z, f.poly) : Math.hypot(x - f.x, z - f.z) < f.r;
+          if (!inside) continue;
+          if (!f.poly && rnd() > 1 - smoothstep(0.7, 1, Math.hypot(x - f.x, z - f.z) / f.r)) continue;
+          const r = rmin + (rmax - rmin) * Math.pow(rnd(), 2.2);
+          R.craterList.push({ x, z, r, d: r * dep * (0.7 + 0.5 * rnd()) });
+          c++;
+        }
+      } else if (f.type === 'hedgerow') {
+        const hw = (f.width ?? 3.2) / 2, gr = (f.gapWidth ?? 8) / 2;
+        const gaps = (f.gaps || []).map((g) => ({ x: g[0], z: g[1], r: g[2] ?? gr }));
+        const e = box({ f, pts: f.closed ? [...f.pts, f.pts[0]] : f.pts, hw, wall: f.h ?? 1.1, gaps, roads: [] }, f.closed ? [...f.pts, f.pts[0]] : f.pts, hw + 2);
+        for (const r of roads) {
+          const b = polyBox(r.pts), w = (r.width || 5) / 2;
+          if (b[0] - w - 3 < e.bx1 && b[2] + w + 3 > e.bx0 && b[1] - w - 3 < e.bz1 && b[3] + w + 3 > e.bz0) e.roads.push({ pts: r.pts, w });
+        }
+        e.gapAt = (x, z) => {
+          let g = 0;
+          for (const p of e.gaps) { const d = Math.hypot(x - p.x, z - p.z); if (d < p.r + 1.5) g = Math.max(g, 1 - smoothstep(p.r - 0.5, p.r + 1.5, d)); }
+          for (const r of e.roads) { const d = distToPolyline(x, z, r.pts) - r.w; if (d < 2.5) g = Math.max(g, 1 - smoothstep(1.0, 2.5, d)); }
+          return g;
+        };
+        R.hedges.push(e);
+      }
+    }
+    if (R.craterList.length) {
+      const gw = Math.ceil(this.size / R_CRATER_CELL) + 1, cells = new Array(gw * gw);
+      for (const c of R.craterList) {
+        const i = clamp(Math.floor((c.x + this.half) / R_CRATER_CELL), 0, gw - 1), j = clamp(Math.floor((c.z + this.half) / R_CRATER_CELL), 0, gw - 1);
+        (cells[j * gw + i] || (cells[j * gw + i] = [])).push(c);
+      }
+      R.craters = { gw, cells };
+    }
+    this.snowLine = snow;
+    const any = R.valleys.length || R.mountains.length || R.ridges.length || R.plateaus.length || R.cliffs.length || R.craters || R.hedges.length;
+    this._rel = any ? R : null;
+  }
+
   _buildHeightfield() {
     const n = this.size + 1;
     this.hn = n;
@@ -264,6 +489,28 @@ export class Terrain {
         if (distToPolyline(x, z, f.pts) < f.width * 0.5) { const k = j * this.gw + i; this.gWater[k] = 0; this.gDeepWater[k] = 0; this.gBlocked[k] = 0; this.gRoad[k] = 1; }
       }
     }
+    this._gridHedges();
+  }
+  // Heckenwälle: für Fahrzeuge harte Sperre (gHard → Abstandsfeld + Grundflächentest), Infanterie passiert (gBlocked frei)
+  // und erhält Deckung/Sichtschutz wie im Wald (gForest). Lücken (Tore, Straßen) bleiben offen.
+  _gridHedges() {
+    const R = this._rel;
+    this.hedgeCells = 0;
+    if (!R || !R.hedges.length) return;
+    const gw = this.gw;
+    for (const e of R.hedges) {
+      const i0 = Math.max(0, Math.floor((e.bx0 + this.half) / CELL)), i1 = Math.min(gw - 1, Math.floor((e.bx1 + this.half) / CELL));
+      const j0 = Math.max(0, Math.floor((e.bz0 + this.half) / CELL)), j1 = Math.min(gw - 1, Math.floor((e.bz1 + this.half) / CELL));
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        const x = (i + 0.5) * CELL - this.half, z = (j + 0.5) * CELL - this.half, k = j * gw + i;
+        const dd = distToPolyline(x, z, e.pts);
+        if (dd > e.hw + 1.2) continue;
+        if (this.gBlocked[k] === 1 && !this.gWater[k]) this.gBlocked[k] = 0; // Wallböschung ist kein Steilhang
+        if (dd > e.hw * 0.8 + 0.5 || e.gapAt(x, z) > 0.5 || this.gWater[k]) continue;
+        if (!this.gHard[k]) this.hedgeCells++;
+        this.gHard[k] = 1; this.gForest[k] = 1;
+      }
+    }
   }
   cellOf(x, z) { return [Math.floor((x + this.half) / CELL), Math.floor((z + this.half) / CELL)]; }
   cellCenter(i, j) { return [(i + 0.5) * CELL - this.half, (j + 0.5) * CELL - this.half]; }
@@ -333,8 +580,12 @@ export class Terrain {
     for (const f of this.features) if (f.type === 'house') this.objects.houses.push({ x: f.x, z: f.z, rot: f.rot || 0, w: f.w || 7, d: f.d || 6, floors: f.floors || 1, style: f.style ?? 0, kind: f.kind, modern: f.modern, snow: f.snow, lit: f.lit, name: f.name });
 
     // Wälder
+    this.objects.hedges = [];
+    const rs = mulberry32((this.def.seed || 1) * 104729 + 17); // eigene Zufallsfolge für Baumarten (Positionen bleiben wie bisher)
+    const steep = (x, z) => this.modernRelief && this.normal(x, z, _v).y < 0.74;
     for (const f of this.features) {
       if (f.type !== 'forest') continue;
+      if (f.kind === 'orchard') { this._plantOrchard(f, rnd, rs); continue; }
       const area = f.poly ? this._polyArea(f.poly) : Math.PI * f.r * f.r;
       const count = Math.floor(area * (f.density ?? 0.05));
       let bx0, bx1, bz0, bz1;
@@ -346,7 +597,9 @@ export class Terrain {
         const x = bx0 + rnd() * (bx1 - bx0), z = bz0 + rnd() * (bz1 - bz0);
         if (f.poly ? !pointInPoly(x, z, f.poly) : Math.hypot(x - f.x, z - f.z) > f.r) continue;
         if (!this.inBounds(x, z, 1) || this.isWater(x, z) || this.roadDist(x, z) < 2) continue;
-        this.objects.trees.push({ x, z, kind: f.kind === 'pine' ? 1 : f.kind === 'mixed' ? (rnd() < 0.5 ? 1 : 0) : 0, s: 0.8 + rnd() * 0.6, r: rnd() * 6.28 });
+        const lk = f.kind === 'pine' ? 1 : f.kind === 'mixed' ? (rnd() < 0.5 ? 1 : 0) : 0;
+        const tr = { x, z, kind: this._species('forest', lk, f.kind, rs), s: 0.8 + rnd() * 0.6, r: rnd() * 6.28 };
+        if (!steep(x, z)) this.objects.trees.push(tr);
         placed++;
       }
     }
@@ -360,7 +613,8 @@ export class Terrain {
           const t = k / n;
           const x = lerp(ax, bx, t) + (rnd() - 0.5) * 2.5, z = lerp(az, bz, t) + (rnd() - 0.5) * 2.5;
           if (this.isWater(x, z) || this.roadDist(x, z) < 2) continue;
-          this.objects.trees.push({ x, z, kind: rnd() < 0.3 ? 1 : 0, s: 0.9 + rnd() * 0.5, r: rnd() * 6.28 });
+          const tr = { x, z, kind: this._species('line', rnd() < 0.3 ? 1 : 0, f.kind, rs), s: 0.9 + rnd() * 0.5, r: rnd() * 6.28 };
+          if (!steep(x, z)) this.objects.trees.push(tr);
         }
       }
     }
@@ -370,12 +624,103 @@ export class Terrain {
       const x = (rnd() - 0.5) * this.size * 0.95, z = (rnd() - 0.5) * this.size * 0.95;
       if (this.isWater(x, z) || this.roadDist(x, z) < 3 || this.fieldAt(x, z)) continue;
       if (this.objects.houses.some((h) => Math.hypot(h.x - x, h.z - z) < 7)) continue;
-      this.objects.trees.push({ x, z, kind: rnd() < 0.4 ? 1 : 0, s: 0.7 + rnd() * 0.6, r: rnd() * 6.28 });
+      const tr = { x, z, kind: this._species('scatter', rnd() < 0.4 ? 1 : 0, null, rs), s: 0.7 + rnd() * 0.6, r: rnd() * 6.28 };
+      if (!steep(x, z)) this.objects.trees.push(tr);
     }
+    this._scatterExtra(rs);
     // Bäume als Waldzellen markieren (Deckung)
     for (const t of this.objects.trees) {
       const k = this.cellIndex(t.x, t.z);
       if (k >= 0) this.gForest[k] = 1;
+    }
+  }
+  // Baumart (SP.*): bisherige Nadel/Laub-Entscheidung bleibt erhalten, Laubbäume werden je Palette/Art aufgefächert
+  _species(ctx, legacyKind, kind, rs) {
+    const pal = this.palette;
+    let mix = kind && FOREST_MIX[kind];
+    if (!mix) {
+      if (pal === 'desert') mix = ctx === 'scatter' ? MIX_DESERT_SCATTER : FOREST_MIX.palm;
+      else if (pal === 'afghan') mix = ctx === 'line' ? FOREST_MIX.poplar : ctx === 'scatter' ? MIX_AFGHAN_SCATTER : MIX_AFGHAN_FOREST;
+      else if (legacyKind === 1) return SP.pine;
+      else mix = ctx === 'line' ? MIX_LINE : MIX_DECIDUOUS;
+    }
+    let r = rs(), k = mix[mix.length - 1][0];
+    for (const [sp, w] of mix) { if (r < w) { k = sp; break; } r -= w; }
+    return k;
+  }
+  // Obstgarten / Plantage: Reihenpflanzung
+  _plantOrchard(f, rnd, rs) {
+    const sp = f.spacing ?? 7, a = f.angle ?? 0.3, ca = Math.cos(a), sa = Math.sin(a);
+    const [bx0, bz0, bx1, bz1] = f.poly ? polyBox(f.poly) : [f.x - f.r, f.z - f.r, f.x + f.r, f.z + f.r];
+    const cx = (bx0 + bx1) / 2, cz = (bz0 + bz1) / 2, R = Math.hypot(bx1 - bx0, bz1 - bz0) / 2;
+    const species = this.palette === 'desert' ? SP.palm : SP.fruit;
+    for (let u = -R; u <= R; u += sp) for (let v = -R; v <= R; v += sp) {
+      const x = cx + u * ca - v * sa + (rnd() - 0.5) * 1.2, z = cz + u * sa + v * ca + (rnd() - 0.5) * 1.2;
+      if (f.poly ? !pointInPoly(x, z, f.poly) : Math.hypot(x - f.x, z - f.z) > f.r) continue;
+      if (!this.inBounds(x, z, 1) || this.isWater(x, z) || this.roadDist(x, z) < 2.5) continue;
+      if (rnd() < (f.missing ?? 0.08)) continue;
+      this.objects.trees.push({ x, z, kind: species, s: 0.8 + rs() * 0.35, r: rs() * 6.28 });
+    }
+  }
+  // Hecken-Bewuchs, Grüne Zone an Flüssen (Afghanistan), zerschossene Bäume (Front/Kraterfelder)
+  _scatterExtra(rs) {
+    const R = this._rel;
+    if (R && R.hedges.length) {
+      for (const e of R.hedges) {
+        const P = e.pts, treeP = e.f.trees ?? 0.3;
+        let nextTree = 4 + rs() * 8;
+        for (let i = 0; i < P.length - 1; i++) {
+          const [ax, az] = P[i], [bx, bz] = P[i + 1];
+          const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(len / 2.1)), rot = Math.atan2(bx - ax, bz - az);
+          for (let k = 0; k < n; k++) {
+            const t = (k + 0.5) / n, x = lerp(ax, bx, t), z = lerp(az, bz, t);
+            if (!this.inBounds(x, z, 0.5) || e.gapAt(x, z) > 0.25 || this.isWater(x, z)) continue;
+            this.objects.hedges.push({ x, z, rot: rot + (rs() - 0.5) * 0.25, s: 0.85 + rs() * 0.35, l: len / n / 2.1 });
+            nextTree -= len / n;
+            if (nextTree <= 0) {
+              nextTree = 6 + rs() * 10;
+              if (rs() < treeP * 2.5) {
+                const r = rs();
+                const kind = this.palette === 'afghan' ? SP.poplar : r < 0.7 ? SP.oak : r < 0.8 ? SP.poplar : r < 0.9 ? SP.birch : SP.fruit;
+                this.objects.trees.push({ x: x + (rs() - 0.5), z: z + (rs() - 0.5), kind, s: 0.85 + rs() * 0.45, r: rs() * 6.28 });
+              }
+            }
+          }
+        }
+      }
+    }
+    // Grüne Zone: Obst-/Maulbeerbäume und Pappeln entlang der Flüsse (Afghanistan oder river.green)
+    for (const f of this.features) {
+      if (f.type !== 'river') continue;
+      const gz = f.green ?? (this.palette === 'afghan' ? 40 : 0);
+      if (!gz) continue;
+      for (let i = 0; i < f.pts.length - 1; i++) {
+        const [ax, az] = f.pts[i], [bx, bz] = f.pts[i + 1];
+        const len = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / len, nz = (bx - ax) / len;
+        const cnt = Math.round(len * gz * 2 * 0.0045);
+        for (let c = 0; c < cnt; c++) {
+          const t = rs(), side = rs() < 0.5 ? -1 : 1, off = f.width * 0.5 + 4 + Math.pow(rs(), 1.4) * gz;
+          const x = lerp(ax, bx, t) + nx * off * side, z = lerp(az, bz, t) + nz * off * side;
+          if (!this.inBounds(x, z, 2) || this.isWater(x, z) || this.roadDist(x, z) < 3 || this.fieldAt(x, z) || this.normal(x, z, _v).y < 0.85) continue;
+          if (this.objects.houses.some((h) => Math.abs(h.x - x) < 9 && Math.abs(h.z - z) < 9)) continue;
+          const r = rs();
+          this.objects.trees.push({ x, z, kind: r < 0.55 ? SP.fruit : r < 0.85 ? SP.poplar : SP.oak, s: 0.8 + rs() * 0.45, r: rs() * 6.28 });
+        }
+      }
+    }
+    // Front: ein Teil der Bäume zerschossen (Stümpfe), in Kraterfeldern fast alle
+    const craters = R && R.craters;
+    if (this.def.scarred || craters) {
+      const inCrater = (x, z) => {
+        if (!craters) return false;
+        for (const f of this.features) if (f.type === 'crater_field' && (f.poly ? pointInPoly(x, z, f.poly) : Math.hypot(x - f.x, z - f.z) < f.r * 0.9)) return true;
+        return false;
+      };
+      for (const t of this.objects.trees) {
+        if (t.kind === SP.palm) continue;
+        const p = inCrater(t.x, t.z) ? 0.75 : this.def.scarred ? (this.def.stumps ?? 0.15) : 0;
+        if (p && rs() < p) { t.kind = SP.stump; t.s *= 0.9; }
+      }
     }
   }
   _roadAngle(x, z) {
@@ -411,6 +756,7 @@ export class Terrain {
     if (this.inForest(x, z)) mix(this.season === 'winter' ? [0.6, 0.62, 0.6] : [0.22, 0.30, 0.14], 0.5);
     const slope = 1 - nrm.y;
     mix(P.rock, smoothstep(0.12, 0.35, slope));
+    if (this.snowLine !== null && this.snowLine !== undefined) mix([0.88, 0.9, 0.94], smoothstep(this.snowLine - 2, this.snowLine + 3, h) * (1 - smoothstep(0.3, 0.5, slope)));
     if (this.hasWater) {
       const above = h - this.seaLevel;
       mix(P.sand, 1 - smoothstep(0.3, 2.0, above));
@@ -481,15 +827,29 @@ export class Terrain {
       group.add(bed);
       disposables.push(bedMat);
     }
+    // Randschürze: verdeckt bei hohem Relief den Spalt zwischen Kartenrand und Umgebungsboden
+    if (this.modernRelief && !this.def.outerSea) {
+      const sk = this._buildSkirt(outer.position.y - 1);
+      group.add(sk); disposables.push(sk.material);
+    }
+    const tt = performance.now();
     group.add(this._buildTrees());
+    const hedges = this._buildHedges();
+    if (hedges) group.add(hedges);
+    const t3 = performance.now();
     const cover = this._buildGroundCover();
     if (cover) group.add(cover);
     const t2 = performance.now();
+    if (this._vegMats) disposables.push(...this._vegMats);
     // Puffer der Texturerzeugung freigeben
     this._tx = null;
+    // LOD der Bäume: vor jedem Bild (Hauptkamera) nahe/ferne Instanzen aufteilen
+    mesh.onBeforeRender = (r, scene) => this._hookLod(scene);
     // Texturen/Materialien mit dem Gelände freigeben (clearScene entsorgt nur Geometrien)
-    geo.addEventListener('dispose', () => disposables.forEach((d) => d && d.dispose()));
-    this.buildStats = { texRes: cfg.tex, colorMapMs: Math.round(t1 - t0), phases: this._phases, totalMs: Math.round(t2 - t0), cover: this.coverCount || 0 };
+    geo.addEventListener('dispose', () => { disposables.forEach((d) => d && d.dispose()); this._unhookLod(); });
+    let veg = 0;
+    group.traverse((o) => { if (o.isInstancedMesh) veg++; });
+    this.buildStats = { texRes: cfg.tex, heightMs: this.heightMs, colorMapMs: Math.round(t1 - t0), phases: this._phases, treesMs: Math.round(t3 - tt), coverMs: Math.round(t2 - t3), totalMs: Math.round(t2 - t0), cover: this.coverCount || 0, trees: this.objects.trees.length, hedges: this.objects.hedges.length, rocks: this.rockCount || 0, vegMeshes: veg };
     return group;
   }
 
@@ -499,8 +859,11 @@ export class Terrain {
     const cfg = this.qcfg;
     const R = cfg.tex, size = this.size, half = this.half, px = size / R;
     const n = this.hn, H = this.heights;
-    const winter = this.season === 'winter', autumn = this.season === 'autumn';
-    const TP = TEX_PAL[this.season] || TEX_PAL.summer;
+    const pal = this.palette;
+    const winter = pal === 'winter', autumn = pal === 'autumn' || pal === 'mud';
+    const mud = pal === 'mud', arid = pal === 'desert' || pal === 'afghan', spring = pal === 'spring';
+    const TP = TEX_PAL[pal] || TEX_PAL.summer;
+    const snowLine = this.snowLine;
     const sea = this.seaLevel, hasWater = this.hasWater;
     const vn = makeVNoise((this.def.seed || 1) * 131 + 7);
     const noise = this.noise;
@@ -526,7 +889,37 @@ export class Terrain {
       const j0 = Math.max(0, Math.floor(z0 + half)), j1 = Math.min(n - 1, Math.ceil(z1 + half));
       for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) cb(j * n + i, i - half, j - half);
     };
+    // Zusatzgitter (nur bei Bedarf): Wadi-/Bachbett, Grüne Zone, Heckensaum
+    let XW = null, GZ = null, HG = null;
     for (const f of this.features) {
+      if (f.type === 'valley' && (f.wadi || f.bed)) {
+        XW = XW || new Float32Array(NN);
+        const hw = (f.width ?? 40) * 0.5 * (f.flat ?? 0.42), b = polyBox(f.pts);
+        gridBox(b[0] - hw - 4, b[1] - hw - 4, b[2] + hw + 4, b[3] + hw + 4, (k, x, z) => {
+          const d = distToPolyline(x, z, f.pts) + noise.get(x / 11 + 5, z / 11) * hw * 0.35;
+          XW[k] = Math.max(XW[k], 1 - smoothstep(hw * 0.45, hw * 1.05, d));
+        });
+      } else if (f.type === 'river' && (f.green ?? (pal === 'afghan' ? 40 : 0))) {
+        GZ = GZ || new Float32Array(NN);
+        const g = f.green ?? 40, w = f.width * 0.5, b = polyBox(f.pts);
+        gridBox(b[0] - g - w - 6, b[1] - g - w - 6, b[2] + g + w + 6, b[3] + g + w + 6, (k, x, z) => {
+          const d = distToPolyline(x, z, f.pts) - w + noise.fbm(x / 26 + 7, z / 26 - 3, 2) * g * 0.5;
+          GZ[k] = Math.max(GZ[k], 1 - smoothstep(g * 0.55, g, d));
+        });
+      }
+    }
+    if (this._rel && this._rel.hedges.length) {
+      HG = new Float32Array(NN);
+      for (const e of this._rel.hedges) {
+        gridBox(e.bx0, e.bz0, e.bx1, e.bz1, (k, x, z) => {
+          const d = distToPolyline(x, z, e.pts);
+          if (d > e.hw + 2.5) return;
+          HG[k] = Math.max(HG[k], (1 - smoothstep(e.hw * 0.5, e.hw + 2.2, d)) * (1 - e.gapAt(x, z)));
+        });
+      }
+    }
+    for (const f of this.features) {
+      if (f.type === 'forest' && f.kind === 'orchard') continue; // Obstwiese: Grasboden
       if (f.type === 'forest') {
         if (f.poly) {
           const b = polyBox(f.poly);
@@ -672,6 +1065,28 @@ export class Terrain {
           mxs(TP.pave[0] * (0.92 + 0.16 * nh), TP.pave[1] * (0.92 + 0.16 * nh), TP.pave[2] * (0.92 + 0.16 * nh), pv);
           bm -= pv * 0.4; bare *= 1 - pv;
         }
+        // Palettenbesonderheiten: Geröllflächen (arid), Schlammfelder/Pfützen (Rasputiza), Grüne Zone, Wadi, Heckensaum
+        if (arid) {
+          const gv = smoothstep(0.58, 0.84, nm * 0.7 + nl * 0.3);
+          if (gv > 0) { const st = 0.82 + 0.3 * nh; mxs(TP.gravel2[0] * st, TP.gravel2[1] * st, TP.gravel2[2] * st, gv * 0.8); bm = Math.max(bm, 0.85); }
+        }
+        if (mud) {
+          const mm = smoothstep(0.48, 0.78, nl * 0.55 + nm * 0.45);
+          if (mm > 0) { mx(TP.mudSoil, mm * 0.8); bare = Math.max(bare, mm * 0.4); }
+          if (ny > 0.985) { const pd = smoothstep(0.78, 0.84, nm * 0.6 + nh * 0.4) * (0.5 + 0.5 * mm); if (pd > 0) { mx(TP.puddle, pd); bm = Math.min(bm, 1 - pd * 0.85); bare *= 1 - pd; } }
+        }
+        if (GZ) {
+          const gz = GZ[k00] * w00 + GZ[k10] * w10 + GZ[k01] * w01 + GZ[k11] * w11;
+          if (gz > 0.01) { const st = 0.85 + 0.3 * nm; mxs(TP.lush[0] * st, TP.lush[1] * st, TP.lush[2] * st, gz * 0.88); bare *= 1 - gz; }
+        }
+        if (XW) {
+          const xw = XW[k00] * w00 + XW[k10] * w10 + XW[k01] * w01 + XW[k11] * w11;
+          if (xw > 0.01) { const st = 0.82 + 0.36 * nh; mxs(TP.bed[0] * st, TP.bed[1] * st, TP.bed[2] * st, xw * 0.92); bm = Math.max(bm, 0.95); bare *= 1 - xw; }
+        }
+        if (HG) {
+          const hg = HG[k00] * w00 + HG[k10] * w10 + HG[k01] * w01 + HG[k11] * w11;
+          if (hg > 0.01) { mx(TP.hedgeSoil, hg * (0.65 + 0.25 * nh)); bare *= 1 - hg; }
+        }
         // Fels an steilen Hängen
         const rk = smoothstep(0.08, 0.26, 1 - ny + (nh - 0.5) * 0.05);
         if (rk > 0) {
@@ -694,6 +1109,11 @@ export class Terrain {
               bm = 0.45;
             }
           }
+        }
+        // Schnee in Hochlagen (Schneegrenze), nicht an Felswänden
+        if (snowLine !== null && snowLine !== undefined && !winter) {
+          const sn = smoothstep(snowLine - 2 + (nm - 0.5) * 6, snowLine + 3, h) * (1 - smoothstep(0.3, 0.55, 1 - ny + (nh - 0.5) * 0.1));
+          if (sn > 0) { const st = 0.94 + 0.08 * nh; mxs(TP.snow[0] * st, TP.snow[1] * st, TP.snow[2] * st, sn); bm = bm * (1 - sn) + 0.5 * sn; bare *= 1 - sn; }
         }
         // verbrannte Erde (Front)
         if (scarred) {
@@ -748,6 +1168,8 @@ export class Terrain {
           if (g > 0.96) mx(TP.dry, 0.5);
           if (bare > 0) mx(TP.dirt, bare * smoothstep(0.35, 0.6, nf) * 0.65);
           if (fw > 0.05 && nf > 0.6) mx(TP.needle, fw * (nf - 0.6) * 1.5);
+          // Frühling: Wiesenblumen (gelb/weiß/violett) auf Grasland
+          if (spring && g > 0.975 && bare < 0.3 && fw < 0.2) { const fc = (hs >>> 10) % 3; mxs(fc === 0 ? 0.92 : fc === 1 ? 0.95 : 0.62, fc === 0 ? 0.82 : fc === 1 ? 0.94 : 0.48, fc === 0 ? 0.22 : fc === 1 ? 0.92 : 0.78, 0.75 * smoothstep(0.35, 0.65, nm)); }
         }
         G0[0] = C[0]; G0[1] = C[1]; G0[2] = C[2]; // ungestörter Boden (für Mittelstreifen der Feldwege)
 
@@ -950,6 +1372,21 @@ export class Terrain {
         });
       }
     }
+    // Kraterfelder (Höhenfeld-Trichter): aufgewühlte Erde, Auswurf, Wasser in der Mulde
+    if (this._rel && this._rel.craterList.length) {
+      this._rel.craterList.forEach((c, ci) => {
+        stamp(c.x, c.z, c.r * 1.9, (x, z) => {
+          const d = Math.sqrt((x - c.x) * (x - c.x) + (z - c.z) * (z - c.z)) / c.r;
+          const nn = vn(x * 1.4 + ci * 2.7, z * 1.4);
+          const dj = d * (0.9 + 0.2 * nn);
+          if (dj < 0.45 && (mud || autumn) && c.r > 2.2 && nn > 0.35) { mx(TP.puddle, 0.85); return; }
+          if (dj < 0.95) { mx(TP.mudSoil || TP.scorch, 0.7); mul(0.82 + 0.25 * dj); }
+          else if (dj < 1.3) mx(TP.ejecta, 0.7 * (1 - smoothstep(1.1, 1.3, dj)) + 0.1);
+          else if (dj < 1.9) mx(TP.ejecta, smoothstep(0.55, 0.7, nn) * (1 - (dj - 1.3) / 0.6) * 0.6);
+          else return false;
+        });
+      });
+    }
 
     tp.push(performance.now());
     this._phases = tp.slice(1).map((t, i) => Math.round(t - tp[i])).join('/'); // Gitter/Raster/Makro/Texel/Stempel
@@ -970,9 +1407,12 @@ export class Terrain {
   _buildGroundCover() {
     const cfg = this.qcfg, T = this._tx;
     const areaK = (this.size * this.size) / (240 * 240);
-    const nGrass = Math.round(cfg.cover * areaK), nBush = Math.round(cfg.bushes * areaK), nStone = Math.round(cfg.stones * areaK);
-    if (!T || (nGrass + nBush + nStone) === 0) { this.coverCount = 0; return null; }
-    const winter = this.season === 'winter', autumn = this.season === 'autumn';
+    const pal = this.palette, winter = pal === 'winter', autumn = pal === 'autumn' || pal === 'mud';
+    const desert = pal === 'desert', arid = desert || pal === 'afghan';
+    const gMul = desert ? 0.3 : pal === 'afghan' ? 0.55 : pal === 'mud' ? 0.75 : 1;
+    const nGrass = Math.round(cfg.cover * areaK * gMul), nBush = Math.round(cfg.bushes * areaK * (desert ? 0.6 : arid ? 0.75 : 1));
+    const nStone = Math.round(cfg.stones * areaK * (arid ? 1.6 : 1)), nRock = Math.round((cfg.rocks || 0) * areaK);
+    if (!T || (nGrass + nBush + nStone + nRock) === 0) { this.coverCount = 0; return null; }
     const rnd = mulberry32((this.def.seed || 1) * 977 + 3);
     const { R, px, data, RS, RG, FI, fields } = T;
     const half = this.half, size = this.size;
@@ -989,11 +1429,12 @@ export class Terrain {
       const i = clamp(Math.floor((x + half) / px), 0, R - 1), j = clamp(Math.floor((z + half) / px), 0, R - 1);
       return j * R + i;
     };
-    // Eignung eines Punktes (0..1) je Art
+    const mountains = this._rel ? this._rel.mountains : [];
+    // Eignung eines Punktes (0..1) je Art (0 Gras, 1 Busch, 2 Stein, 3 Fels)
     const suit = (x, z, kind) => {
       if (!this.inBounds(x, z, 1)) return 0;
       const k = texIdx(x, z);
-      if (RG[k] >= 0 && RS[k] < (kind === 0 ? 0.5 : 1.2)) return 0;
+      if (RG[k] >= 0 && RS[k] < (kind === 0 ? 0.5 : kind === 3 ? 3 : 1.2)) return 0;
       const h = this.height(x, z);
       if (this.hasWater && h < this.seaLevel + (kind === 2 ? 0.1 : 0.45)) return 0;
       if (inHouse(x, z)) return 0;
@@ -1002,8 +1443,14 @@ export class Terrain {
       const fi = FI[k];
       if (fi >= 0) {
         const crop = fields[fi].crop;
-        if (kind === 1) return 0;
+        if (kind === 1 || kind === 3) return 0;
         p *= crop === 'plowed' ? (kind === 2 ? 0.25 : 0.02) : crop === 'stubble' ? 0.12 : 0.06;
+      }
+      if (kind === 3) {
+        // Felsen: an Hängen, in Bergen, selten im Flachland
+        let mt = 0;
+        for (const m of mountains) { const d = Math.hypot(x - m.x, z - m.z); if (d < m.r) mt = Math.max(mt, 1 - d / m.r); }
+        return smoothstep(0.08, 0.3, 1 - ny) * 1.2 + mt * 0.35 + (arid ? 0.05 : 0.01);
       }
       if (kind === 2) p *= 0.4 + smoothstep(0.03, 0.2, 1 - ny) * 2.5;
       else if (ny < 0.8) p *= 0.3;
@@ -1018,7 +1465,7 @@ export class Terrain {
     const place = (count, kind) => {
       const out = [];
       let tries = 0;
-      while (out.length < count && tries < count * 6) {
+      while (out.length < count && tries < count * (kind === 3 ? 10 : 6)) {
         tries++;
         const x = (rnd() - 0.5) * size, z = (rnd() - 0.5) * size;
         if (rnd() > suit(x, z, kind)) continue;
@@ -1032,15 +1479,19 @@ export class Terrain {
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3(), p = new THREE.Vector3();
     const col = new THREE.Color();
     let total = 0;
+    const mats = this._vegMats || (this._vegMats = []);
 
-    // Grasbüschel / im Winter vertrocknete Halme
+    // Grasbüschel / im Winter und in der Wüste vertrocknete Halme
+    const dryTuft = winter || desert;
     const grassPts = place(winter ? Math.round(nGrass * 0.55) : nGrass, 0);
     if (grassPts.length) {
-      const geo = grassTuftGeometry(winter ? 6 : 8, winter);
+      const geo = grassTuftGeometry(dryTuft ? 6 : 8, dryTuft);
       const mat = applyFow(new THREE.MeshLambertMaterial({ vertexColors: true }), { wind: true });
+      mats.push(mat);
       const im = new THREE.InstancedMesh(geo, mat, grassPts.length);
+      const fresh = GRASS_FRESH[pal] || GRASS_FRESH.summer;
       grassPts.forEach(([x, z], i) => {
-        const s = (winter ? 0.7 : 0.55) + rnd() * 0.55;
+        const s = (dryTuft ? 0.7 : 0.55) + rnd() * 0.55;
         p.set(x, this.height(x, z) - 0.04, z);
         e.set((rnd() - 0.5) * 0.25, rnd() * 6.28, (rnd() - 0.5) * 0.25); q.setFromEuler(e);
         sc.set(s * (0.8 + rnd() * 0.5), s, s * (0.8 + rnd() * 0.5));
@@ -1052,8 +1503,7 @@ export class Terrain {
           // Farbe vom Boden übernehmen und Richtung frisches Gras ziehen
           const o = texIdx(x, z) * 4;
           let r = data[o] / 255, gg = data[o + 1] / 255, b = data[o + 2] / 255;
-          const fresh = autumn ? [0.50, 0.46, 0.24] : [0.40, 0.52, 0.20];
-          const t = 0.45 + rnd() * 0.2;
+          const t = (arid ? 0.3 : 0.45) + rnd() * 0.2;
           r += (fresh[0] - r) * t; gg += (fresh[1] - gg) * t; b += (fresh[2] - b) * t;
           const v = 1.0 + rnd() * 0.25;
           col.setRGB(r * v, gg * v, b * v, THREE.SRGBColorSpace);
@@ -1064,25 +1514,32 @@ export class Terrain {
       g.add(im); total += grassPts.length;
     }
 
-    // Büsche (Winter: kahle, schneebedeckte Sträucher)
+    // Büsche in zwei Formen (rund/belaubt und ausladend bzw. Dornbusch in ariden Gebieten); Winter: kahl mit Schnee
     const bushPts = place(winter ? Math.round(nBush * 0.6) : nBush, 1);
     if (bushPts.length) {
-      const geo = bushGeometry(winter, cfg.treeDetail);
-      const mat = applyFow(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
-      const im = new THREE.InstancedMesh(geo, mat, bushPts.length);
-      const pal = winter ? [[0.92, 0.92, 0.95], [0.85, 0.82, 0.80]] : autumn ? [[0.60, 0.42, 0.18], [0.48, 0.40, 0.18], [0.36, 0.38, 0.17], [0.62, 0.30, 0.14]] : [[0.33, 0.45, 0.17], [0.28, 0.40, 0.15], [0.38, 0.47, 0.20], [0.30, 0.42, 0.14]];
-      bushPts.forEach(([x, z], i) => {
-        const s = (winter ? 0.55 : 0.7) + rnd() * (winter ? 0.6 : 0.9);
-        p.set(x, this.height(x, z) - 0.1, z);
-        e.set(0, rnd() * 6.28, 0); q.setFromEuler(e);
-        sc.set(s * (0.8 + rnd() * 0.5), s * (0.7 + rnd() * 0.5), s * (0.8 + rnd() * 0.5));
-        im.setMatrixAt(i, m4.compose(p, q, sc));
-        const c = pal[Math.floor(rnd() * pal.length)], v = 0.85 + rnd() * 0.3;
-        col.setRGB(c[0] * v, c[1] * v, c[2] * v, THREE.SRGBColorSpace);
-        im.setColorAt(i, col);
+      const mat = this._bushMat();
+      const bp = BUSH_TINT[pal] || BUSH_TINT.summer;
+      const hi = cfg.treeDetail > 0;
+      const variants = [bushGeometry2(winter, hi, arid ? 2 : 0), bushGeometry2(winter, hi, arid ? 3 : 1)];
+      const lists = [[], []];
+      bushPts.forEach((pt) => lists[rnd() < 0.55 ? 0 : 1].push(pt));
+      variants.forEach((geo, vi) => {
+        const L = lists[vi];
+        if (!L.length) { geo.dispose(); return; }
+        const im = new THREE.InstancedMesh(geo, mat, L.length);
+        L.forEach(([x, z], i) => {
+          const s = (winter ? 0.55 : 0.7) + rnd() * (winter ? 0.6 : 0.9);
+          p.set(x, this.height(x, z) - 0.1, z);
+          e.set(0, rnd() * 6.28, 0); q.setFromEuler(e);
+          sc.set(s * (0.8 + rnd() * 0.5), s * (0.7 + rnd() * 0.5), s * (0.8 + rnd() * 0.5));
+          im.setMatrixAt(i, m4.compose(p, q, sc));
+          const c = bp[Math.floor(rnd() * bp.length)], v = 0.85 + rnd() * 0.3;
+          col.setRGB(c[0] * v, c[1] * v, c[2] * v, THREE.SRGBColorSpace);
+          im.setColorAt(i, col);
+        });
+        im.castShadow = false; im.receiveShadow = true; im.name = 'bush' + vi;
+        g.add(im); total += L.length;
       });
-      im.castShadow = false; im.receiveShadow = true;
-      g.add(im); total += bushPts.length;
     }
 
     // Steine
@@ -1090,7 +1547,9 @@ export class Terrain {
     if (stonePts.length) {
       const geo = stoneGeometry(winter);
       const mat = applyFow(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }));
+      mats.push(mat);
       const im = new THREE.InstancedMesh(geo, mat, stonePts.length);
+      const rt = ROCK_TINT[pal] || ROCK_TINT.summer;
       stonePts.forEach(([x, z], i) => {
         const s = 0.25 + rnd() * rnd() * 0.9;
         p.set(x, this.height(x, z) - s * 0.25, z);
@@ -1098,14 +1557,96 @@ export class Terrain {
         sc.set(s * (0.8 + rnd() * 0.6), s * (0.5 + rnd() * 0.4), s * (0.8 + rnd() * 0.5));
         im.setMatrixAt(i, m4.compose(p, q, sc));
         const v = 0.75 + rnd() * 0.35;
-        col.setRGB(v, v * (0.97 + rnd() * 0.04), v * (0.92 + rnd() * 0.06), THREE.SRGBColorSpace);
+        col.setRGB(v * rt[0], v * rt[1] * (0.97 + rnd() * 0.04), v * rt[2] * (0.92 + rnd() * 0.06), THREE.SRGBColorSpace);
         im.setColorAt(i, col);
       });
       im.castShadow = false; im.receiveShadow = true;
       g.add(im); total += stonePts.length;
     }
+
+    // Felsen (Findlinge und Felsnadeln) an Hängen und in Bergen
+    const rockPts = place(nRock, 3);
+    this.rockCount = rockPts.length;
+    if (rockPts.length) {
+      const mat = applyFow(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, flatShading: true }));
+      mats.push(mat);
+      const rt = ROCK_TINT[pal] || ROCK_TINT.summer;
+      const lists = [[], []];
+      for (const pt of rockPts) lists[this.normal(pt[0], pt[1], _v).y < 0.82 && rnd() < 0.7 ? 1 : 0].push(pt);
+      [boulderGeometry(winter), cragGeometry(winter)].forEach((geo, vi) => {
+        const L = lists[vi];
+        if (!L.length) { geo.dispose(); return; }
+        const im = new THREE.InstancedMesh(geo, mat, L.length);
+        L.forEach(([x, z], i) => {
+          const s = (vi ? 1.1 : 0.8) + rnd() * rnd() * (vi ? 2.6 : 2.2);
+          const n = this.normal(x, z, _v);
+          p.set(x, this.height(x, z) - s * (vi ? 0.35 : 0.3), z);
+          e.set(n.z * 0.6 + (rnd() - 0.5) * 0.3, rnd() * 6.28, -n.x * 0.6 + (rnd() - 0.5) * 0.3); q.setFromEuler(e);
+          sc.set(s * (0.8 + rnd() * 0.5), s * (0.6 + rnd() * 0.5), s * (0.8 + rnd() * 0.5));
+          im.setMatrixAt(i, m4.compose(p, q, sc));
+          const v = 0.8 + rnd() * 0.3;
+          col.setRGB(v * rt[0], v * rt[1], v * rt[2], THREE.SRGBColorSpace);
+          im.setColorAt(i, col);
+        });
+        im.castShadow = true; im.receiveShadow = true; im.name = 'rock' + vi;
+        g.add(im); total += L.length;
+      });
+    }
     this.coverCount = total;
     return g;
+  }
+
+  _bushMat() {
+    if (!this._bushMaterial) {
+      this._bushMaterial = applyFow(new THREE.MeshLambertMaterial({ vertexColors: true }), { tree: 0.6 });
+      (this._vegMats || (this._vegMats = [])).push(this._bushMaterial);
+    }
+    return this._bushMaterial;
+  }
+
+  // Heckenwälle: dichte Hecke als Instanzen entlang der Polylinien
+  _buildHedges() {
+    const H = this.objects.hedges;
+    if (!H || !H.length) return null;
+    const winter = this.palette === 'winter', hi = (this.qcfg || QUALITY.medium).treeDetail > 0;
+    const geo = hedgeGeometry(winter, hi);
+    const im = new THREE.InstancedMesh(geo, this._bushMat(), H.length);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
+    const tint = HEDGE_TINT[this.palette] || HEDGE_TINT.summer;
+    H.forEach((h, i) => {
+      p.set(h.x, this.height(h.x, h.z) - 0.3, h.z);
+      e.set(0, h.rot, 0); q.setFromEuler(e);
+      sc.set(h.s * (0.9 + hash3(i, 1, 2) * 0.3), h.s * (0.85 + hash3(i, 3, 4) * 0.35), Math.max(0.8, h.l) * (0.95 + hash3(i, 5, 6) * 0.15));
+      im.setMatrixAt(i, m4.compose(p, q, sc));
+      const c = tint[Math.floor(hash3(i, 7, 8) * tint.length)], v = 0.86 + hash3(i, 9, 1) * 0.28;
+      col.setRGB(c[0] * v, c[1] * v, c[2] * v, THREE.SRGBColorSpace);
+      im.setColorAt(i, col);
+    });
+    im.castShadow = true; im.receiveShadow = true; im.name = 'hedges';
+    const g = new THREE.Group(); g.name = 'hedges'; g.add(im);
+    return g;
+  }
+
+  // Randschürze (senkrechte Wand vom Kartenrand bis unter den Umgebungsboden)
+  _buildSkirt(bottom) {
+    const n = Math.round(this.size / 4), half = this.half, pos = [], nrm = [];
+    const edges = [[(t) => [-half + t, -half], [0, 0, -1]], [(t) => [half, -half + t], [1, 0, 0]], [(t) => [half - t, half], [0, 0, 1]], [(t) => [-half, half - t], [-1, 0, 0]]];
+    for (const [f, nn] of edges) {
+      for (let i = 0; i < n; i++) {
+        const [ax, az] = f((i / n) * this.size), [bx, bz] = f(((i + 1) / n) * this.size);
+        const ha = this.height(ax, az), hb = this.height(bx, bz);
+        pos.push(ax, ha, az, bx, bottom, bz, ax, bottom, az, ax, ha, az, bx, hb, bz, bx, bottom, bz);
+        for (let k = 0; k < 6; k++) nrm.push(...nn);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+    const c = this.pal.dirt || [0.4, 0.33, 0.25];
+    const mat = applyFow(new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(c[0] * 0.7, c[1] * 0.7, c[2] * 0.7, THREE.SRGBColorSpace), roughness: 1, side: THREE.DoubleSide }));
+    const m = new THREE.Mesh(geo, mat);
+    m.name = 'skirt';
+    return m;
   }
 
   // ---------- Wasser ----------
@@ -1205,46 +1746,97 @@ export class Terrain {
   }
 
   // ---------- Bäume ----------
+  // Je Baumart zwei InstancedMeshes (nah: detailliert, fern: vereinfacht); Stamm und Krone in einer Geometrie,
+  // Instanzfarbe färbt nur das Laub (aTint). Aufteilung nah/fern vor jedem Bild über einen scene.onBeforeRender-Haken.
   _buildTrees() {
     const g = new THREE.Group();
+    g.name = 'trees';
     const trees = this.objects.trees;
-    const winter = this.season === 'winter', autumn = this.season === 'autumn';
-    const hi = (this.qcfg || QUALITY.medium).treeDetail > 0;
-    const trunkGeo = new THREE.CylinderGeometry(0.13, 0.3, 3.4, hi ? 7 : 5); trunkGeo.translate(0, 1.7, 0);
-    const decGeo = deciduousGeometry(winter, hi);
-    const pineGeo = pineGeometry(winter, hi);
-    const trunkMat = applyFow(new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.20, 0.15, 0.11, THREE.SRGBColorSpace), roughness: 1 }));
-    const crownMat = applyFow(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, flatShading: true }));
-    const dec = trees.filter((t) => t.kind === 0), pin = trees.filter((t) => t.kind === 1);
+    const cfg = this.qcfg || QUALITY.medium;
+    const pal = this.palette, winter = pal === 'winter';
+    const lodDist = cfg.treeDetail > 0 ? (cfg.treeLod || 150) : 0;
+    const mat = applyFow(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0 }), { tree: 1 });
+    (this._vegMats || (this._vegMats = [])).push(mat);
+    const bySp = new Map();
+    trees.forEach((t, i) => { const k = t.kind in TREE_GEO ? t.kind : SP.oak; if (!bySp.has(k)) bySp.set(k, []); bySp.get(k).push(i); });
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), p = new THREE.Vector3();
     const col = new THREE.Color();
     const hash = (i, k) => { const v = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453; return v - Math.floor(v); };
-    const decPal = winter ? [[1, 1, 1], [0.92, 0.9, 0.88], [0.97, 0.95, 0.93]]
-      : autumn ? [[0.72, 0.48, 0.14], [0.78, 0.60, 0.18], [0.62, 0.30, 0.12], [0.50, 0.46, 0.16], [0.36, 0.42, 0.16]]
-        : [[0.26, 0.40, 0.14], [0.32, 0.46, 0.17], [0.22, 0.35, 0.12], [0.36, 0.44, 0.18], [0.28, 0.42, 0.20]];
-    const pinPal = winter ? [[1, 1, 1], [0.93, 0.95, 0.93]] : [[0.13, 0.26, 0.15], [0.16, 0.30, 0.17], [0.11, 0.22, 0.13], [0.17, 0.28, 0.14]];
-    const mk = (geo, mat, list, castShadow, pal) => {
-      if (!list.length) return null;
-      const im = new THREE.InstancedMesh(geo, mat, list.length);
-      list.forEach((t, i) => {
-        p.set(t.x, this.height(t.x, t.z) - 0.2, t.z);
-        e.set((hash(i, 1) - 0.5) * 0.08, t.r, (hash(i, 2) - 0.5) * 0.08); q.setFromEuler(e);
-        s.set(t.s * (0.9 + hash(i, 3) * 0.2), t.s * (0.9 + hash(i, 4) * 0.25), t.s * (0.9 + hash(i, 5) * 0.2));
-        m4.compose(p, q, s);
-        im.setMatrixAt(i, m4);
-        if (pal) {
-          const c = pal[Math.floor(hash(i, 6) * pal.length)], v = 0.85 + hash(i, 7) * 0.3;
-          col.setRGB(Math.min(1, c[0] * v), Math.min(1, c[1] * v), Math.min(1, c[2] * v), THREE.SRGBColorSpace);
-        } else { const v = 0.7 + hash(i, 8) * 0.5; col.setRGB(v, v, v); }
-        im.setColorAt(i, col);
+    const sphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), this.size * 0.75 + 40);
+    const groups = [];
+    for (const [sp, idx] of [...bySp.entries()].sort((a, b) => a[0] - b[0])) {
+      const n = idx.length;
+      const tint = (TREE_TINT[pal] || TREE_TINT.summer)[sp] || TREE_TINT.summer[sp];
+      const M = new Float32Array(n * 16), Cc = new Float32Array(n * 3), P = new Float32Array(n * 3);
+      idx.forEach((ti, i) => {
+        const t = trees[ti];
+        const y = this.height(t.x, t.z) - 0.2;
+        p.set(t.x, y, t.z);
+        const lean = sp === SP.palm ? 0.12 : sp === SP.stump ? 0.15 : 0.06;
+        e.set((hash(ti, 1) - 0.5) * lean, t.r, (hash(ti, 2) - 0.5) * lean); q.setFromEuler(e);
+        const ys = sp === SP.stump ? 0.6 + hash(ti, 4) * 0.8 : 0.9 + hash(ti, 4) * 0.25;
+        s.set(t.s * (0.9 + hash(ti, 3) * 0.2), t.s * ys, t.s * (0.9 + hash(ti, 5) * 0.2));
+        m4.compose(p, q, s).toArray(M, i * 16);
+        const c = tint[Math.floor(hash(ti, 6) * tint.length)], v = 0.86 + hash(ti, 7) * 0.28;
+        col.setRGB(Math.min(1, c[0] * v), Math.min(1, c[1] * v), Math.min(1, c[2] * v), THREE.SRGBColorSpace);
+        Cc[i * 3] = col.r; Cc[i * 3 + 1] = col.g; Cc[i * 3 + 2] = col.b;
+        P[i * 3] = t.x; P[i * 3 + 1] = y + 4 * t.s; P[i * 3 + 2] = t.z;
       });
-      im.castShadow = castShadow; im.receiveShadow = true;
-      return im;
-    };
-    [mk(trunkGeo, trunkMat, trees, false, null), mk(decGeo, crownMat, dec, true, decPal), mk(pineGeo, crownMat, pin, true, pinPal)]
-      .forEach((m) => m && g.add(m));
+      const mk = (geo, name) => {
+        const im = new THREE.InstancedMesh(geo, mat, n);
+        im.instanceMatrix.array.set(M); im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        im.instanceColor = new THREE.InstancedBufferAttribute(Cc.slice(), 3); im.instanceColor.setUsage(THREE.DynamicDrawUsage);
+        im.boundingSphere = sphere.clone();
+        im.castShadow = true; im.receiveShadow = true; im.name = name;
+        g.add(im);
+        return im;
+      };
+      const lo = mk(treeGeometry(sp, winter, false), 'tree' + sp + 'lo');
+      const hi = lodDist > 0 ? mk(treeGeometry(sp, winter, true), 'tree' + sp + 'hi') : null;
+      if (hi) { hi.count = 0; hi.visible = false; }
+      groups.push({ hi, lo, M, Cc, P, n });
+    }
+    this._lod = lodDist > 0 ? { groups, d2: lodDist * lodDist, lx: 1e9, ly: 1e9, lz: 1e9 } : null;
     this.treeMeshes = g;
     return g;
+  }
+  // LOD: Instanzen nach Abstand zur Kamera auf nah/fern verteilen (nur bei Kamerabewegung > 3 m)
+  _updateLod(cam) {
+    const L = this._lod, c = cam.position;
+    if (Math.abs(c.x - L.lx) + Math.abs(c.y - L.ly) + Math.abs(c.z - L.lz) < 3) return;
+    L.lx = c.x; L.ly = c.y; L.lz = c.z;
+    for (const G of L.groups) {
+      const { M, Cc, P, n, hi, lo } = G;
+      const hm = hi.instanceMatrix.array, lm = lo.instanceMatrix.array, hc = hi.instanceColor.array, lc = lo.instanceColor.array;
+      let nh = 0, nl = 0;
+      for (let i = 0; i < n; i++) {
+        const dx = P[i * 3] - c.x, dy = P[i * 3 + 1] - c.y, dz = P[i * 3 + 2] - c.z;
+        const near = dx * dx + dy * dy + dz * dz < L.d2;
+        const dm = near ? hm : lm, dc = near ? hc : lc, o = near ? nh++ : nl++;
+        const s16 = i * 16, d16 = o * 16;
+        for (let k = 0; k < 16; k++) dm[d16 + k] = M[s16 + k];
+        dc[o * 3] = Cc[i * 3]; dc[o * 3 + 1] = Cc[i * 3 + 1]; dc[o * 3 + 2] = Cc[i * 3 + 2];
+      }
+      hi.count = nh; lo.count = nl;
+      hi.visible = nh > 0; lo.visible = nl > 0;
+      hi.instanceMatrix.needsUpdate = true; lo.instanceMatrix.needsUpdate = true;
+      hi.instanceColor.needsUpdate = true; lo.instanceColor.needsUpdate = true;
+    }
+  }
+  _hookLod(scene) {
+    if (!this._lod || !scene || !scene.isScene || this._lodScene) return;
+    const prev = scene.onBeforeRender, self = this;
+    const hook = function (r, sc, cam, rt) {
+      prev.call(this, r, sc, cam, rt);
+      if (self._lod && cam && cam.isPerspectiveCamera) self._updateLod(cam);
+    };
+    scene.onBeforeRender = hook;
+    this._lodScene = scene; this._lodHook = hook; this._lodPrev = prev;
+  }
+  _unhookLod() {
+    const sc = this._lodScene;
+    if (sc && sc.onBeforeRender === this._lodHook) sc.onBeforeRender = this._lodPrev;
+    this._lod = null; this._lodScene = null; this._lodHook = null; this._lodPrev = null;
   }
 
   // Minikarten-Bild

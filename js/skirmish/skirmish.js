@@ -179,7 +179,10 @@ export function normalizeSetup(s = {}) {
     victory: VICTORY[s.victory] ? s.victory : 'points', seed: (Number.isFinite(+s.seed) && +s.seed > 0) ? Math.floor(+s.seed) : Math.floor(Math.random() * 99999) + 1,
     spectate: !!s.spectate, timeLimit: +s.timeLimit > 0 ? +s.timeLimit : null, pointsLimit: +s.pointsLimit > 0 ? +s.pointsLimit : null,
     startArmyMul: +s.startArmyMul > 0 ? +s.startArmyMul : 1,
+    // V3-E: eigene Karte (Editor/Mod) statt Generator – Objekt aus compileSkirmishGen() (js/editor/compile.js)
+    customMap: s.customMap && typeof s.customMap === 'object' && s.customMap.map ? s.customMap : null,
   };
+  if (o.customMap) { o.presetResolved = 'custom'; o.sizeResolved = o.customMap.recommendedSize || 'medium'; o.sizeAdjusted = false; return o; }
   // Preset/Größe auflösen (Auto = Empfehlung des Generators; zu kleine Karten werden vergrößert)
   const probe = generateSkirmishMap({ size: 'large', seed: o.seed, playersPerTeam: o.mode, preset: o.preset });
   o.presetResolved = probe.preset;
@@ -216,7 +219,7 @@ function buildPlayers(S) {
 
 export function createSkirmish(setup) {
   const S = setup.presetResolved ? setup : normalizeSetup(setup);
-  const gen = generateSkirmishMap({ size: S.sizeResolved, seed: S.seed, playersPerTeam: S.mode, season: S.season, night: S.night, preset: S.presetResolved });
+  const gen = S.customMap || generateSkirmishMap({ size: S.sizeResolved, seed: S.seed, playersPerTeam: S.mode, season: S.season, night: S.night, preset: S.presetResolved });
   const players = buildPlayers(S);
   const half = gen.map.size / 2;
   const nPlayers = players.length;
@@ -249,6 +252,7 @@ export function createSkirmish(setup) {
     skirmish: null,
 
     setup(g) {
+      gen.decorate?.(g); // V3-E: eigene Karten (Gebäudearten, Brücken, Gleise)
       const sk = this.skirmish = {
         setup: S, gen, popCap, timeLimit, pointsLimit, totalValue,
         interval: S.reinforce, reinfT: S.reinforce, reinfCycle: 0,

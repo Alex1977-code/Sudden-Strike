@@ -12,6 +12,12 @@ import { isMobile, isTouchDevice, fmtTime } from './engine/util.js';
 import { createOnline } from './net/onlineui.js';
 import { startSkirmish, createSkirmish, normalizeSetup, roleSummary, roleSummaryText, ROLES, DIFFICULTIES, VICTORY, TEAM_NAME, TEAM_COLOR, MAP_PRESETS, MAP_SIZES } from './skirmish/skirmish.js';
 import { generateSkirmishMap } from './skirmish/maps.js';
+import { createEditor } from './editor/editor.js';
+import { createModsUI } from './editor/modsui.js';
+import { initMods, listCustomMaps, getCustomMap } from './editor/mods.js';
+import { compileMission, compileSkirmishGen } from './editor/compile.js';
+import { escapeHtml } from './editor/format.js';
+initMods(); // V3-E: aktive Mods (Einheitenwerte) vor dem ersten Spielstart anwenden
 
 const $ = (id) => document.getElementById(id);
 const SETTINGS_KEY = 'steppensturm.settings.v2'; // v2: neue Grafik-Voreinstellungen
@@ -45,7 +51,7 @@ const input = new Input(game, canvas, hud);
 hud.input = input;
 
 // ---------- Bildschirme ----------
-const screens = ['title', 'campaign', 'skirmish', 'online', 'lobby', 'briefing', 'settings', 'help', 'pause', 'end'];
+const screens = ['title', 'campaign', 'skirmish', 'online', 'lobby', 'briefing', 'settings', 'help', 'pause', 'end', 'mods'];
 let current = 'title', returnTo = 'title';
 function show(name) {
   for (const s of screens) $('screen-' + s).classList.toggle('hidden', s !== name);
@@ -84,7 +90,7 @@ $('btn-fullscreen').onclick = () => {
   try { screen.orientation?.lock?.('landscape').catch(() => {}); } catch (e) { /* ignorieren */ }
 };
 document.querySelectorAll('.back').forEach((b) => (b.onclick = () => show(returnTo === 'pause' ? 'pause' : returnTo)));
-document.querySelector('.back-campaign').onclick = () => { renderCampaign(); show('campaign'); };
+document.querySelector('.back-campaign').onclick = () => { if (currentMission?.custom) openMods(); else { renderCampaign(); show('campaign'); } };
 // "Zurück" im Kampagnenmenü führt zum Titel
 document.querySelector('#screen-campaign .back').onclick = () => show('title');
 
@@ -169,7 +175,27 @@ $('sk-preset').innerHTML = opt('random', 'Zufall') + MAP_PRESETS.map((p) => opt(
 $('sk-size').innerHTML = opt('auto', 'Auto (empfohlen)') + Object.entries(MAP_SIZES).map(([k, z]) => opt(k, `${z.label} (${z.size} m, bis ${z.maxPerTeam}v${z.maxPerTeam})`)).join('');
 $('sk-diff').innerHTML = Object.entries(DIFFICULTIES).map(([k, t]) => opt(k, t)).join('');
 $('sk-victory').innerHTML = Object.entries(VICTORY).map(([k, t]) => opt(k, t)).join('');
+// V3-E: eigene Karten (Editor/Mods) mit Startzonen und Eroberungspunkten
+function skCustomMaps() { return listCustomMaps().filter((c) => { const t = new Set(c.doc.zones.map((z) => z.team)); return t.has('UA') && t.has('RU') && c.doc.points.length; }); }
+function renderSkCustom() {
+  const list = skCustomMaps();
+  if (skSetup.customKey && !list.some((c) => c.key === skSetup.customKey)) skSetup.customKey = '';
+  $('sk-custom').innerHTML = opt('', 'Generiert (Kartenthema)') + list.map((c) => `<option value="${escapeHtml(c.key)}">${escapeHtml(c.title)} – ${escapeHtml(c.source)}</option>`).join('');
+  $('sk-custom').value = skSetup.customKey || '';
+  const custom = !!skSetup.customKey;
+  for (const id of ['sk-preset', 'sk-size', 'sk-season', 'sk-seed', 'sk-reroll']) $(id).disabled = custom;
+  $('sk-night').disabled = custom;
+}
+const skGenCache = new Map();
+function skCustomGen(key) {
+  const doc = getCustomMap(key);
+  if (!doc) return null;
+  const ck = key + '|' + (doc.meta.modified || '') + '|' + JSON.stringify(doc).length;
+  if (!skGenCache.has(ck)) skGenCache.set(ck, compileSkirmishGen(doc));
+  return skGenCache.get(ck);
+}
 function renderSkSetup() {
+  renderSkCustom();
   for (const [id, key] of [['sk-mode', 'mode'], ['sk-team', 'team']]) $(id).querySelectorAll('button').forEach((b) => b.classList.toggle('active', String(skSetup[key]) === b.dataset.v));
   $('sk-role').value = skSetup.role; $('sk-preset').value = skSetup.preset; $('sk-size').value = skSetup.size; $('sk-season').value = skSetup.season;
   $('sk-night').checked = !!skSetup.night; $('sk-diff').value = skSetup.difficulty; $('sk-reinforce').value = String(skSetup.reinforce);
@@ -191,15 +217,17 @@ for (const [id, key, conv] of [['sk-role', 'role'], ['sk-preset', 'preset'], ['s
   $(id).addEventListener('change', () => { skSetup[key] = conv ? conv($(id).value) : $(id).value; skChanged(); });
 }
 $('sk-night').addEventListener('change', () => { skSetup.night = $('sk-night').checked; skChanged(); });
+$('sk-custom').addEventListener('change', () => { skSetup.customKey = $('sk-custom').value; skChanged(); });
 $('sk-reroll').onclick = () => { skSetup.seed = Math.floor(Math.random() * 99999) + 1; skChanged(); };
 let previewTimer = null;
 const previewCache = new Map();
 function schedulePreview() { clearTimeout(previewTimer); previewTimer = setTimeout(drawPreview, 180); }
 function drawPreview() {
-  const S = normalizeSetup(skSetup);
-  const gen = generateSkirmishMap({ size: S.sizeResolved, seed: S.seed, playersPerTeam: S.mode, season: S.season, night: S.night, preset: S.presetResolved });
+  const cg = skSetup.customKey ? skCustomGen(skSetup.customKey) : null;
+  const S = normalizeSetup(cg ? { ...skSetup, customMap: cg } : skSetup);
+  const gen = cg || generateSkirmishMap({ size: S.sizeResolved, seed: S.seed, playersPerTeam: S.mode, season: S.season, night: S.night, preset: S.presetResolved });
   const c = $('sk-map'), ctx = c.getContext('2d');
-  const key = `${S.seed}|${S.presetResolved}|${S.sizeResolved}|${S.season}|${S.mode}`;
+  const key = cg ? 'custom|' + skSetup.customKey + '|' + gen.map.features.length + '|' + gen.map.seed : `${S.seed}|${S.presetResolved}|${S.sizeResolved}|${S.season}|${S.mode}`;
   let img = previewCache.get(key);
   if (!img) { try { img = new Terrain(gen.map, 'low').minimapImage(240); previewCache.set(key, img); } catch (e) { console.error(e); } }
   ctx.fillStyle = '#111'; ctx.fillRect(0, 0, c.width, c.height);
@@ -219,12 +247,19 @@ function drawPreview() {
   });
   ctx.textBaseline = 'alphabetic';
   const zep = gen.capturePoints.filter((p) => p.kind === 'zeppelin').length;
+  if (cg) { $('sk-info').innerHTML = `<b>${gen.title}</b> · ${S.mode}v${S.mode}<br>${gen.place}<br>${gen.description}<br>${gen.capturePoints.length} Eroberungspunkte (${zep} Zeppelin) · Startzonen ${gen.spawns.UA.length}/${gen.spawns.RU.length}` + (Math.max(gen.spawns.UA.length, gen.spawns.RU.length) < S.mode ? `<br><span class="warn">Weniger Startzonen als Spieler – Spieler teilen sich Startzonen.</span>` : ''); return; }
   $('sk-info').innerHTML = `<b>${gen.title}</b> · ${S.mode}v${S.mode}<br>${MAP_PRESETS.find((p) => p.id === gen.preset)?.description || ''}<br>${gen.capturePoints.length} Eroberungspunkte (${zep} Zeppelin) · Seed <b>${S.seed}</b>` +
     (S.sizeAdjusted ? `<br><span class="warn">Größe auf „${MAP_SIZES[S.sizeResolved].label}" angehoben (${S.mode} Spieler je Team).</span>` : '');
 }
 function openSkirmish() { returnTo = 'title'; renderSkSetup(); show('skirmish'); }
 $('btn-skirmish').onclick = openSkirmish;
-$('btn-sk-start').onclick = () => startSkirmishGame({ ...skSetup });
+$('btn-sk-start').onclick = () => startSkirmishGame(withCustomMap({ ...skSetup }));
+function withCustomMap(setup) {
+  if (!setup.customKey) return setup;
+  const doc = getCustomMap(setup.customKey);
+  if (!doc) { setup.customKey = ''; return setup; }
+  return { ...setup, customMap: compileSkirmishGen(doc) };
+}
 
 async function startSkirmishGame(setup) {
   currentSkirmish = setup;
@@ -272,7 +307,7 @@ function updatePauseInfo() {
   el.classList.toggle('hidden', !sk);
   const on = online.inGame;
   $('btn-restart').classList.toggle('hidden', on);
-  $('btn-quit').textContent = on ? 'Online-Spiel verlassen' : sk ? 'Zum Gefechtsmenü' : 'Zur Kampagne';
+  $('btn-quit').textContent = on ? 'Online-Spiel verlassen' : sk ? 'Zum Gefechtsmenü' : currentMission?.custom ? (currentMission.fromEditor ? 'Zurück zum Editor' : 'Zu eigenen Karten') : 'Zur Kampagne';
   $('btn-resume').textContent = on ? 'Zurück zum Spiel' : 'Weiter';
   $('btn-restart').textContent = sk ? 'Gefecht neu starten' : 'Mission neu starten';
   if (sk && on) { const S = sk.setup; el.innerHTML = `${game.mission.title}<br>Online · Seed <b>${S.seed}</b> · ${ROLES[game.localPlayer?.role]?.name || ''} · ${VICTORY[S.victory]}<br>Das Spiel läuft im Hintergrund weiter.`; return; }
@@ -321,7 +356,13 @@ $('btn-menu').onclick = () => hud.togglePause();
 $('btn-resume').onclick = () => { if (!online.inGame) game.paused = false; hideScreens(); };
 $('btn-pause-settings').onclick = () => { returnTo = 'pause'; openSettings(); };
 $('btn-restart').onclick = () => { game.paused = false; if (currentSkirmish) startSkirmishGame(currentSkirmish); else startMission(currentMission); };
-$('btn-quit').onclick = async () => { if (online.inGame) { online.leaveGame(); return; } game.paused = false; const sk = !!currentSkirmish; await loadDemo(); if (sk) openSkirmish(); else { renderCampaign(); show('campaign'); } };
+$('btn-quit').onclick = async () => {
+  if (online.inGame) { online.leaveGame(); return; }
+  game.paused = false;
+  const m = currentMission;
+  if (!currentSkirmish && m?.custom) { if (m.fromEditor) backToEditor(m); else { await loadDemo(); openMods(); } return; }
+  const sk = !!currentSkirmish; await loadDemo(); if (sk) openSkirmish(); else { renderCampaign(); show('campaign'); }
+};
 
 // Missionsende
 game.on('end', (won, text) => {
@@ -329,6 +370,7 @@ game.on('end', (won, text) => {
   game.paused = true;
   if (online.inGame) online.toggleChat(false);
   if (game.mission?.skirmish) { showSkirmishEnd(won, text); return; }
+  if (game.mission?.custom) { showCustomEnd(won, text); return; }
   $('btn-end-retry').classList.remove('hidden');
   $('btn-end-retry').textContent = 'Erneut versuchen';
   const m = currentMission;
@@ -354,6 +396,39 @@ game.on('end', (won, text) => {
   $('btn-end-retry').onclick = () => { game.paused = false; startMission(m); };
   show('end');
 });
+
+// ================= V3-E: Karteneditor, Mods, eigene Karten =================
+function showCustomEnd(won, text) {
+  const m = game.mission;
+  $('btn-end-retry').classList.remove('hidden');
+  $('btn-end-retry').textContent = 'Erneut spielen';
+  $('end-title').textContent = won ? 'Mission erfüllt' : 'Mission gescheitert';
+  $('end-title').style.color = won ? '#46c46b' : '#e5484d';
+  $('end-text').innerHTML = `<p>${escapeHtml(text)}</p><p class="muted">${escapeHtml(m.title)}</p>`;
+  $('end-stats').innerHTML = `<div class="cols"><div>${icon('clock', { cls: 'ic-in' })} Einsatzzeit: <b>${fmtTime(game.time)}</b><br>${icon('attack', { cls: 'ic-in' })} Feindliche Verluste: <b>${game.stats.kills}</b></div><div>${icon('close', { cls: 'ic-in' })} Eigene Verluste: <b>${game.stats.lost}</b></div></div>`;
+  const next = $('btn-end-next');
+  next.textContent = m.fromEditor ? 'Zurück zum Editor' : 'Eigene Karten';
+  next.onclick = async () => { game.paused = false; if (m.fromEditor) backToEditor(m); else { await loadDemo(); openMods(); } };
+  $('btn-end-retry').onclick = () => { game.paused = false; startMission(m); };
+  show('end');
+}
+function backToEditor(m) {
+  inMission = false; game.paused = false; hud.show(false);
+  editor.open(m.doc, { cam: editor.returnCam, keepUndo: true });
+}
+const editor = createEditor({
+  game, gr, input, hud, hideScreens, show,
+  playMission: (m) => startMission(m),
+  onExit: async () => { await loadDemo(); show('title'); },
+});
+const modsUI = createModsUI({
+  openEditor: (doc) => editor.open(doc),
+  playAsMission: (entry) => openBriefing(compileMission(entry.doc, { source: entry.key })),
+  playAsSkirmish: (entry) => { skSetup.customKey = entry.key; saveSk(); openSkirmish(); },
+});
+function openMods() { returnTo = 'title'; modsUI.render(); show('mods'); }
+$('btn-editor').onclick = () => editor.open();
+$('btn-mods').onclick = () => openMods();
 
 // Einstellungen
 function openSettings() {
@@ -406,6 +481,7 @@ function frame(now) {
   simTick(dt);
   online.frameDone();
   if (inMission) hud.update(dt);
+  if (editor.active) editor.update(dt);
   gr.render(dt);
   requestAnimationFrame(frame);
 }
@@ -421,6 +497,9 @@ function frame(now) {
   window.__startSkirmish = (setup = {}) => startSkirmishGame({ ...skSetup, ...setup });
   window.__openSkirmish = openSkirmish;
   window.__online = online;
+  window.__editor = editor;
+  window.__modsUI = modsUI;
+  window.__openMods = openMods;
 })();
 
 // Offline-Fähigkeit (PWA)

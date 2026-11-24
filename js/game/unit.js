@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { UNIT_TYPES } from './unitTypes.js';
 import { buildModel, house as houseModel, rubble, wreckify } from './models.js';
 import { angleDiff, clamp, rand } from '../engine/util.js';
+import { initTactical } from './tactics.js';
 
 let NEXT_ID = 1;
 // Je Mission ab 1 zählen (game.load): Häuser/Punkte bekommen auf Host und Online-Clients dieselben ids
@@ -108,6 +109,9 @@ export class Unit {
     this.mines = opts.mines || 0;
     this.invulnerable = !!opts.invulnerable;
     this.noCapture = !!opts.noCapture;
+    // Kampfmechaniken (V3-M1, tactics.js): supp/panicT (Niederhalten), xp/vet (Veteranen), mods (Fahrzeugmodule),
+    // smokeN (Nebelgranaten/-werfer), ambush ({ on, range }), throwOrder, burnT
+    initTactical(this);
 
     // Modell
     if (typeKey === 'house') {
@@ -133,6 +137,9 @@ export class Unit {
   // Für ein Team sichtbar/aufgeklärt? (eigenes Team und Neutrale immer)
   visibleTo(team) { return this.side === team || this.side === 'N' || !!this.seenBy[team]; }
   get isAir() { return this.type.air; }
+  // EloKa-Störung (Fähigkeit „ew“, game.jamZones): Typen mit ewImmune (Glasfaser-Drohnen) ignorieren sie
+  get jammed() { return this._jam; }
+  set jammed(v) { if (v && this.type?.ewImmune) return; this._jam = v; }
   get armor() { return this.type.armor; }
   get primary() { return this.weapons[0]; }
 
@@ -246,7 +253,7 @@ export class Unit {
   rangeMul() { const h = this.garrison; return h ? Math.min(1.4, 1 + 0.08 * (h.houseDef?.floors || 1)) : 1; }
   // Freie Schusslinie (gecacht 0,5 s); Luft-, Flach- und Flugabwehrfeuer ignorieren Verdeckung
   hasLos(u, w) {
-    if (w && (w.indirect || w.kind === 'sam' || w.kind === 'artillery')) return true;
+    if (w && (w.indirect || w.kind === 'sam' || w.kind === 'artillery' || w.kind === 'grenade')) return true;
     if (u.type.air || this.type.air || !this.game.vision) return true;
     const c = this._losC || (this._losC = new Map());
     const e = c.get(u.id), now = this.game.time;
@@ -264,7 +271,8 @@ export class Unit {
     // Explizites Ziel?
     const ot = this.order?.type === 'attack' ? this.order.target : null;
     if (ot && this.canWeaponTarget(w, ot) && this.isSpotted(ot) && this.inRange(w, ot) && this.hasLos(ot, w)) return ot;
-    if (this.holdFire) return null;
+    if (this.holdFire || this.ambush?.on) return null; // Feuer halten / Hinterhalt
+    const tac = game.tac, gren = w.kind === 'grenade';
     let best = null, bestScore = -Infinity;
     const list = game.units;
     const rangeLimit = w.range + 6;
@@ -275,6 +283,7 @@ export class Unit {
       if (u.garrison) continue; // Insassen sind nur über das Haus angreifbar
       if (Math.abs(u.pos.x - this.pos.x) > rangeLimit + 15 || Math.abs(u.pos.z - this.pos.z) > rangeLimit + 15) continue;
       if (!this.canWeaponTarget(w, u) || !this.isSpotted(u) || !this.inRange(w, u) || !this.hasLos(u, w)) continue;
+      if (gren && tac && !tac.grenadeWorthy(this, w, u)) continue; // Handgranaten nur gegen Deckung/Häuser/Stellungen
       const eff = w.vs[u.armor] || 0;
       let score = eff * 10 - this.distTo(u) * 0.08;
       if (w.prefer && w.prefer.includes(u.armor)) score += 6;
@@ -315,8 +324,9 @@ export class Unit {
     if (this.jammed) { this.jammed -= dt; if (this.jammed <= 0) { this.game.killUnit(this, null, true); return; } }
 
     if (this.garrison) { this.moving = false; this.path = null; this.order = this.order?.type === 'attack' ? this.order : null; }
+    if (!type.structure && this.game.tac) this.game.tac.unitStep(this, dt);
     if (!type.structure && !this.garrison) {
-      if (this.ai) this.updateAI(dt);
+      if (this.ai && !(this.panicT > 0)) this.updateAI(dt);
       if (this.job) this.game.logi.updateJob(this, dt);
       this.updateMovement(dt);
     }
@@ -435,6 +445,7 @@ export class Unit {
     }
     if (type.naval && Math.abs(diff) > 1.2) spd *= 0.3;
     if (this.hp < this.maxHp * 0.3 && type.vehicle) spd *= 0.6;
+    if (!type.air && game.tac) spd *= game.tac.speedMul(this); // Niederhalten, Verwundung, Motorschaden
     // Kamikaze-Anflug
     if (type.air) {
       let targetAlt = this.alt;
@@ -641,9 +652,12 @@ export class Unit {
     if (this.abandoned) { for (const ws of this.weapons) ws.target = null; this.aiming = null; return; }
     const game = this.game;
     let aimTarget = null, aimPoint = null;
+    const tac = game.tac, gunOut = !!(this.mods?.gun && this.type.vehicle);
+    const holds = this.holdFire || !!this.ambush?.on;
     for (const ws of this.weapons) {
       const w = ws.def;
       ws.cd -= dt;
+      if (gunOut && ws === this.weapons[0]) { ws.target = null; continue; } // Hauptwaffe zerstört
       if (ws.ammo <= 0) { ws.reloadT -= dt; if (ws.reloadT <= 0) ws.ammo = w.ammo; continue; }
       if (ws.stock < 1) { ws.target = null; ws.threat = null; continue; } // Vorrat leer (Logistik): Waffe schweigt
       ws.acqT -= dt;
@@ -661,7 +675,8 @@ export class Unit {
       const tp = threat ? threat.pos : target.pos;
       if (!aimTarget) { aimTarget = threat || target; aimPoint = tp; }
       if (ws.cd > 0) continue;
-      if (this.holdFire && !(this.order?.type === 'attack') && !(threat && threat.threat === 'hypersonic')) continue;
+      if (holds && !(this.order?.type === 'attack') && !(threat && threat.threat === 'hypersonic')) continue;
+      if (w.kind === 'grenade' && this.panicT > 0) continue;
       // Ausrichtung prüfen
       const desired = Math.atan2(tp.x - this.pos.x, tp.z - this.pos.z);
       if (this.model.turret) {
@@ -672,7 +687,7 @@ export class Unit {
         this.heading = desired;
       } else if (this.type.infantry && this.moving && w.kind !== 'bullet') continue;
       if (w.indirect && this.moving) continue;
-      ws.cd = w.reload * rand(0.9, 1.1);
+      ws.cd = w.reload * rand(0.9, 1.1) * (tac ? tac.reloadMul(this) : 1);
       if (w.ammo) { ws.ammo--; if (ws.ammo <= 0) ws.reloadT = w.reloadAmmo; }
       if (ws.stock !== Infinity) ws.stock--;
       if (this.garrison) this.garrison.revealT = game.time;
@@ -680,7 +695,7 @@ export class Unit {
     }
     // Turm drehen
     if (this.model.turret) {
-      const rate = (this.type.turretRate || 1.5) * dt;
+      const rate = (this.mods?.tur ? 0 : (this.type.turretRate || 1.5)) * dt; // Turm klemmt
       let desiredRel = 0;
       if (aimPoint) desiredRel = angleDiff(this.heading, Math.atan2(aimPoint.x - this.pos.x, aimPoint.z - this.pos.z));
       const diff = angleDiff(this.turretYaw, desiredRel);
@@ -697,6 +712,7 @@ export class Unit {
 
   animate(dt) {
     const m = this.model;
+    if (this.game.tac) this.game.tac.pose(this, dt);
     if (m.rotors) for (const r of m.rotors) r.rotation.y += dt * 40;
     if (m.radar) m.radar.rotation.y += dt * (this.type.key === 'gepard' ? 3 : 0.8);
     if (m.radar2) m.radar2.rotation.y -= dt * 2;

@@ -122,6 +122,28 @@ export const ABILITIES = {
       game.markerTo(p.team, x, z, 0xff8030, 6, 14);
     },
   },
+  // V3-M1: Artillerie-Nebel – Nebelgranaten legen eine Rauchwand (Sichtlinien blockiert, ~35 s, driftet mit dem Wind)
+  smoke: {
+    name: 'Artillerie-Nebel', icon: '🌫️', cooldown: 45, charges: 4, radius: 16,
+    desc: 'Nebelgranaten der Artillerie: Rauchwand (4 Wolken quer zur Anmarschrichtung), blockiert Sicht und Lenkflugkörper ~35 s.',
+    exec(game, x, z, p) {
+      if (!game.tac) return false;
+      // Wand quer zur Linie eigene Kartenhälfte → Ziel
+      const edge = game.mission?.friendlyEdges?.[p.team] || [0, (p.team === 'UA' ? 1 : -1) * game.terrain.half];
+      const a = Math.atan2(x - edge[0], z - edge[1]) + Math.PI / 2;
+      game.sayTo(p.id, 'Artillerie', 'Nebel kommt – Rauchwand in 5 Sekunden.', 3);
+      for (let i = 0; i < 4; i++) {
+        const o = (i - 1.5) * 8 + rand(-1.5, 1.5);
+        const sx = x + Math.sin(a) * o, sz = z + Math.cos(a) * o;
+        game.later(4.5 + i * 0.35, () => {
+          if (!game.active) return;
+          game.effects.explosion(sx, game.terrain.surface(sx, sz) + 0.3, sz, 0.35, { crater: false });
+          game.tac.addSmoke(sx, sz, 8, 36, 0.8);
+        });
+      }
+      game.markerTo(p.team, x, z, 0xd0d0d0, 6, 16);
+    },
+  },
   stormshadow: {
     name: 'Storm Shadow', icon: '✈️', cooldown: 20, charges: 4, radius: 9,
     desc: 'Luftgestützter Marschflugkörper im Tiefflug. Kann von Panzir/S-400 abgefangen werden.',

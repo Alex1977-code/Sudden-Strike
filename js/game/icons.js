@@ -144,6 +144,13 @@ export const ICONS = {
   lock: [T(R(5, 11, 14, 9.5, 2)), 'M8 11V8a4 4 0 0 1 8 0v3', S(C(12, 15.7, 1.2))],
   medal: [T(C(12, 15, 5.5)), 'M8.4 3.5l2.4 6.3M15.6 3.5l-2.4 6.3', 'M12 12.6l.9 1.8 2 .3-1.4 1.4.3 2-1.8-.9-1.8.9.3-2-1.4-1.4 2-.3z'],
   unknown: [C(12, 12, 8.6), 'M9.4 9.6a2.7 2.7 0 1 1 3.9 2.4c-.9.5-1.3 1.1-1.3 2.1', S(C(12, 17.2, 1))],
+  // ---------- Kampfmechaniken (V3-M1): Offizier, Granate, Nebel, Hinterhalt, Eingraben, Feuer frei ----------
+  officer: [FR, XX, S('M12 6.6l1.3 2.7 3 .4-2.2 2.1.5 3-2.6-1.4-2.6 1.4.5-3-2.2-2.1 3-.4z')],
+  grenade: [T(E(12, 14.5, 5, 6)), 'M10 8.6h4V6.2h-4zM14 7.4l3.4-2.6', 'M7.4 13h9.2M7.4 16.4h9.2'],
+  smoke: [T('M5.5 17.5a3.5 3.5 0 0 1 .6-7 4.6 4.6 0 0 1 8.8-1.4 3.6 3.6 0 0 1 3.6 6 2.8 2.8 0 0 1-1.6 2.4z'), 'M4 20.5h16'],
+  ambush: [T(HOUSE), 'M7.8 15.2c1.3-1.6 2.7-2.4 4.2-2.4s2.9.8 4.2 2.4c-1.3 1.6-2.7 2.4-4.2 2.4s-2.9-.8-4.2-2.4z', 'M6.5 19.5l11-8.6'],
+  dig: [T('M3 15.5h4.5l1.5 3h6l1.5-3H21'), 'M13.5 3.5l3.5 3.5-5.6 5.6-3.5-3.5z', 'M11.4 12.6l-2 2'],
+  firefree: [C(12, 12, 5.6), 'M12 3.5v3.6M12 16.9v3.6M3.5 12h3.6M16.9 12h3.6', S(C(12, 12, 1.4))],
   // ---------- Karteneditor & Mods (V3-E) ----------
   editor: [T('M3 6.5l5.5-2.5 6 2.5 5.5-2.5v7.5'), 'M3 6.5V19l5.5-2.5 3 1.2M8.5 4v12.5M14.5 6.5v4', T('M13 21l.8-3.2 6-6 2.4 2.4-6 6z')],
   mods: [T('M4 7h4.5a2.2 2.2 0 1 1 4 0H17v4.5a2.2 2.2 0 1 1 0 4V20H4z')],
@@ -205,6 +212,7 @@ export const ICON_LABELS = {
   check: 'Bereit', close: 'Schließen', clock: 'Zeit', ammo: 'Munition', fuel: 'Treibstoff', material: 'Baumaterial', supply: 'Vorrat',
   warning: 'Warnung', battery: 'Akku', repair: 'Reparatur', flag: 'Flagge', lock: 'Gesperrt', medal: 'Abgeschlossen', unknown: 'Unbekannt',
   role_armor: 'Panzerkeil', role_infantry: 'Infanterie', role_support: 'Artillerie', role_logistics: 'Logistik',
+  officer: 'Offizier', grenade: 'Handgranate', smoke: 'Nebel', ambush: 'Hinterhalt', dig: 'Eingraben', firefree: 'Feuer frei',
 };
 
 // Einheitentyp-Schlüssel → Icon (explizit; neue Epochen können iconKey setzen oder hier erweitern)

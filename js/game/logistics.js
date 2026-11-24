@@ -7,14 +7,35 @@
 //   Unit.supply {ammo, fuel, material} (Versorgungs-Lkw), Unit.immobilized, Unit.abandoned (side 'N'), Unit.crew,
 //   Unit.job {type,...}, Bauwerke: type.build, Unit.build {progress,time,kind}, Unit.mines, game.charges[] (Zeitzünder).
 // Neue Kommandos (alle über game.command validiert):
-//   {t:'build', ids, kind:'tanktrap'|'sandbag'|'trench'|'minefield', x, z, rot}  (oder {t:'build', ids, target} = Bau fortsetzen)
-//   {t:'clearmines', ids, x, z} · {t:'demolish', ids, target} · {t:'bailout', ids} · {t:'crew', ids, target}
+//   {t:'build', ids, kind, x, z, rot}  (oder {t:'build', ids, target} = Bau fortsetzen). kind: Basis tanktrap|sandbag|trench|
+//     minefield + Epochen-Bauten (registerBuildKinds; je Epoche/Fraktion des Pioniers, buildKindsFor(type))
+//   {t:'clearmines', ids, x, z} (Minen oder Stacheldraht/NATO-Draht räumen) · {t:'demolish', ids, target} · {t:'bailout', ids}
+//   · {t:'crew', ids, target}
+// V3-M1: blocksInfantry (Draht) sperrt Infanterie im Pfadraster (gBlocked = 5, BLOCK_WIRE), Fahrzeuge walzen ihn nieder
+//   (tactics.js); selfDig-Bauten (Schützenloch) gräbt jede Infanterie selbst ({t:'dig'}); Minenarten mineKind 'at'|'ap',
+//   iedResist (MRAP) mindert Minen-/IED-Schaden; Sanitäter heilen immer (auch Kampagne); Bergepanzer reparieren alle Module.
 import * as THREE from 'three';
 import { UNIT_TYPES } from './unitTypes.js';
-import { BLOCK_TRAP } from './gamepath.js';
+import { BLOCK_TRAP, BLOCK_WIRE } from './gamepath.js';
 import { rand } from '../engine/util.js';
 
-export const BUILD_KINDS = ['tanktrap', 'sandbag', 'trench', 'minefield'];
+export const BUILD_KINDS = ['tanktrap', 'sandbag', 'trench', 'minefield']; // Basis-Bauarten (alle Epochen)
+// Registry für Epochen-Bauten: registerBuildKinds(['ww2_barbedwire', …], { era: 'ww2', factions: ['DE', …] })
+const BUILD_REG = [];
+export function registerBuildKinds(kinds, { era = null, factions = null } = {}) {
+  for (const kind of kinds) if (!BUILD_REG.some((e) => e.kind === kind && e.era === era && String(e.factions) === String(factions))) BUILD_REG.push({ kind, era, factions });
+}
+/** Bauarten, die ein Pioniertyp errichten kann (Basis + Epoche/Fraktion). */
+export function buildKindsFor(type) {
+  const out = [...BUILD_KINDS];
+  for (const e of BUILD_REG) {
+    if (out.includes(e.kind) || !UNIT_TYPES[e.kind]?.build) continue;
+    if (e.era && e.era !== (type.era || 'modern')) continue;
+    if (e.factions && !e.factions.includes(type.faction)) continue;
+    out.push(e.kind);
+  }
+  return out;
+}
 export const LOGI = {
   tick: 0.25,
   ammoRate: 22,       // Versorgungs-Einheiten/s je Empfänger (Gewicht je Schuss: Waffe.wt)
@@ -31,7 +52,7 @@ export const LOGI = {
   mineDetect: { engineer: 12, recon: 16 },
   bailChance: 0.28, immobChance: 0.15,
 };
-const MINE_W = { vs: { soft: 1, light: 1, heavy: 0.75, air: 0, struct: 1 }, name: 'Mine' };
+const MINE_W = { vs: { soft: 1, light: 1, heavy: 0.75, air: 0, struct: 1 }, name: 'Mine', mine: true };
 const CHARGE_W = { vs: { soft: 1, light: 1, heavy: 1, air: 0, struct: 1 }, name: 'Sprengladung' };
 const d2 = (ax, az, bx, bz) => (ax - bx) * (ax - bx) + (az - bz) * (az - bz);
 
@@ -66,8 +87,8 @@ export class Logistics {
       this.supplyTick(step, trucks);
       this.pointTick(step, trucks);
       this.repairTick(step, repairers);
-      this.medicTick(step, medics);
     }
+    if (medics.length) this.medicTick(step, medics); // Sanitäter heilen immer (auch Kampagne)
     if (this.mineList.length) this.mineTick(step);
     if (g.charges?.length) this.chargeTick(step);
   }
@@ -110,6 +131,7 @@ export class Logistics {
       const amt = Math.min(u.maxMaterial - u.material, (rates.materialRate ?? rates.material) * step * k, pool.material);
       u.material += amt; if (pool.material !== Infinity) pool.material -= amt; moved = true;
     }
+    if (pool.ammo > 0 && u.smokeN < u.smokeMax) { u.smokeN = u.smokeMax; moved = true; } // Nebelgranaten/-wurfkörper
     if (moved) { u.lastSupplied = this.g.time; this.stats.supplied++; }
     return moved;
   }
@@ -145,7 +167,7 @@ export class Logistics {
         if (d2(u.pos.x, u.pos.z, rp.pos.x, rp.pos.z) > r2) continue;
         let did = false;
         if (u.hp < u.maxHp) { u.hp = Math.min(u.maxHp, u.hp + u.maxHp * def.rate * step); did = true; }
-        if (u.immobilized) { u.fixT = (u.fixT || 0) + step; did = true; if (u.fixT >= LOGI.fixTime) { u.immobilized = false; u.fixT = 0; } }
+        if (g.tac?.damaged(u)) { u.fixT = (u.fixT || 0) + step; did = true; if (u.fixT >= LOGI.fixTime) { g.tac.repairOne(u); u.fixT = 0; } } // Kette, Motor, Waffe, Turm, Besatzung
         if (did) { u.lastRepaired = g.time; this.stats.repaired++; }
       }
     }
@@ -153,30 +175,29 @@ export class Logistics {
   medicTick(step, medics) {
     const g = this.g;
     for (const m of medics) {
-      const def = m.type.medic, r2 = def.radius ** 2;
+      const def = m.type.medic, r2 = (def.radius || 10) ** 2;
+      if (m.panicT > 0 || m.garrison && !m.type.structure) continue; // in Panik / im Haus: keine Versorgung draußen
       for (const u of g.units) {
-        if (!u.alive || !u.type.infantry || u.side !== m.side || u.hp >= u.maxHp) continue;
+        if (!u.alive || !u.type.infantry || u.side !== m.side || u.hp >= u.maxHp || u.garrison) continue;
         if (d2(u.pos.x, u.pos.z, m.pos.x, m.pos.z) > r2) continue;
-        u.hp = Math.min(u.maxHp, u.hp + def.rate * step);
+        u.hp = Math.min(u.maxHp, u.hp + (def.rate || 2.5) * step); // nie über 100 %
+        u.healedT = g.time;
       }
     }
   }
 
   // ---------- Treffer: Kette zerstört, Besatzung steigt aus ----------
+  // (Ketten-/Modulschäden je Trefferzone: tactics.js moduleHit – in allen Spielmodi)
   onVehicleHit(u, amount, src) {
     if (!this.on || u.abandoned || u.invulnerable || u.owner === null) return;
-    const frac = u.hp / u.maxHp, g = this.g;
-    if (!u.immobilized && amount >= u.maxHp * 0.06 && Math.random() < LOGI.immobChance) {
-      u.immobilized = true;
-      g.alertTo(u.owner, `⚠ ${u.name}: Kette/Antrieb zerstört`, 3);
-    }
+    const frac = u.hp / u.maxHp;
     if ((frac < 0.2 || (u.immobilized && frac < 0.5)) && amount >= u.maxHp * 0.02 && Math.random() < LOGI.bailChance) this.bailOut(u);
   }
-  canBail(u) { return u.alive && !u.abandoned && u.type.vehicle && !u.type.structure && !u.invulnerable && (u.hp < u.maxHp * 0.25 || u.immobilized || (u.maxFuel > 0 && u.fuel <= 0)); }
+  canBail(u) { return u.alive && !u.abandoned && !u.type.unmanned && u.type.vehicle && !u.type.structure && !u.invulnerable && (u.hp < u.maxHp * 0.25 || u.immobilized || (u.maxFuel > 0 && u.fuel <= 0)); }
   // Besatzung steigt aus: 2–3 Infanteristen, Fahrzeug wird neutral „verlassen“ (kein Wrack)
   bailOut(u) {
     const g = this.g;
-    if (!u.alive || u.abandoned) return false;
+    if (!u.alive || u.abandoned || u.type.unmanned) return false; // Roboter (UGV) haben keine Besatzung
     const side = u.side, owner = u.owner;
     const n = u.type.armor === 'heavy' ? 3 : 2;
     const key = side === 'UA' ? 'ua_crew' : 'e_crew';
@@ -244,20 +265,21 @@ export class Logistics {
     }
     return true;
   }
-  countBuilds(owner) { let n = 0; for (const u of this.g.units) if (u.alive && u.type.build && u.owner === owner) n++; return n; }
-  // Panzersperren in das Pfadraster eintragen (gBlocked = 4): nur freie Zellen, alle Sperren neu aufbauen
+  countBuilds(owner) { let n = 0; for (const u of this.g.units) if (u.alive && u.type.build && !u.type.selfDig && u.owner === owner) n++; return n; }
+  // Panzersperren (gBlocked = 4) und fertigen Draht (gBlocked = 5) in das Pfadraster eintragen: nur freie Zellen, alle neu
   rebuildTraps() {
     const T = this.g.terrain;
-    for (let i = 0; i < T.gBlocked.length; i++) if (T.gBlocked[i] === BLOCK_TRAP) T.gBlocked[i] = 0;
+    for (let i = 0; i < T.gBlocked.length; i++) if (T.gBlocked[i] === BLOCK_TRAP || T.gBlocked[i] === BLOCK_WIRE) T.gBlocked[i] = 0;
     for (const u of this.g.units) {
-      if (!u.alive || u.type.build?.blocks !== true) continue;
-      this.blockTrap(u);
+      if (!u.alive || !u.type.build) continue;
+      if (u.type.build.blocks === true) this.blockTrap(u);
+      else if (u.type.build.blocksInfantry && u.build?.progress >= 1) this.blockTrap(u, BLOCK_WIRE, 0.7);
     }
   }
-  blockTrap(u) {
+  blockTrap(u, val = BLOCK_TRAP, margin = 2.2) {
     const T = this.g.terrain, d = u.type.build;
     const c = Math.cos(u.heading), s = Math.sin(u.heading);
-    const M = 2.2; // Sicherheitsabstand: Fahrzeuge (Radius ≈ 3 m) halten Abstand zum Bauwerk
+    const M = margin; // Sicherheitsabstand: Fahrzeuge (Radius ≈ 3 m) halten Abstand zum Bauwerk; Draht: Infanterie-Radius
     const r = Math.hypot(d.w, d.d) / 2 + M + 2;
     const [ci, cj] = T.cellOf(u.pos.x, u.pos.z);
     const cr = Math.ceil(r / 2);
@@ -266,12 +288,12 @@ export class Logistics {
       const [cx, cz] = T.cellCenter(i, j);
       const dx = cx - u.pos.x, dz = cz - u.pos.z;
       const lx = dx * c - dz * s, lz = dx * s + dz * c;
-      if (Math.abs(lx) <= d.w / 2 + M && Math.abs(lz) <= d.d / 2 + M) { const k = j * T.gw + i; if (T.gBlocked[k] === 0) T.gBlocked[k] = BLOCK_TRAP; }
+      if (Math.abs(lx) <= d.w / 2 + M && Math.abs(lz) <= d.d / 2 + M) { const k = j * T.gw + i; if (T.gBlocked[k] === 0) T.gBlocked[k] = val; }
     }
   }
   // Bauwerk aus dem Spiel genommen (zerstört, abgebaut, Minen aufgebraucht)
   onBuildingGone(u) {
-    if (u.type.build?.blocks) this.rebuildTraps();
+    if (u.type.build?.blocks || u.type.build?.blocksInfantry) this.rebuildTraps();
   }
   removeBuilding(u) {
     if (!u.alive) return;
@@ -298,7 +320,7 @@ export class Logistics {
         if (!eng.length || !fin(cmd.x) || !fin(cmd.z)) return false;
         let m = null, bd = 9;
         for (const u of g.units) {
-          if (!u.alive || !u.type.build?.mines) continue;
+          if (!u.alive || !(u.type.build?.mines || u.type.build?.blocksInfantry)) continue; // Minen oder Draht
           if (!(u.side === p.team || u.seenBy[p.team])) continue;
           const d = Math.hypot(u.pos.x - cmd.x, u.pos.z - cmd.z);
           if (d < bd) { bd = d; m = u; }
@@ -342,7 +364,10 @@ export class Logistics {
       for (const e of eng) this.assign(e, { type: 'build', target: t.id });
       return true;
     }
-    if (!BUILD_KINDS.includes(cmd.kind) || !fin(cmd.x) || !fin(cmd.z)) return false;
+    if (typeof cmd.kind !== 'string' || !fin(cmd.x) || !fin(cmd.z)) return false;
+    const able = eng.filter((e) => buildKindsFor(e.type).includes(cmd.kind)); // Epoche/Fraktion des Pioniers
+    if (!able.length) return false;
+    eng.length = 0; eng.push(...able);
     const rot = fin(cmd.rot) ? cmd.rot : 0;
     const def = UNIT_TYPES[cmd.kind].build;
     if (this.countBuilds(p.id) >= LOGI.maxBuildPerPlayer) return false;
@@ -379,10 +404,23 @@ export class Logistics {
         u.working = g.time;
         this.setProgress(t, t.build.progress + dt / t.build.time);
         if (Math.random() < dt * 0.8) g.effects.smallHit(t.pos.x + rand(-1.5, 1.5), t.pos.y + 0.6, t.pos.z + rand(-1, 1));
-        if (t.build.progress >= 1) { g.emit('built', t); g.effects.marker(t.pos.x, t.pos.z, 0x5dff8a, 0.8, 3); }
+        if (t.build.progress >= 1) {
+          if (t.type.build.blocksInfantry) this.rebuildTraps(); // Draht sperrt erst fertig
+          g.emit('built', t); g.effects.marker(t.pos.x, t.pos.z, 0x5dff8a, 0.8, 3);
+          if (job.dig) u.job = null;
+        }
         return;
       }
       case 'clear': {
+        if (t.type.build?.blocksInfantry && !t.type.build.mines) { // Draht durchschneiden
+          if (dist > t.radius + 1.6) { if (!u.order || u.order.type !== 'move') u._goto(t.pos.x, t.pos.z); return; }
+          if (u.order) { u.order = null; u.path = null; }
+          face(t); u.working = g.time;
+          job.t = (job.t || 0) + dt;
+          if (Math.random() < dt * 0.8) g.effects.smallHit(t.pos.x + rand(-1.5, 1.5), t.pos.y + 0.4, t.pos.z + rand(-0.5, 0.5));
+          if (job.t >= 5) { this.stats.cleared++; this.removeBuilding(t); g.emit('wireCleared', t); u.job = null; }
+          return;
+        }
         if (!t.type.build?.mines) { u.job = null; return; }
         if (dist > Math.max(2.5, t.radius * 0.55)) { if (!u.order || u.order.type !== 'move') u._goto(t.pos.x, t.pos.z); return; }
         if (u.order) { u.order = null; u.path = null; }
@@ -440,11 +478,14 @@ export class Logistics {
         if (d2(u.pos.x, u.pos.z, m.pos.x, m.pos.z) > r2) continue;
         if (!u.moving || (u.mineCd || 0) > g.time) continue; // nur Einheiten in Bewegung lösen Minen aus
         if (u.job?.type === 'clear' && u.job.target === m.id) continue; // Räumende Pioniere lösen nichts aus
-        u.mineCd = g.time + 2.2;
         const veh = u.type.vehicle;
+        const mk = m.type.build.mineKind || m.type.mineKind; // 'at' Panzermine (Infanterie zu leicht) · 'ap' Schützenmine
+        if (mk === 'at' && !veh) continue;
+        u.mineCd = g.time + 2.2;
         g.effects.explosion(u.pos.x, u.pos.y + 0.3, u.pos.z, veh ? 0.9 : 0.5, { crater: false });
-        g.applyDamage(u, veh ? LOGI.mineDmg.veh : LOGI.mineDmg.inf, MINE_W, { pos: m.pos, alive: false, side: m.side, owner: m.owner }, { topAttack: true });
-        if (veh && u.alive && Math.random() < 0.5 && g.logistics && !u.immobilized) { u.immobilized = true; g.alertTo(u.owner, `⚠ ${u.name}: Mine – Kette zerstört`, 3); }
+        const dmg = (veh ? LOGI.mineDmg.veh : LOGI.mineDmg.inf) * (mk === 'ap' && veh ? 0.25 : mk === 'at' ? 1.4 : 1);
+        g.applyDamage(u, dmg, MINE_W, { pos: m.pos, alive: false, side: m.side, owner: m.owner }, { topAttack: true });
+        if (veh && u.alive && mk !== 'ap' && !u.immobilized && Math.random() < 0.5 * (1 - (u.type.iedResist || 0))) { u.immobilized = true; u.selfFixT = 0; g.alertTo(u.owner, `⚠ ${u.name}: Mine – Kette zerstört`, 3); }
         m.mines -= 1;
         m.seenBy[u.side] = true; // Opfer-Team kennt das Minenfeld jetzt
         this.stats.mines++;

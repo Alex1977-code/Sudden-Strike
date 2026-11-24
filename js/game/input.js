@@ -326,12 +326,13 @@ export class Input {
   engineers() { return this.ownSelected().filter((u) => u.type.engineer); }
   startBuild(mode, kind = null) {
     const g = this.game;
-    if (mode !== 'binoculars' && mode !== 'garrison' && !this.engineers().length) { g.audio.ui('fail'); return; }
+    const tmode = mode === 'grenade' || mode === 'smoke'; // Kampfmechaniken (V3-M1): Zielpunkt für Granate/Nebelgranate
+    if (mode !== 'binoculars' && mode !== 'garrison' && !tmode && !this.engineers().length) { g.audio.ui('fail'); return; }
     if (this.pendingBuild && this.pendingBuild.mode === mode && this.pendingBuild.kind === kind) { this.cancelBuild(); return; }
     this.cancelAbility();
     this.pendingBuild = { mode, kind };
     const touch = this.touch;
-    const txt = mode === 'binoculars' ? 'Blickrichtung des Fernglases wählen' : mode === 'garrison' ? 'Gebäude zum Besetzen wählen' : mode === 'build' ? `${UNIT_TYPES[kind].name} platzieren` : mode === 'clearmines' ? 'Minenfeld zum Räumen wählen' : 'Brücke/Gebäude zum Sprengen wählen';
+    const txt = mode === 'grenade' ? 'Ziel für Handgranate/Werfer wählen' : mode === 'smoke' ? 'Ziel für Nebelgranate wählen' : mode === 'binoculars' ? 'Blickrichtung des Fernglases wählen' : mode === 'garrison' ? 'Gebäude zum Besetzen wählen' : mode === 'build' ? `${UNIT_TYPES[kind].name} platzieren` : mode === 'clearmines' ? 'Minenfeld zum Räumen wählen' : 'Brücke/Gebäude zum Sprengen wählen';
     this.hud.showTargetHint(txt + (touch ? ' – Karte antippen' : mode === 'build' ? ' – Klick platziert (R dreht)' : ' – Klick wählt'), () => this.cancelBuild());
     if (mode === 'build') {
       const d = UNIT_TYPES[kind].build;
@@ -372,6 +373,21 @@ export class Input {
   }
   fireBuild(x, y, keep) {
     const g = this.game, pb = this.pendingBuild;
+    if (pb.mode === 'grenade' || pb.mode === 'smoke') {
+      const own = this.ownSelected();
+      if (!own.length) { this.cancelBuild(); return; }
+      const p = this.ground(x, y); if (!p) return;
+      const u = pb.mode === 'grenade' ? g.pickUnit(x, y, 30) : null;
+      const tgt = u && u.side !== g.localSide && (u.type.key === 'house' || u.root.visible) ? u : null;
+      const ids = own.filter((o) => o.type.infantry).map((o) => o.id);
+      const okk = pb.mode === 'grenade'
+        ? g.issueCommand(tgt ? { t: 'grenade', ids, target: tgt.id } : { t: 'grenade', ids, x: p.x, z: p.z })
+        : g.issueCommand({ t: 'smoke', ids, x: p.x, z: p.z });
+      if (okk === false) { g.audio.ui('fail'); return; }
+      g.effects.marker(p.x, p.z, pb.mode === 'grenade' ? 0xff8030 : 0xd0d0d0, 0.8, 2);
+      this.cancelBuild();
+      return;
+    }
     if (pb.mode === 'binoculars' || pb.mode === 'garrison') {
       const own = this.ownSelected();
       if (!own.length) { this.cancelBuild(); return; }
@@ -434,6 +450,16 @@ export class Input {
       return;
     }
     if (k === 'f' && own.length) { g.camera.focus(own[0].pos.x, own[0].pos.z); return; }
+    // Kampfmechaniken (V3-M1): G Granate, N Nebel, B Eingraben (Schützenloch), J Hinterhalt an/aus
+    if (k === 'g' && own.some((u) => u.type.infantry)) { this.startBuild('grenade'); return; }
+    if (k === 'n' && own.some((u) => u.smokeN > 0)) {
+      const veh = own.filter((u) => u.type.vehicle && u.smokeN > 0);
+      if (veh.length) g.issueCommand({ t: 'smoke', ids: veh.map((u) => u.id) });
+      if (own.some((u) => u.type.infantry && u.smokeN > 0)) this.startBuild('smoke');
+      return;
+    }
+    if (k === 'b' && own.some((u) => u.type.infantry)) { g.issueCommand({ t: 'dig', ids: own.filter((u) => u.type.infantry).map((u) => u.id) }); return; }
+    if (k === 'j' && own.length) { g.issueCommand({ t: 'ambush', ids: own.map((u) => u.id), value: !own.every((u) => u.ambush?.on) }); this.hud.refreshBuildbar(true); return; }
     if (k === '+' ) g.camera.zoom(0.85);
     if (k === '-') g.camera.zoom(1.15);
   }

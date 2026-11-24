@@ -1,0 +1,66 @@
+// Beispiel-Mod (identisch mit mods/beispiel.json) – im Spiel per „Beispiel-Mod laden" installierbar,
+// auch ohne Netzwerkzugriff (Artifact).
+export const EXAMPLE_MOD = {
+  format: 'steppensturm-mod',
+  version: 1,
+  id: 'beispiel',
+  name: 'Beispiel: Brückenkopf am Donez',
+  author: 'Steppensturm',
+  description: 'Eine Karte (Mission und Gefecht) und leicht verstärkte Kampfpanzer.',
+  units: {
+    leopard: { hp: 1200, speed: 9 },
+    t72: { hp: 950 },
+  },
+  weapons: {
+    tank125: { range: 44 },
+  },
+  maps: [
+    {
+      format: 'steppensturm-karte',
+      version: 1,
+      meta: { title: 'Brückenkopf am Donez', author: 'Steppensturm', era: 'modern', description: 'Fluss mit Brücke und Furt, Dorf am Südufer, Wald im Osten.', created: '2026-11-24T12:00:00', modified: '2026-11-24T12:00:00' },
+      map: { size: 260, seed: 4711, season: 'summer', night: false, relief: 4, scatterTrees: 30 },
+      player: 'UA',
+      briefing: 'Der Gegner hält die Brücke über den Donez und das Dorf Bilohoriwka am Nordufer.\n\nNehmt die Brücke, setzt über die Furt im Westen und vernichtet alle feindlichen Kräfte.',
+      elements: [
+        { id: 'e1', type: 'river', pts: [[-128, -6], [-70, -14], [-10, -2], [50, -16], [128, -8]], width: 16, depth: 3 },
+        { id: 'e2', type: 'road', kind: 'road', pts: [[4, 128], [2, 60], [-4, 0], [6, -60], [0, -128]], width: 7 },
+        { id: 'e3', type: 'bridge', kind: 'bridge', pts: [[-6, 16], [-2, -20]], width: 7 },
+        { id: 'e4', type: 'road', kind: 'track', pts: [[-128, 70], [-70, 40], [-60, 12]], width: 4 },
+        { id: 'e5', type: 'bridge', kind: 'ford', pts: [[-66, 6], [-72, -30]], width: 8 },
+        { id: 'e6', type: 'village', x: 10, z: -72, r: 30, houses: 11, set: 'ukraine_village', urban: false },
+        { id: 'e7', type: 'forest', poly: [[60, 30], [118, 26], [122, 96], [70, 104]], kind: 'mixed', density: 0.05 },
+        { id: 'e8', type: 'field', poly: [[-110, 60], [-30, 60], [-30, 118], [-110, 118]], crop: 'sunflower', angle: 0.4 },
+        { id: 'e9', type: 'treeline', pts: [[-120, 50], [-24, 52]] },
+        { id: 'e10', type: 'hill', x: -80, z: -90, r: 32, h: 7 },
+        { id: 'e11', type: 'building', x: 34, z: 92, rot: 0, kind: 'warehouse', w: 16, d: 11.5, floors: 1 },
+      ],
+      units: [
+        { id: 'u12', type: 'leopard', team: 'UA', x: -8, z: 96, heading: 3.14, ai: 'guard', target: false },
+        { id: 'u13', type: 'leopard', team: 'UA', x: 8, z: 98, heading: 3.14, ai: 'guard', target: false },
+        { id: 'u14', type: 'bradley', team: 'UA', x: -20, z: 104, heading: 3.14, ai: 'guard', target: false },
+        { id: 'u15', type: 'rifle', team: 'UA', x: -30, z: 92, heading: 3.14, ai: 'guard', target: false },
+        { id: 'u16', type: 'rifle', team: 'UA', x: -26, z: 92, heading: 3.14, ai: 'guard', target: false },
+        { id: 'u17', type: 'javelin', team: 'UA', x: -22, z: 92, heading: 3.14, ai: 'guard', target: false },
+        { id: 'u18', type: 't72', team: 'RU', x: 0, z: -40, heading: 0, ai: 'hold', target: true },
+        { id: 'u19', type: 'bmp', team: 'RU', x: 20, z: -60, heading: 0, ai: 'guard', target: false },
+        { id: 'u20', type: 'e_rifle', team: 'RU', x: -8, z: -66, heading: 0, ai: 'guard', target: false },
+        { id: 'u21', type: 'e_rifle', team: 'RU', x: 14, z: -80, heading: 0, ai: 'guard', target: false },
+        { id: 'u22', type: 'e_rpg', team: 'RU', x: -16, z: -50, heading: 0, ai: 'guard', target: false },
+      ],
+      points: [
+        { id: 'p23', kind: 'zeppelin', x: 0, z: -4, name: 'Brücke', value: 3, radius: 18 },
+        { id: 'p24', kind: 'depot', x: 24, z: -88, name: 'Dorfdepot', value: 1, radius: 14 },
+        { id: 'p25', kind: 'radio', x: -40, z: 70, name: 'Funkturm Süd', value: 1, radius: 14 },
+      ],
+      zones: [
+        { id: 'z26', team: 'UA', x: 0, z: 104, r: 22 },
+        { id: 'z27', team: 'RU', x: 0, z: -108, r: 22 },
+      ],
+      objectives: [
+        { id: 'o28', kind: 'annihilate' },
+      ],
+      nextId: 29,
+    },
+  ],
+};

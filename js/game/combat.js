@@ -102,6 +102,7 @@ export class Combat {
     if (target.type.infantry && this.game.logi?.coverOf(target)) acc *= 0.8; // Deckung (Sandsäcke/Graben)
     if (shooter.moving) acc *= 0.7;
     if (shooter.hp < shooter.maxHp * 0.3) acc *= 0.85;
+    if (this.game.tac) acc *= this.game.tac.accMul(shooter, target, w); // Niederhalten, Offizier, Veteranen, Besatzung
     return Math.min(0.97, acc);
   }
 
@@ -114,9 +115,16 @@ export class Combat {
     const sp = game.ownerPlayer(shooter);
     if (sp) sp.stats.shots++;
 
+    const tac = game.tac;
+    if (w.kind === 'grenade') { // Handgranate / Molotow / Unterlauf-Granatwerfer: Wurf bzw. Bogenschuss
+      if (tac && target) tac.throwAt(shooter, w, target.pos.x, target.pos.z, target);
+      return;
+    }
     if (w.kind === 'bullet') {
-      fx.muzzle(from.x, from.y, from.z, false);
       const n = w.burst || 1;
+      if (!threat && tac) tac.onShot(shooter, w, target);
+      if (!threat && w.sound === 'grenade') { this._lob(shooter, ws, target, from, tp); return; } // AGS/Granatmaschinenwaffe
+      fx.muzzle(from.x, from.y, from.z, false);
       // Gegen Marschflugkörper/Drohnen mit Rohrwaffen
       if (threat) {
         for (let i = 0; i < Math.min(2, n); i++) fx.tracer(from, _a.copy(tp).add(new THREE.Vector3(rand(-2, 2), rand(-2, 2), rand(-2, 2))), w.tracer || 'y', 400);
@@ -147,6 +155,7 @@ export class Combat {
 
     if (w.kind === 'shell') {
       fx.muzzle(from.x, from.y, from.z, true);
+      if (tac) tac.onShot(shooter, w, target);
       const hit = Math.random() < this.hitChance(shooter, w, target);
       const end = tp.clone();
       if (!hit) end.add(new THREE.Vector3(rand(-4, 4), 0, rand(-4, 4))).setY(game.terrain.surface(end.x, end.z));
@@ -169,12 +178,15 @@ export class Combat {
         from, target: hit ? target : null, to: hit ? null : tp.clone().add(new THREE.Vector3(rand(-5, 5), -tp.y + game.terrain.surface(tp.x, tp.z), rand(-5, 5))),
         speed: w.speed || 40, arc: w.topAttack ? Math.max(8, d * 0.45) : w.straight ? 1 : 3, side: shooter.side, model: 'atgm',
         onHit: (m) => {
-          if (hit && target.alive) game.applyDamage(target, w.dmg, w, shooter, { topAttack: w.topAttack });
-          fx.explosion(m.pos.x, m.pos.y, m.pos.z, 0.9, { crater: !hit });
+          // Rauch zwischen Schütze und Ziel: Lenkung verliert das Ziel (65 %)
+          const blind = hit && tac && target.alive && tac.lineSmoked(shooter.pos, target.pos) && Math.random() < 0.65;
+          if (hit && !blind && target.alive) game.applyDamage(target, w.dmg, w, shooter, { topAttack: w.topAttack });
+          fx.explosion(m.pos.x, m.pos.y, m.pos.z, 0.9, { crater: !hit || blind });
           if (w.splash) game.splashDamage(m.pos.x, m.pos.z, w.splash, w.dmg * 0.2, w, shooter.side, hit ? target : null, false, shooter.owner);
         },
       }).register();
       fx.muzzle(from.x, from.y, from.z, true);
+      if (tac && target?.type.vehicle) tac.onAtgm(target, shooter); // Nebelwurfanlage des Ziels
       return;
     }
 
@@ -218,6 +230,7 @@ export class Combat {
       // Sprengladung anbringen
       const tgt = target;
       fx.marker(tgt.pos.x, tgt.pos.z, 0xff3030, 2.5, 3);
+      fx.throwable(from, tgt.aimPoint(), 0.35, 2.5, 'charge'); // Ladung sichtbar angebracht
       game.later(2.5, () => {
         if (!shooter.alive && Math.random() < 0.5) return;
         const p = tgt.pos;
@@ -226,6 +239,29 @@ export class Combat {
       });
       return;
     }
+  }
+
+  // Granatmaschinenwaffe (AGS, GMW): Granaten im flachen Bogen, Einschläge nach der Flugzeit
+  _lob(shooter, ws, target, from, tp) {
+    const game = this.game, fx = game.effects, w = ws.def, n = w.burst || 1;
+    fx.muzzle(from.x, from.y, from.z, false);
+    const pc = this.hitChance(shooter, w, target);
+    const d = shooter.distTo(target), flight = 0.3 + d / 45;
+    let hits = 0;
+    for (let i = 0; i < n; i++) {
+      const hit = Math.random() < pc;
+      if (hit) hits++;
+      const end = tp.clone();
+      if (!hit) end.add(new THREE.Vector3(rand(-3, 3), 0, rand(-3, 3)));
+      end.y = game.terrain.surface(end.x, end.z);
+      const dl = i * 0.12;
+      game.later(dl, () => fx.throwable(from, end, flight, flight, 'launcher'));
+      game.later(dl + flight, () => fx.explosion(end.x, end.y + 0.2, end.z, 0.35, { crater: false, sound: i === 0 }));
+    }
+    game.later(flight + 0.05, () => {
+      if (hits && target.alive) game.applyDamage(target, w.dmg * hits, w, shooter);
+      if (w.splash && target.alive !== undefined) game.splashDamage(target.pos.x, target.pos.z, w.splash, w.dmg * 0.4 * Math.max(1, hits), w, shooter.side, hits ? target : null, false, shooter.owner);
+    });
   }
 
   // Granate im Anflug (Artillerie, auch für Missionsereignisse)

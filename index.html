@@ -71,6 +71,7 @@
         <button id="btn-campaign" class="big"><i data-icon="flag"></i><span>Kampagne</span></button>
         <button id="btn-skirmish" class="big"><i data-icon="tank"></i><span>Gefecht</span></button>
         <button id="btn-online" class="big"><i data-icon="globe"></i><span>Online-Gefecht</span></button>
+        <div class="menu-pair"><button id="btn-editor"><i data-icon="editor"></i><span>Editor</span></button><button id="btn-mods"><i data-icon="mods"></i><span>Mods &amp; Karten</span></button></div>
         <p id="online-artifact-note" class="art-note hidden">Online-Spiel nur in der Web-Version (z. B. GitHub Pages) – hier nur der lokale Test.</p>
         <button id="btn-settings"><i data-icon="repair"></i><span>Grafik &amp; Einstellungen</span></button>
         <button id="btn-help"><i data-icon="move"></i><span>Steuerung</span></button>
@@ -97,6 +98,7 @@
           <div class="sk-field"><span>Team</span><div class="seg" id="sk-team"><button data-v="UA">Ukraine</button><button data-v="RU">Russland</button></div></div>
           <label>Deine Rolle <select id="sk-role"></select></label>
           <div id="sk-role-desc" class="role-desc"></div>
+          <label>Karte <select id="sk-custom"></select></label>
           <label>Kartenthema <select id="sk-preset"></select></label>
           <label>Größe <select id="sk-size"></select></label>
           <label>Jahreszeit <select id="sk-season"><option value="summer">Sommer</option><option value="autumn">Herbst</option><option value="winter">Winter</option></select></label>
@@ -172,6 +174,23 @@
       <h2 id="net-msg-title">Verbindung</h2>
       <p id="net-msg-text"></p>
       <div class="row"><span></span><button id="net-msg-ok" class="big">Zum Hauptmenü</button></div>
+    </div>
+  </div>
+
+  <div id="screen-mods" class="screen hidden">
+    <div class="panel wide mods-panel">
+      <h2>Mods &amp; eigene Karten</h2>
+      <h3>Eigene Karten</h3>
+      <div id="mods-maps" class="mod-list"></div>
+      <h3>Installierte Mods</h3>
+      <div id="mods-list" class="mod-list"></div>
+      <h3>Mod laden</h3>
+      <label>Datei <input type="file" id="mods-file" accept=".json,application/json,text/plain"></label>
+      <textarea id="mods-paste" rows="4" spellcheck="false" placeholder="… oder Mod-JSON (bzw. eine exportierte Karte) hier einfügen"></textarea>
+      <div class="row"><button id="mods-example">Beispiel-Mod laden</button><button id="mods-load" class="big"><i data-icon="upload"></i> Mod laden</button></div>
+      <div id="mods-msg" class="ed-msg"></div>
+      <p class="note">Mods sind reine Daten (JSON, Format „steppensturm-mod"): Karten sowie Einheitenwerte. Erlaubte Felder – <span id="mods-fields"></span>. Ausführbarer Code wird abgewiesen, Werte werden geklemmt. Format und Beispiel: README, Abschnitt „Mods".</p>
+      <div class="row"><button class="back">Zurück</button><button id="mods-editor"><i data-icon="editor"></i> Editor öffnen</button></div>
     </div>
   </div>
 

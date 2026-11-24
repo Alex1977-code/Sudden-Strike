@@ -17,6 +17,13 @@
  *   bekannt (Zielerfassung), werden aber erst nach Erkundung dargestellt. addReveal(x, z, r, t, team = localSide).
  * Kommandos (serialisierbar): {t:'move', ids, x, z, attackMove} · {t:'attack', ids, target} · {t:'stop', ids}
  *   · {t:'hold', ids, value} · {t:'ability', ability, x, z}.
+ *   Kampfmechaniken (V3-M1, js/game/tactics.js – game.tac): {t:'smoke', ids, x, z} (Nebelgranate werfen bzw. Nebelwurfanlage
+ *   der Fahrzeuge) · {t:'grenade', ids, x, z, target?} (Handgranate/Werfer auf Punkt/Ziel) · {t:'ambush', ids, value, range}
+ *   (Hinterhalt: nicht schießen, unentdeckt bleiben bis Feind < range m; ids auch Häuser) · {t:'dig', ids} (Schützenloch).
+ *   Logistik/Pioniere (logistics.js): build (Bauarten je Epoche/Fraktion: buildKindsFor), clearmines (auch Draht), demolish,
+ *   bailout, crew. Einheiten in Panik (u.panicT > 0) nehmen keine Befehle an.
+ * Kampfzustände je Einheit (Snapshots): u.supp (Niederhalten 0..100), u.panicT, u.vet/u.xp (Veteranenstufe 0..3),
+ *   u.mods {eng,tur,gun,crw} + u.immobilized (Fahrzeugmodule), u.smokeN, u.ambush {on,range}, u.burnT; game.tac.smokes (Rauch).
  *   game.command(playerId, cmd) → bool: validiert (nur eigene lebende Einheiten, sichtbares feindl./neutrales Ziel,
  *   eigene Fähigkeit) und führt aus; emit('command', playerId, cmd).
  *   game.issueCommand(cmd): Einstieg für Input/HUD – Client → game.net.sendCommand(cmd), sonst command(localPlayerId, cmd).
@@ -44,6 +51,7 @@ import { Garrison, GAR } from './garrison.js';
 import { Effects } from '../engine/effects.js';
 import { Unit, resetUnitIds } from './unit.js';
 import { Combat, Missile } from './combat.js';
+import { Tactics } from './tactics.js';
 import { ABILITIES } from './abilities.js';
 import { UNIT_TYPES } from './unitTypes.js';
 import { bridgeDecor, setBuildingDamage, buildingFxPoint, buildingClass } from './models.js';
@@ -162,6 +170,7 @@ export class Game {
     this.effects = new Effects(this.scene, this.terrain, q, this.audio);
     this.combat = new Combat(this);
     this.logi = new Logistics(this);
+    this.tac = new Tactics(this);
     this.vision = new Vision(this);
     this.gar = new Garrison(this);
     this.visionStats = { n: 0, sum: 0, max: 0, last: 0 };
@@ -233,6 +242,7 @@ export class Game {
       if (opts.y !== undefined) { u.pos.y = opts.y; u.root.position.y = opts.y; u.root.updateMatrix(); }
       if (opts.rot !== undefined) { u.heading = opts.rot; u.root.rotation.y = opts.rot; u.root.updateMatrix(); }
     }
+    if (t.build && u.build?.progress >= 1 && (t.build.blocks || t.build.blocksInfantry) && this.logi) this.logi.rebuildTraps();
     if (opts.order) u.moveTo(opts.order[0], opts.order[1]);
     this.mission?.onSpawn?.(this, u, opts); // MP-T7: missionsspezifische Einheitenwerte (Gefecht: Fraktionsausgleich)
     return u;
@@ -284,11 +294,16 @@ export class Game {
       if (credit) credit.stats.kills++;
     }
     if (killer) killer.kills = (killer.kills || 0) + 1;
+    this.tac?.onKill(u, killer);
     if (this.mission?.onKill) this.mission.onKill(this, u, killer);
     this.emit('kill', u, killer, silent);
   }
   applyDamage(target, dmg, w, src, opts = {}) {
     if (!target.alive || target.invulnerable) return;
+    const tt = target.type;
+    if (w.ew && tt.ewImmune) return; // EloKa-Waffen gegen Glasfaser-Drohnen wirkungslos
+    if (tt.droneResist && w.kind === 'kamikaze') dmg *= 1 - tt.droneResist; // Dachkäfig gegen FPV/Lancet
+    if (tt.iedResist && w.mine) dmg *= 1 - tt.iedResist; // minengeschützte Fahrzeuge (MRAP)
     let mul = w.vs ? (w.vs[target.armor] ?? 0) : 1;
     if (target.armor === 'heavy' && !opts.topAttack && !opts.noFront && src && src.pos) {
       // Frontpanzerung
@@ -297,14 +312,17 @@ export class Game {
       mul *= d < 0.7 ? 0.65 : d > 2.4 ? 1.5 : 1.0;
     }
     if (opts.topAttack && target.armor === 'heavy') mul *= 1.25;
-    if (target.type.infantry && this.terrain.inForest(target.pos.x, target.pos.z)) mul *= 0.7;
+    const gren = !!opts.grenade; // Handgranate landet in der Stellung: Wald/Haus/Graben schützen kaum
+    if (target.type.infantry && this.terrain.inForest(target.pos.x, target.pos.z)) mul *= gren ? 0.9 : 0.7;
     if (target.garrison) mul *= GAR.hitMul; // Insassen: starke Deckung
-    else if (target.type.infantry && this.nearHouse(target.pos.x, target.pos.z)) mul *= 0.6;
-    if (target.type.infantry && this.logi) mul *= this.logi.coverMul(target); // Sandsäcke / Graben
+    else if (target.type.infantry && !gren && this.nearHouse(target.pos.x, target.pos.z)) mul *= 0.6;
+    if (target.type.infantry && this.logi && !gren) mul *= this.logi.coverMul(target); // Sandsäcke / Graben
     if (this.mission?.damageMul && target.side !== 'N' && !this.ownerPlayer(target)?.ai) mul *= this.mission.damageMul;
     const amount = dmg * mul * rand(0.85, 1.15);
     if (target.occupants?.length) this.gar.onHouseHit(target, dmg, w, src);
     if (amount <= 0) return;
+    this.tac?.onHit(target, amount, w, src, opts); // Niederhalten, Erfahrung, Fahrzeugmodule, Hinterhalt auslösen
+    if (!target.alive) return;
     target.hp -= amount;
     target.lastHit = this.time;
     if (target.type.key === 'house' && target.hp > 0) this._houseDamageFx(target, w);
@@ -359,6 +377,7 @@ export class Game {
     this.effects.addEmitter(buildingFxPoint(u.root, (u.damageStage || 0) >= 2 ? 'roof' : 'win'), 0, dur, intensity);
   }
   splashDamage(x, z, r, dmg, w, side, exclude, hitAll = false, owner = null) {
+    this.tac?.onBlast(x, z, r, dmg, side, hitAll);
     for (const u of [...this.units]) {
       if (!u.alive || u === exclude) continue;
       if (u.side === side && !hitAll) continue;
@@ -393,7 +412,8 @@ export class Game {
     const k = this.terrain.cellIndex(x, z);
     if (k < 0) return false;
     const gw = this.terrain.gw, b = this.terrain.gBlocked;
-    return (b[k - 1] && b[k - 1] !== 4) || (b[k + 1] && b[k + 1] !== 4) || (b[k - gw] && b[k - gw] !== 4) || (b[k + gw] && b[k + gw] !== 4);
+    const hb = (v) => v && v !== 4 && v !== 5; // 4 Panzersperre, 5 Draht: keine Hausdeckung
+    return hb(b[k - 1]) || hb(b[k + 1]) || hb(b[k - gw]) || hb(b[k + gw]);
   }
   hasRadar(side, key) {
     const c = this.radarCache[key + side];
@@ -430,7 +450,8 @@ export class Game {
     const p = this.playerById(playerId);
     if (!p || p.defeated || !cmd || typeof cmd !== 'object' || !this.active) return false;
     const ids = Array.isArray(cmd.ids) ? cmd.ids : [];
-    const units = ids.map((id) => this.unitById(id)).filter((u) => u && u.alive && u.owner === p.id && u.side === p.team);
+    // Einheiten in Panik sind kurz nicht steuerbar
+    const units = ids.map((id) => this.unitById(id)).filter((u) => u && u.alive && u.owner === p.id && u.side === p.team && !(u.panicT > 0));
     const fin = (v) => typeof v === 'number' && Number.isFinite(v);
     let ok = false;
     switch (cmd.t) {
@@ -444,12 +465,13 @@ export class Game {
         if (!units.length || !t || !t.alive || t.side === p.team || t.invulnerable) return false;
         // Ziel muss für das Team aufgeklärt sein (Strukturen: erkundet)
         if (t.side !== 'N' && !(t.type.structure ? this.fowFor(p.team).isExplored(t.pos.x, t.pos.z) : t.visibleTo(p.team))) return false;
+        for (const u of units) if (u.ambush?.on) u.ambush.on = false; // Angriffsbefehl gibt das Feuer frei
         ok = this.issueOrder(units, t.pos.x, t.pos.z, t, { playerId: p.id });
         break;
       }
       case 'stop':
         if (!units.length) return false;
-        units.forEach((u) => u.stop());
+        units.forEach((u) => { u.stop(); u.throwOrder = null; });
         ok = true;
         break;
       case 'hold': {
@@ -473,6 +495,9 @@ export class Game {
         ok = true;
         break;
       }
+      case 'smoke': case 'grenade': case 'ambush': case 'dig':
+        ok = this.tac.command(p, cmd, units);
+        break;
       case 'ability':
         if (!fin(cmd.x) || !fin(cmd.z)) return false;
         ok = this.useAbility(p.id, cmd.ability, cmd.x, cmd.z);
@@ -481,7 +506,7 @@ export class Game {
         return false;
     }
     if (ok) {
-      if (p.id === this._localPlayerId && (cmd.t === 'stop' || cmd.t === 'hold')) this.audio.ui('ack');
+      if (p.id === this._localPlayerId && (cmd.t === 'stop' || cmd.t === 'hold' || cmd.t === 'ambush' || cmd.t === 'dig' || cmd.t === 'smoke' || cmd.t === 'grenade')) this.audio.ui('ack');
       this.emit('command', p.id, cmd);
     }
     return !!ok;
@@ -490,7 +515,7 @@ export class Game {
   issueOrder(units, x, z, target, { attackMove = false, playerId = this._localPlayerId } = {}) {
     units = units.filter((u) => u.alive && !u.type.structure && u.speed > 0);
     if (!units.length) return false;
-    for (const u of units) { if (u.garrison) this.gar.leave(u); u.garrisonGoal = null; }
+    for (const u of units) { if (u.garrison) this.gar.leave(u); u.garrisonGoal = null; u.throwOrder = null; }
     const fb = playerId === this._localPlayerId; // Rückmeldung nur für den lokalen Spieler
     if (fb) this.audio.ui('ack');
     if (target && target.side !== units[0].side) {
@@ -672,7 +697,7 @@ export class Game {
   // ================== Sicht ==================
   // Effektive Sichtweite eines Beobachters (Gebäude-Besatzung: höhere Position)
   sightOf(o) {
-    let s = o.type.sight * (o.sightMul || 1); // sightMul: Gefechts-Fraktionsausgleich (MP-T7), sonst 1
+    let s = o.type.sight * (o.sightMul || 1) * (o.vet ? 1 + 0.05 * o.vet : 1); // sightMul: Gefechts-Fraktionsausgleich (MP-T7); Veteranen +5 %/Stufe
     if (o.garrison) s *= Math.min(1.5, 1 + 0.1 * (o.garrison.houseDef?.floors || 1)) * (o.type.key.includes('sniper') ? 1.15 : 1);
     return s;
   }
@@ -716,7 +741,14 @@ export class Game {
       if (!fogOn) f.revealAll();
     }
     const vc = this.mission?.vehicleConceal; // MP-T7: Fahrzeugtarnung im Wald (nur Missionen, die sie setzen – Gefecht)
+    // Hinterhalt (still, nicht feuernd): nur auf kurze Distanz zu entdecken; liegende Infanterie kleiner
     const concealOf = (u) => {
+      let k = baseConceal(u);
+      if (u.ambush?.on && !u.moving && !(u.lastFired && this.time - u.lastFired < 6)) k = Math.min(k, 0.4);
+      else if (u.type.infantry && u.supp >= 50) k *= 0.85;
+      return k;
+    };
+    const baseConceal = (u) => {
       let c = u.type.conceal || 0;
       if (vc && u.type.vehicle && !u.type.structure) {
         // nur stehend, im Wald und ohne kürzlich gefeuert zu haben (Abschuss/Mündungsfeuer verrät das Fahrzeug 6 s lang)
@@ -842,6 +874,7 @@ export class Game {
     const list = [...this.units];
     for (const u of list) if (u.alive) u.update(dt);
     this.logi.update(dt);
+    this.tac.update(dt);
     this.gar.update(dt);
     this.separate();
     // Flugkörper
@@ -883,6 +916,7 @@ export class Game {
     this.reveals = this.reveals.filter((r) => r.t > 0);
     for (const u of [...this.units]) if (u.alive) u.update(dt);
     this.gar.update(dt);
+    this.tac.updateClient(dt);
     for (const m of this.missiles) m.update(dt);
     this.missiles = this.missiles.filter((m) => !m.dead);
     if (this.trackedMissile?.dead) this.trackedMissile = null;

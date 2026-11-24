@@ -333,6 +333,68 @@ export class Effects {
     scene.add(this.debris);
     // Markierungen (Bewegungsziel / Warnungen)
     this.markers = [];
+    // Wurfkörper (Handgranate, Molotow, Nebelgranate, Sprengladung, Werfergranate) – gepoolt, rein optisch
+    this.throws = []; this.throwPool = [];
+    this.throwGeo = new THREE.IcosahedronGeometry(0.13, 0);
+    const tl = (c, o = {}) => new THREE.MeshLambertMaterial({ color: c, ...o });
+    this.throwMats = { grenade: tl(0x3b4030), molotov: tl(0x6f8f4a, { emissive: 0x552200 }), smoke: tl(0x9a9a8c), charge: tl(0x5a4a32), launcher: tl(0x55584a) };
+    // Rauchwände (Nebelgranaten/-werfer, Artillerie-Nebel): Objekte { x, z, r, age, dur, dead } aus game.tac.smokes
+    this.screens = [];
+  }
+  // Wurf im Bogen von from nach to (Flugzeit flight s), liegt danach bis fuse s; kind: grenade|molotov|smoke|charge|launcher
+  throwable(from, to, flight, fuse, kind = 'grenade') {
+    let m = this.throwPool.pop();
+    if (!m) { m = new THREE.Mesh(this.throwGeo, this.throwMats.grenade); m.castShadow = false; m.renderOrder = 2; this.scene.add(m); }
+    m.material = this.throwMats[kind] || this.throwMats.grenade;
+    m.scale.set(1, kind === 'molotov' ? 1.8 : 1, 1).multiplyScalar(kind === 'charge' ? 2.4 : kind === 'launcher' ? 0.75 : 1);
+    m.visible = true;
+    const d = Math.hypot(to.x - from.x, to.z - from.z);
+    const f = Math.max(0.12, flight);
+    m.position.copy(from);
+    this.throws.push({ m, from: from.clone(), to: to.clone(), t: 0, flight: f, end: Math.max(f, fuse || f), kind, h: kind === 'launcher' ? 0.8 + d * 0.12 : kind === 'charge' ? 0.4 : 1.4 + d * 0.22 });
+  }
+  _updateThrows(dt) {
+    for (let i = this.throws.length - 1; i >= 0; i--) {
+      const th = this.throws[i], m = th.m;
+      th.t += dt;
+      if (th.t >= th.end) { m.visible = false; this.throws.splice(i, 1); this.throwPool.push(m); continue; }
+      if (th.t < th.flight) {
+        const k = th.t / th.flight;
+        m.position.set(th.from.x + (th.to.x - th.from.x) * k, th.from.y + (th.to.y - th.from.y) * k + 4 * th.h * k * (1 - k), th.from.z + (th.to.z - th.from.z) * k);
+        m.rotation.x += dt * 14; m.rotation.z += dt * 9;
+        const p = m.position;
+        if (th.kind === 'molotov') this.fire.emit(p.x, p.y, p.z, 0, 0.4, 0, 0.7, 0.2, 1, 0.6, 0.2, 1, { heat: 1 });
+        else if (th.kind === 'smoke' || th.kind === 'launcher') { if (Math.random() < 0.6) this.smoke.emit(p.x, p.y, p.z, 0, 0.2, 0, 0.35, 0.7, 0.75, 0.75, 0.72, 0.5, { grow: 1.6, drag: 1 }); }
+      } else {
+        const p = m.position.set(th.to.x, th.to.y + 0.08, th.to.z);
+        if (th.kind === 'smoke' && Math.random() < 0.9 * this.mul) this.smoke.emit(p.x, p.y + 0.2, p.z, rand(-0.4, 0.4), rand(0.6, 1.4), rand(-0.4, 0.4), rand(1, 1.8), rand(1.6, 2.6), 0.86, 0.86, 0.84, 0.65, { grow: 1.6, drag: 1.2 });
+        else if (th.kind === 'grenade' && Math.random() < dt * 6) this.fire.emit(p.x, p.y + 0.1, p.z, rand(-0.5, 0.5), rand(0.5, 1.5), rand(-0.5, 0.5), 0.12, 0.25, 1, 0.8, 0.4, 1, { grav: 3, heat: 0.5 });
+      }
+    }
+  }
+  // Brandfläche (Molotow): kurzlebige Feuerquelle am Boden
+  firePool(x, y, z, dur = 9) {
+    this.addEmitter(new THREE.Vector3(x, y, z), 0, dur, 0.75);
+    for (let i = 0; i < 10 * this.mul + 3; i++) this.fire.emit(x + rand(-1.5, 1.5), y + 0.2, z + rand(-1.5, 1.5), rand(-0.6, 0.6), rand(1, 3), rand(-0.6, 0.6), rand(1, 2), rand(0.4, 0.8), 1, 0.55, 0.15, 1, { grow: 0.8, drag: 1, heat: 1 });
+  }
+  // Rauchwand: emittiert dichten, hellen Rauch im Wolkenradius, solange das Wolkenobjekt lebt (Drift über c.x/c.z)
+  smokeScreen(c) { this.screens.push(c); }
+  _updateScreens(dt) {
+    for (let i = this.screens.length - 1; i >= 0; i--) {
+      const c = this.screens[i];
+      if (c.dead || c.age >= c.dur) { this.screens.splice(i, 1); continue; }
+      const grow = Math.min(1, (c.age + 0.3) / 3), fade = Math.min(1, (c.dur - c.age) / 6);
+      const rate = (8 + c.r * 2.6) * this.mul * fade;
+      let n = rate * dt; const whole = Math.floor(n); n = whole + (Math.random() < n - whole ? 1 : 0);
+      const R = c.r * 0.85 * grow;
+      for (let k = 0; k < n; k++) {
+        const a = Math.random() * 6.283, rr = Math.sqrt(Math.random()) * R;
+        const x = c.x + Math.cos(a) * rr, z = c.z + Math.sin(a) * rr;
+        const y = this.terrain.surface(x, z) + rand(0.4, 2.6);
+        const g = rand(0.8, 0.9);
+        this.smoke.emit(x, y, z, (c.vx || 0) + rand(-0.3, 0.3), rand(0.15, 0.6), (c.vz || 0) + rand(-0.3, 0.3), rand(3.2, 5.2) * (0.6 + 0.4 * grow), rand(4.5, 7), g, g, g * 0.98, 0.5, { grow: 1.22, drag: 0.7, fadeIn: 0.15 });
+      }
+    }
   }
 
   // --- interne Helfer ---
@@ -633,6 +695,8 @@ export class Effects {
     this.smoke.update(dt, this.wind);
     this.fire.update(dt, { x: 0, z: 0 });
     this._updateDebris(dt);
+    this._updateThrows(dt);
+    this._updateScreens(dt);
     const now = performance.now() / 1000;
     for (let i = this.emitters.length - 1; i >= 0; i--) {
       const e = this.emitters[i];

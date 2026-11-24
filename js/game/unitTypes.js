@@ -111,6 +111,10 @@ export const UNIT_TYPES = {
   ua_observer: { name: 'Artilleriebeobachter', icon: '🔭', cls: 'inf', model: 'soldier', weaponModel: 'tablet', hp: 55, armor: 'soft', speed: 4.1, sight: 24, radius: 0.8, weapons: ['pistol'], conceal: 0.5, observer: { range: 96, cone: Math.PI / 2, delay: 2 }, desc: 'Im Stand nach 2 s Fernglas: sehr weite Sicht im Kegel.' },
   e_observer: { name: 'Vorgeschobener Beobachter', icon: '🔭', cls: 'inf', model: 'soldier', weaponModel: 'tablet', hp: 55, armor: 'soft', speed: 4, sight: 24, radius: 0.8, weapons: ['pistol'], conceal: 0.5, observer: { range: 96, cone: Math.PI / 2, delay: 2 }, desc: 'Im Stand nach 2 s Fernglas: sehr weite Sicht im Kegel.' },
 
+  // V3-M1: Kompaniechef/Offizier – Führungsaura (Moral, Treffer, Nachladen in 30 m), Fernglas wie der Beobachter
+  ua_officer: { name: 'Kompaniechef (Hauptmann)', icon: '⭐', cls: 'inf', model: 'soldier', weaponModel: 'tablet', hp: 62, armor: 'soft', speed: 4.2, sight: 30, radius: 0.8, weapons: ['rifle'], conceal: 0.4, officer: true, observer: { range: 80, cone: Math.PI / 2, delay: 2 }, desc: 'Offizier: Führungsaura 30 m (Treffer +15 %, Nachladen −15 %, weniger Niederhalten), Fernglas im Stand. Fällt er, wankt die Moral.' },
+  e_officer: { name: 'Kompaniechef (Kapitan)', icon: '⭐', cls: 'inf', model: 'soldier', weaponModel: 'tablet', hp: 62, armor: 'soft', speed: 4, sight: 30, radius: 0.8, weapons: ['rifleRU'], conceal: 0.35, officer: true, observer: { range: 80, cone: Math.PI / 2, delay: 2 }, desc: 'Offizier: Führungsaura 30 m (Treffer +15 %, Nachladen −15 %, weniger Niederhalten), Fernglas im Stand. Fällt er, wankt die Moral.' },
+
   // Gefechtsmodus (MP-T7): Panzerjäger – im Wald stehend und schweigend sehr schwer aufzuklären (mission.vehicleConceal)
   ua_tankdestroyer: { name: 'Panzerjäger Stugna-P (BTR-4E)', icon: '🎯', cls: 'veh', model: 'tankdestroyer', hp: 380, armor: 'light', speed: 9.5, sight: 36, radius: 3, weapons: ['stugna', 'hmg'], turnRate: 2, turretRate: 1.6, desc: 'Jagdpanzer mit Lenkflugkörpern (52 m). Im Wald stehend und ohne zu feuern erst auf kurze Distanz zu entdecken.' },
   ru_tankdestroyer: { name: '9P157-2 Chrysanthema-S', icon: '🎯', cls: 'veh', model: 'tankdestroyer', hp: 440, armor: 'light', speed: 8.5, sight: 36, radius: 3.1, weapons: ['chrysanthema', 'coaxRU'], turnRate: 1.8, turretRate: 1.5, desc: 'Jagdpanzer mit Lenkflugkörpern (54 m). Im Wald stehend und ohne zu feuern erst auf kurze Distanz zu entdecken.' },
@@ -139,6 +143,8 @@ export const UNIT_TYPES = {
   sandbag: { name: 'Sandsackwall', icon: '🟫', cls: 'struct', model: 'sandbag', hp: 260, armor: 'struct', sight: 0, radius: 2.6, weapons: [], noAutoTarget: true, build: { cost: 1, time: 8, w: 5, d: 1.2, cover: 0.4, conceal: 0.3 }, desc: 'Deckung für Infanterie (Schaden −40 %).' },
   trench: { name: 'Schützengraben', icon: '⛏️', cls: 'struct', model: 'trench', hp: 500, armor: 'struct', sight: 0, radius: 3.2, weapons: [], noAutoTarget: true, build: { cost: 2, time: 18, w: 6, d: 2.4, cover: 0.55, conceal: 0.5 }, desc: 'Starke Deckung und Tarnung für Infanterie (Schaden −55 %).' },
   minefield: { name: 'Minenfeld', icon: '💣', cls: 'struct', model: 'minefield', hp: 150, armor: 'struct', sight: 0, radius: 5, weapons: [], noAutoTarget: true, build: { cost: 2, time: 14, w: 9, d: 9, mines: 8, hidden: true }, desc: 'Für den Gegner unsichtbar. Beschädigt Fahrzeuge und Infanterie.' },
+  // V3-M1: Schützenloch, das jede Infanterie selbst gräbt ({t:'dig'}); Epochen nutzen ww2_foxhole / af_foxhole
+  foxhole: { name: 'Schützenloch', icon: '🕳️', cls: 'struct', model: 'af_foxhole_ALL', hp: 150, armor: 'struct', sight: 0, radius: 1.4, weapons: [], noAutoTarget: true, selfDig: true, build: { cost: 0, time: 6, w: 1.8, d: 1.8, cover: 0.5, conceal: 0.5, selfDig: true }, desc: 'Selbst gegrabene Deckung (Schaden −50 %).' },
   house: { name: 'Gebäude', icon: '🏠', cls: 'struct', model: 'house', hp: 900, armor: 'struct', sight: 0, radius: 4, weapons: [], neutral: true },
 };
 // Aufbereitung eines Typs (für Basis-Typen und per registerUnitTypes nachgeladene Epochen)
@@ -155,6 +161,16 @@ function prepareType(k, t) {
   if (t.infantry) t.speed *= 0.95;
   t.engineer = t.engineer || null;
   t.era = t.era || 'modern';
+  // V3-M1: Epochenfelder vereinheitlichen – medic:true (+healRate/healRadius) → { rate, radius }; Offiziere mit Fernglas
+  if (t.medic === true) t.medic = { rate: t.healRate || 2.5, radius: t.healRadius || 10 };
+  if (t.officer && !t.observer && t.infantry) t.observer = { range: 80, cone: Math.PI / 2, delay: 2 };
+  if (t.officer && !t.iconKey) t.iconKey = 'officer';
+  if (t.build && (t.selfDig || t.blocksInfantry || t.mineKind)) { // Typfelder auch im build-Objekt (Kern liest dort)
+    if (t.selfDig) t.build.selfDig = true;
+    if (t.blocksInfantry) t.build.blocksInfantry = true;
+    if (t.mineKind) t.build.mineKind = t.mineKind;
+  }
+  if (t.build?.selfDig) t.selfDig = true;
 }
 for (const [k, t] of Object.entries(UNIT_TYPES)) prepareType(k, t);
 
@@ -164,6 +180,9 @@ for (const [k, t] of Object.entries(UNIT_TYPES)) prepareType(k, t);
  *   registerWeapons({ mg42: {...} })                 – vor den Einheiten aufrufen
  *   registerUnitTypes({ sherman: {..., era:'ww2', faction:'US'} })
  * Gleiche Regeln wie oben (cls, model, weapons[] als Schlüssel aus W, Tempo-Faktoren werden angewendet).
+ * Kernfelder (V3-M1): officer, medic (true|{rate,radius}), ewImmune, droneResist, unmanned, iedResist, smoke/smokeLaunchers,
+ *   build.{blocks, blocksInfantry, selfDig, cover, conceal, mines, mineKind, hidden}; Waffen kind 'grenade' (range, fuse,
+ *   splash, incendiary, houseMul, minRange/launcher = Werfer), suppress (Niederhalten je Schuss), ew, mine.
  */
 export function registerWeapons(obj) {
   for (const [k, w] of Object.entries(obj)) { if (W[k]) console.warn('Waffe überschrieben:', k); W[k] = w; }

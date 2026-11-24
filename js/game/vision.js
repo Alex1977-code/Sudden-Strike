@@ -1,4 +1,5 @@
 // Sichtlinien (MP-T4c): Raster-Raymarching über Höhenfeld, Wälder (gForest) und Gebäude.
+// V3-M1: Rauchwolken (game.tac.smokes) blockieren Sichtlinien und Sichtsektoren (unterhalb der Wolkenoberkante).
 // Reine Spiel-Hilfsklasse: game.vision = new Vision(game) nach dem Laden des Geländes.
 import { CELL } from '../engine/terrain.js';
 
@@ -49,6 +50,8 @@ export class Vision {
     const dx = tx - ox, dz = tz - oz;
     const dist = Math.hypot(dx, dz);
     if (dist < 4) return true;
+    const tac = this.g.tac;
+    if (tac && tac.smokes.length && tac.segBlocked(ox, oz, oy, tx, tz, ty)) return false; // Rauch
     const n = Math.max(1, Math.floor(dist / VIS.step));
     const gw = t.gw, half = t.half;
     let forest = 0;
@@ -75,6 +78,7 @@ export class Vision {
   // Sichtradius-Sektoren eines Beobachters (für die Nebeltextur): maxima je Sektor
   sectors(o, rMax, out, n, rangeFn) {
     const ey = this.eyeY(o), ox = o.pos.x, oz = o.pos.z, t = this.t;
+    const tac = this.g.tac, smk = tac && tac.smokes.length ? tac.smokesNear(ox, oz, rMax) : null;
     for (let s = 0; s < n; s++) {
       const a = (s + 0.5) / n * Math.PI * 2;
       const R = rangeFn ? rangeFn(a, rMax) : rMax;
@@ -92,6 +96,7 @@ export class Vision {
         const hu = this.houseAt[k];
         if (hu && hu.alive && hu !== o.garrison && this.houseTop[k] > h) { blocked = d; break; }
         if (t.gForest[k] && h < g + VIS.treeH) { forest += VIS.step / CELL; if (forest > VIS.forestCells) { blocked = d; break; } }
+        if (smk && smk.length && d > 3 && tac.inSmoke(smk, x, z, h)) { blocked = d; break; }
       }
       out[s] = Math.min(R, blocked + 3);
     }

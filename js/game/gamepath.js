@@ -2,9 +2,11 @@
 // Rasterwert gBlocked = 4 („Panzersperre“) sperrt Fahrzeuge, Infanterie passiert. Alle anderen Werte (1 Gebäude/Hang,
 // 2 Wasser-Sperre, 3 Wrack) bleiben für alle gesperrt. Das Abstandsfeld (Fahrzeugbreite) gilt nur für Fahrzeuge und
 // zählt Panzersperren daher als hartes Hindernis.
+// V3-M1: gBlocked = 5 („Draht“: Stacheldraht/NATO-Draht) sperrt Infanterie, Fahrzeuge fahren darüber (und walzen ihn nieder).
 import { Pathfinder } from '../engine/pathfinding.js';
 
 export const BLOCK_TRAP = 4;
+export const BLOCK_WIRE = 5;
 
 export class GamePathfinder extends Pathfinder {
   constructor(terrain) { super(terrain); this._veh = true; }
@@ -13,7 +15,7 @@ export class GamePathfinder extends Pathfinder {
     const t = this.t;
     if (mode === 'water') return t.gDeepWater[k] === 1 && t.gBlocked[k] !== 2;
     const b = t.gBlocked[k];
-    return t.gWater[k] === 0 && (b === 0 || (b === BLOCK_TRAP && !veh));
+    return t.gWater[k] === 0 && (b === 0 || (b === BLOCK_TRAP && !veh) || (b === BLOCK_WIRE && veh));
   }
   hardBlock(k) { return this.t.gBlocked[k] === BLOCK_TRAP || super.hardBlock(k); }
   find(sx, sz, ex, ez, mode = 'ground', vehicle = false, radius) {

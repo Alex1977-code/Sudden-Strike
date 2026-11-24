@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { UNIT_TYPES } from '../game/unitTypes.js';
 import { Missile } from '../game/combat.js';
 import { createCodec } from './codec.js';
+import { packMods, unpackMods } from '../game/tactics.js';
 import { AICommander } from '../skirmish/ai.js';
 import { normalizeSetup, netPointState, applyNetPoints, endFor, ROLES, TEAM_NAME } from '../skirmish/skirmish.js';
 
@@ -33,15 +34,18 @@ export const NET = {
 function relaxTimeout(lobby) { const o = lobby.transport.opts; if (!o._normalTimeout) o._normalTimeout = o.peerTimeoutMs; o.peerTimeoutMs = Math.max(o.peerTimeoutMs, NET.loadTimeoutMs); }
 function restoreTimeout(lobby) { const o = lobby.transport.opts; if (o._normalTimeout) o.peerTimeoutMs = o._normalTimeout; }
 
-// Einheiten-Schema: [id, typ, owner, x, z, heading, hp, maxHp, turm/fernglas, flags, flughöhe, munition, sprit, material, bau, haus]
+// Einheiten-Schema: [id, typ, owner, x, z, heading, hp, maxHp, turm/fernglas, flags, flughöhe, munition, sprit, material, bau, haus,
+//                    niederhalten 0..100, veteranenstufe 0..3, fahrzeugmodule (Bitfeld packMods)]  – V3-M1
 export const UNIT_CODEC = createCodec([
   { name: 'id', type: 'uint', delta: true }, { name: 'type', type: 'uint' }, { name: 'owner', type: 'int' },
   { name: 'x', type: 'fixed', step: 1 / 32 }, { name: 'z', type: 'fixed', step: 1 / 32 }, { name: 'h', type: 'angle', bits: 8 },
   { name: 'hp', type: 'fixed', step: 1, keepPositive: true }, { name: 'maxHp', type: 'uint' }, { name: 'ty', type: 'angle', bits: 8 },
   { name: 'flags', type: 'uint' }, { name: 'alt', type: 'fixed', step: 0.25 }, { name: 'stock', type: 'int' },
   { name: 'fuel', type: 'uint' }, { name: 'mat', type: 'uint' }, { name: 'build', type: 'uint' }, { name: 'gh', type: 'uint' },
+  { name: 'sup', type: 'uint' }, { name: 'vet', type: 'uint' }, { name: 'mod', type: 'uint' },
 ]);
-export const F = { moving: 1, hold: 2, immob: 4, abandoned: 8, bino: 16, garrison: 32, dive: 64, UA: 128, RU: 256, hot: 512, fired: 1024, work: 2048 };
+// ambush/led nur für das eigene Team (Hinterhalt bleibt dem Gegner verborgen); burn = brennende Einheit bzw. brennendes Haus
+export const F = { moving: 1, hold: 2, immob: 4, abandoned: 8, bino: 16, garrison: 32, dive: 64, UA: 128, RU: 256, hot: 512, fired: 1024, work: 2048, ambush: 4096, panic: 8192, led: 16384, burn: 32768 };
 const r1 = (v) => Math.round(v * 10) / 10;
 
 /** Spielerliste (game.setupPlayers) aus den Lobby-Slots der Start-Nachricht. */
@@ -131,7 +135,7 @@ export class HostSession {
   _tap() {
     const g = this.game, fx = g.effects, au = g.audio, self = this;
     this._fx = fx; this._au = au;
-    const o = this._orig = { explosion: fx.explosion, muzzle: fx.muzzle, tracer: fx.tracer, smallHit: fx.smallHit, shot: au.shot, drone: au.drone, boom: au.boom, addReveal: g.addReveal };
+    const o = this._orig = { explosion: fx.explosion, muzzle: fx.muzzle, tracer: fx.tracer, smallHit: fx.smallHit, shot: au.shot, drone: au.drone, boom: au.boom, addReveal: g.addReveal, throwable: fx.throwable, firePool: fx.firePool, smokeScreen: fx.smokeScreen };
     fx.explosion = function (x, y, z, size = 1, opt = {}) {
       o.explosion.call(this, x, y, z, size, opt);
       if (!g._inDie) self._fxAt(x, z, ['x', r1(x), r1(y), r1(z), r1(size), (opt.crater === false ? 1 : 0) | (opt.sound === false ? 2 : 0) | (opt.water ? 4 : 0) | (opt.air ? 8 : 0)]);
@@ -139,6 +143,10 @@ export class HostSession {
     fx.muzzle = function (x, y, z, big = false) { o.muzzle.call(this, x, y, z, big); if (!g._inDie) self._fxAt(x, z, ['m', r1(x), r1(y), r1(z), big ? 1 : 0]); };
     fx.tracer = function (a, b, color = 'y', speed = 300) { o.tracer.call(this, a, b, color, speed); self._fxAt(a.x, a.z, ['t', r1(a.x), r1(a.y), r1(a.z), r1(b.x), r1(b.y), r1(b.z), color, speed], b.x, b.z); };
     fx.smallHit = function (x, y, z) { o.smallHit.call(this, x, y, z); self._fxAt(x, z, ['h', r1(x), r1(y), r1(z)]); };
+    // V3-M1: Würfe (Granate, Molotow, Nebel, Ladung), Brandflächen, Rauchwände (Rauch auch für die Sichtprüfung der Clients)
+    fx.throwable = function (a, b, fl, fu, kind) { o.throwable.call(this, a, b, fl, fu, kind); self._fxAt(a.x, a.z, ['th', r1(a.x), r1(a.y), r1(a.z), r1(b.x), r1(b.y), r1(b.z), Math.round(fl * 100) / 100, Math.round(fu * 100) / 100, kind], b.x, b.z); };
+    fx.firePool = function (x, y, z, dur) { o.firePool.call(this, x, y, z, dur); self._fxAt(x, z, ['fp', r1(x), r1(y), r1(z), dur]); };
+    fx.smokeScreen = function (c) { o.smokeScreen.call(this, c); for (const t of ['UA', 'RU']) if (self._teamHasRemote(t)) self.teamQ[t].push(['sm', r1(c.x), r1(c.z), r1(c.r), c.dur, r1(c.age)]); };
     au.shot = function (kind, x, z) { o.shot.call(this, kind, x, z); self._fxAt(x, z, ['s', kind, r1(x), r1(z)]); };
     au.drone = function (x, z) { o.drone.call(this, x, z); self._fxAt(x, z, ['d', r1(x), r1(z)]); };
     au.boom = function () { o.boom.call(this); for (const t of ['UA', 'RU']) self.teamQ[t].push(['b']); };
@@ -147,6 +155,7 @@ export class HostSession {
   _untap() {
     const o = this._orig; if (!o) return;
     delete this._fx.explosion; delete this._fx.muzzle; delete this._fx.tracer; delete this._fx.smallHit; // Prototyp-Methoden wieder wirksam
+    delete this._fx.throwable; delete this._fx.firePool; delete this._fx.smokeScreen;
     delete this._au.shot; delete this._au.drone; delete this._au.boom;
     delete this.game.addReveal;
     this._orig = null;
@@ -304,7 +313,7 @@ export class HostSession {
       if (t.key === 'house') {
         const occ = u.occupants?.length > 0;
         const hot = occ && u.garrisonSide !== T && g.time - u.revealT < 5;
-        inc = fow.isExplored(u.pos.x, u.pos.z) && (u.hp < u.maxHp - 0.5 || (occ && u.garrisonSide === T) || hot);
+        inc = fow.isExplored(u.pos.x, u.pos.z) && (u.hp < u.maxHp - 0.5 || (occ && u.garrisonSide === T) || hot || (u.damageStage || 0) > 0);
         if (inc) out.push(this.houseEntry(u, T, hot));
         continue;
       }
@@ -332,10 +341,15 @@ export class HostSession {
     if (side === 'UA') f |= F.UA; else if (side === 'RU') f |= F.RU;
     if (u.lastFired && g.time - u.lastFired < 2) f |= F.fired;
     if (u.working && g.time - u.working < 0.5) f |= F.work;
+    if (own && u.ambush?.on) f |= F.ambush;
+    if (u.panicT > 0) f |= F.panic;
+    if (own && u.ledT > g.time) f |= F.led;
+    if (u.burnT > 0) f |= F.burn;
     const am = own ? u.ammoInfo() : null;
     return [u.id, TYPE_IDX.get(u.type.key), u.owner ?? -1, u.pos.x, u.pos.z, u.heading, Math.max(0, u.hp), u.maxHp, u.bino ? u.bino.yaw : u.turretYaw, f,
       u.type.air ? u.curAlt : 0, am ? Math.floor(am.cur + 1e-6) : -1, own && u.maxFuel ? Math.round(u.fuel) : 0,
-      own && u.maxMaterial ? Math.round(u.material * 10) : 0, u.build ? Math.round(Math.min(1, u.build.progress) * 250) : 0, u.garrison ? u.garrison.id : 0];
+      own && u.maxMaterial ? Math.round(u.material * 10) : 0, u.build ? Math.round(Math.min(1, u.build.progress) * 250) : 0, u.garrison ? u.garrison.id : 0,
+      Math.round(u.supp || 0), u.vet || 0, packMods(u.mods) | (own ? (u.smokeN & 3) << 6 : 0)];
   }
   houseEntry(h, T, hot) {
     let f = 0;
@@ -343,7 +357,9 @@ export class HostSession {
     const mine = occ && h.garrisonSide === T;
     if (mine || hot) f |= h.garrisonSide === 'RU' ? F.RU : F.UA;
     if (hot) f |= F.hot;
-    return [h.id, TYPE_IDX.get('house'), -1, h.pos.x, h.pos.z, h.heading, Math.max(0, h.hp), h.maxHp, 0, f, 0, -1, 0, 0, 0, mine ? occ : 0];
+    if (h.fireUntil > this.game.time) f |= F.burn;
+    if (mine && h.occupants.some((o) => o.ambush?.on)) f |= F.ambush;
+    return [h.id, TYPE_IDX.get('house'), -1, h.pos.x, h.pos.z, h.heading, Math.max(0, h.hp), h.maxHp, 0, f, 0, -1, 0, 0, 0, mine ? occ : 0, 0, 0, h.damageStage || 0];
   }
   /** Bandbreite/Leistung für Tests. */
   report() {
@@ -391,7 +407,7 @@ export class ClientSession {
     // Sofortige Rückmeldung (Ton, Marker) – ausgeführt wird auf dem Host
     if (cmd.t === 'move') { g.audio.ui('ack'); g.effects?.marker(cmd.x, cmd.z, cmd.attackMove ? 0xffa030 : 0x5dff8a, 0.8, 2); }
     else if (cmd.t === 'attack') { const t = g.unitById(cmd.target); g.audio.ui('ack'); if (t) g.effects?.marker(t.pos.x, t.pos.z, 0xff4040, 0.8, Math.max(2, t.radius + 1)); }
-    else if (cmd.t === 'stop' || cmd.t === 'hold') g.audio.ui('ack');
+    else if (cmd.t === 'stop' || cmd.t === 'hold' || cmd.t === 'ambush' || cmd.t === 'dig' || cmd.t === 'smoke' || cmd.t === 'grenade') g.audio.ui('ack');
     return true;
   }
   onLoaded() {
@@ -492,7 +508,7 @@ export class ClientSession {
   }
   _applyUnit(e, t) {
     const g = this.game;
-    const [id, ti, owner, x, z, h, hp, maxHp, ty, f, alt, stock, fuel, mat, build, gh] = e;
+    const [id, ti, owner, x, z, h, hp, maxHp, ty, f, alt, stock, fuel, mat, build, gh, sup, vet, mod] = e;
     const key = TYPE_KEYS[ti];
     const type = UNIT_TYPES[key];
     if (!type) return;
@@ -503,6 +519,10 @@ export class ClientSession {
       u.hp = hp; if (maxHp) u.maxHp = maxHp;
       if (sideBits !== 'N') u.garrisonSide = sideBits;
       if (f & F.hot) u.revealT = g.time;
+      // Gebäudeschaden/Brand (Optik wie beim Host)
+      const st = mod || 0, burn = !!(f & F.burn);
+      if (st > (u.damageStage || 0) || (burn && !(u.fireUntil > g.time))) { g.setHouseDamage(u, Math.max(st, u.damageStage || 0), burn); if (burn && !(u.fireUntil > g.time)) g._houseFire(u, 20, 0.8); }
+      if (u.occupants) for (const o of u.occupants) if (o.ambush || f & F.ambush) o.ambush = { on: !!(f & F.ambush), range: o.ambush?.range ?? 25 };
       return;
     }
     if (u && (!u.alive || !u.remote || u.type !== type)) { if (u.remote && u.alive) this._vanish(u); u = null; }
@@ -539,6 +559,12 @@ export class ClientSession {
     if (u.bino) u.bino.on = !!(f & F.bino);
     if (f & F.fired) u.lastFired = g.time;
     if (f & F.work) u.working = g.time;
+    // Kampfzustände (V3-M1): Niederhalten, Panik, Veteranen, Module, Hinterhalt, Offiziersaura, Brand
+    u.supp = sup || 0; u.vet = vet || 0;
+    u.panicT = f & F.panic ? 1 : 0;
+    u.burnT = f & F.burn ? 1 : 0;
+    if (u.mods) unpackMods(u, mod || 0);
+    if (u.side === g.localSide) { u.smokeN = ((mod || 0) >> 6) & 3; u.ambush = f & F.ambush ? { on: true, range: u.ambush?.range ?? 25 } : (u.ambush ? { ...u.ambush, on: false } : null); u.ledT = f & F.led ? g.time + 0.6 : -99; }
     if (stock >= 0) { const ws = u.weapons.find((w) => w.stockMax !== Infinity); if (ws) ws.stock = stock; }
     if (u.maxFuel) u.fuel = fuel;
     if (u.maxMaterial && (u.side === g.localSide)) u.material = mat / 10;
@@ -614,6 +640,9 @@ export class ClientSession {
         break;
       }
       case 'mx': { const m = this.missiles.get(ev[1]); if (m) { if (!m.dead) { m.dead = true; m.remove(); } this.missiles.delete(ev[1]); } break; }
+      case 'th': fx.throwable(new THREE.Vector3(ev[1], ev[2], ev[3]), new THREE.Vector3(ev[4], ev[5], ev[6]), ev[7], ev[8], ev[9]); break;
+      case 'fp': fx.firePool(ev[1], ev[2], ev[3], ev[4]); break;
+      case 'sm': g.tac?.addSmoke(ev[1], ev[2], ev[3], ev[4], ev[5] || 0); break;
       case 'rv': g.reveals.push({ x: ev[1], z: ev[2], r: ev[3], t: ev[4], team: g.localSide }); g.visionT = 0; break;
       case 'bt': { const u = g.unitById(ev[1]); if (u) { fx.marker(u.pos.x, u.pos.z, 0x5dff8a, 0.8, 3); if (g.isOwn(u)) { g.alert(`🔨 ${u.name} fertig`, 2); g.audio.ui('ack'); } } break; }
       case 'ua': { const u = g.unitById(ev[1]); if (u && u.alive) g.emit('underAttack', u); break; }
