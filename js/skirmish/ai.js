@@ -562,7 +562,8 @@ export class AICommander {
       if (mine && this.cmd({ t: (e.mineStock || 0) < 12 ? 'pickmines' : 'clearmines', ids: [e.id], x: mine.pos.x, z: mine.pos.z })) { this.stats.clears++; continue; }
       // Epochen-Bauarten des Pioniers (ohne selbst gegrabene Schützenlöcher)
       const kinds = buildKindsFor(e.type).filter((k) => !UNIT_TYPES[k]?.build?.selfDig);
-      const order = [...base.filter((k) => kinds.includes(k)), ...kinds.filter((k) => !base.includes(k))];
+      const bs = base.filter((k) => kinds.includes(k)), ex = kinds.filter((k) => !base.includes(k)), order = [];
+      for (let i = 0; i < Math.max(bs.length, ex.length); i++) { if (bs[i]) order.push(bs[i]); if (ex[i]) order.push(ex[i]); } // Basis und Epoche abwechselnd
       for (const k of order) if (cost[k] === undefined) cost[k] = UNIT_TYPES[k]?.build?.cost ?? 2;
       // Gehaltene Punkte befestigen
       if (built < 10 && es) {

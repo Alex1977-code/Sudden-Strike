@@ -304,7 +304,8 @@ export class HostSession {
     if (g.bridges.length) common.br = g.mapobj.stateCodes(); // V3-M2: Brückenzustände
     for (const id of this.connected) {
       const p = g.playerById(id); if (!p) continue;
-      const msg = { ...common, ...(withPlayers ? { pl: plFor[p.team] } : {}), u: enc[p.team], ...extra[p.team], me: { ab: p.abilities.map((a) => [Math.round(a.cd * 10), a.charges === Infinity ? -1 : a.charges]) } };
+      const ex = extra[p.team] || {};
+      const msg = { ...common, ...(withPlayers ? { pl: plFor[p.team] } : {}), u: enc[p.team], ...(ex.cg ? { cg: ex.cg } : {}), ...(ex.wp?.[p.id] ? { wp: ex.wp[p.id] } : {}), me: { ab: p.abilities.map((a) => [Math.round(a.cd * 10), a.charges === Infinity ? -1 : a.charges]) } };
       this._count('bytes', id, msg);
       this.lobby.sendSnap(msg, id);
     }
@@ -336,18 +337,18 @@ export class HostSession {
     out.sort((a, b) => a[0] - b[0]);
     return out;
   }
-  /** V3-M2: Zusatzdaten nur fürs eigene Team: Insassen-Typen (cg) und Wegpunkte/Befehlsketten (wp). */
+  /** V3-M2: Zusatzdaten nur fürs eigene Team: Insassen-Typen (cg) und – je Spieler nur eigene Einheiten – Wegpunkte (wp). */
   teamExtras(T) {
     const g = this.game, cg = {}, wp = {};
-    let nc = 0, nw = 0;
+    let nc = 0;
     for (const u of g.units) {
       if (!u.alive || u.side !== T) continue;
       if (u.cargo?.length) { cg[u.id] = u.cargo.map((q) => TYPE_IDX.get(q.type.key)); nc++; }
-      if (!u.type.structure && (u.queue?.length || u.order || u.retreat || u.embarkGoal || u.unloadAt || u.bridgeJob)) { const w = g.orders.packWaypoints(u); if (w) { wp[u.id] = w; nw++; } }
+      if (u.owner === null || u.owner === undefined || !this.remote.includes(u.owner)) continue;
+      if (!u.type.structure && (u.queue?.length || u.order || u.retreat || u.embarkGoal || u.unloadAt || u.bridgeJob)) { const w = g.orders.packWaypoints(u); if (w) (wp[u.owner] ||= {})[u.id] = w; }
     }
-    const out = {};
+    const out = { wp };
     if (nc) out.cg = cg;
-    if (nw) out.wp = wp;
     return out;
   }
   unitEntry(u, T) {
