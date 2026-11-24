@@ -24,6 +24,7 @@
 //   stopEngine(id) / stopAllEngines()
 //   drone(x, z)                 kurzes Drohnen-/Shahed-Surren (Einzelton, alt)
 //   siren()  boom()             Luftalarm / Überschallknall
+//   jericho(x, z)               Sirenenheulen des Sturzkampfbombers (Ju 87)
 //   ui(kind)                    'click' 'ack' 'obj' 'fail' 'radio' 'warn' 'select' 'done' (unbekannt -> click)
 //   radio(dur=1.2)              Funkspruch-Rauschen mit Klick am Anfang/Ende (Dauer in s)
 //   ambient()                   startet Umgebung (wird von init() erledigt)
@@ -306,6 +307,16 @@ function synthSiren(seed) {
   }
   return finish(o, 0.6);
 }
+function synthJericho(seed) {   // Sirenenheulen eines Sturzkampfbombers (steigende Tonhöhe, Vibrato)
+  const r = rng(seed), n = (2.6 * SR) | 0, o = new Float32Array(n); let ph = 0, lp = 0; const k = 1 - Math.exp(-TAU * 3200 / SR);
+  for (let i = 0; i < n; i++) {
+    const t = i / SR, f = 520 + 560 * Math.pow(t / 2.6, 1.3) + 22 * Math.sin(TAU * 7 * t); ph += TAU * f / SR;
+    let y = 0; for (let h = 1; h <= 6; h++) y += Math.sin(h * ph + 0.3 * h) / h;
+    lp += k * (y - lp);
+    o[i] = (lp + (r() * 2 - 1) * 0.05) * Math.min(1, t / 0.25) * Math.min(1, (2.6 - t) / 0.35) * (0.6 + 0.4 * t / 2.6);
+  }
+  return finish(o, 0.6);
+}
 function synthBoom(seed) {
   const r = rng(seed), o = new Float32Array((1.8 * SR) | 0);
   [[0, 1], [0.11, 0.8]].forEach(([at, a]) => { crack(o, r, at, a, 6, 300); thump(o, at, a * 0.9, 55, 30, 0.25); blast(o, r, at, a * 0.8, 0.3, 1200, 120); });
@@ -474,6 +485,7 @@ export class Audio {
       case 'radio': d = synthRadio(seed, 0.5); break;
       case 'siren': d = synthSiren(seed); break;
       case 'boom': d = synthBoom(seed); break;
+      case 'jericho': d = synthJericho(seed); break;
       case 'bird': d = synthBird(+key, seed); break;
       case 'owl': d = synthOwl(seed); break;
       default: d = synthAmb(key, seed);
@@ -588,6 +600,13 @@ export class Audio {
   siren() {
     if (!this._ok() || !this._throttle('siren', 3000)) return;
     try { this._play(this._get('siren', 'wail', 1), { cat: 'a', bus: 'amb', g: 0.55, cut: 9000, wet: 0.5 }); } catch (e) { this._err(e); }
+  }
+  jericho(x, z) {   // Sirenenheulen eines Sturzkampfbombers (V3-A)
+    if (!this._ok() || !this._throttle('jericho', 1500)) return;
+    try {
+      const sp = this._sp(x, z); if (!sp || sp.g < 0.03) return;
+      this._play(this._get('jericho', 's', 1), { cat: 'v', bus: 'veh', g: sp.g * 0.9, cut: sp.cut, pan: sp.pan, wet: sp.wet, delay: sp.delay });
+    } catch (e) { this._err(e); }
   }
   boom() {   // Überschallknall
     if (!this._ok() || !this._throttle('boom', 200)) return;

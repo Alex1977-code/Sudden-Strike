@@ -614,7 +614,9 @@ export class Terrain {
         if (!this.inBounds(x, z, 1) || this.isWater(x, z) || this.roadDist(x, z) < 2) continue;
         const lk = f.kind === 'pine' ? 1 : f.kind === 'mixed' ? (rnd() < 0.5 ? 1 : 0) : 0;
         const tr = { x, z, kind: this._species('forest', lk, f.kind, rs), s: 0.8 + rnd() * 0.6, r: rnd() * 6.28 };
-        if (!steep(x, z)) this.objects.trees.push(tr);
+        // neue Waldarten (Palmenhain, Birken …) meiden Häuser; Altbestand unverändert
+        const nearHouse = f.kind && !LEGACY_FOREST.has(f.kind) && this.objects.houses.some((h) => Math.abs(h.x - x) < h.w / 2 + 2.5 && Math.abs(h.z - z) < h.w / 2 + 2.5);
+        if (!steep(x, z) && !nearHouse) this.objects.trees.push(tr);
         placed++;
       }
     }
@@ -2100,6 +2102,7 @@ const FOREST_MIX = {
   oak: [[SP.oak, 1]], birch: [[SP.birch, 0.85], [SP.oak, 0.15]], poplar: [[SP.poplar, 1]], palm: [[SP.palm, 1]], oasis: [[SP.palm, 0.85], [SP.fruit, 0.15]],
   fruit: [[SP.fruit, 1]], mulberry: [[SP.fruit, 1]], dead: [[SP.stump, 1]], stumps: [[SP.stump, 1]],
 };
+const LEGACY_FOREST = new Set(['pine', 'mixed', 'deciduous']);
 const MIX_DECIDUOUS = [[SP.oak, 0.75], [SP.birch, 0.25]];
 const MIX_LINE = [[SP.oak, 0.55], [SP.poplar, 0.3], [SP.birch, 0.15]];
 const MIX_DESERT_SCATTER = [[SP.fruit, 0.55], [SP.palm, 0.3], [SP.stump, 0.15]];

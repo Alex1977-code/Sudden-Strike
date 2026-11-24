@@ -220,6 +220,9 @@ export class Input {
     if (!own.length) return;
     this.orderAt(own, x, y, g.pickUnit(x, y), ctrl);
   }
+  // ---------- Öffentliche Helfer für Bildschirmkoordinaten (V3-GP: Gamepad nutzt dieselbe Logik wie Maus) ----------
+  pickAt(sx, sy, { add = false } = {}) { this.leftClick(sx, sy, add); }
+  commandAt(sx, sy, { attackMove = false } = {}) { this.rightClick(sx, sy, attackMove); }
   // ---------- Touch ----------
   tap(x, y) {
     const g = this.game;

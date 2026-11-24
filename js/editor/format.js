@@ -34,6 +34,14 @@ export const CP_KINDS = { zeppelin: 'Zeppelin', aerostat: 'Fesselballon', airfie
 export const CP_DEFAULT_R = { zeppelin: 18, aerostat: 14, airfield: 18, depot: 14, radio: 14, railway: 16 };
 export const AI_MODES = { guard: 'Verteidigen (Umkreis)', hold: 'Stellung halten', attack: 'Angreifen' };
 export const OBJECTIVE_KINDS = { annihilate: 'Alle Feinde vernichten', destroy: 'Ziel-Einheiten zerstören', hold: 'Gebiet halten', timelimit: 'Zeitlimit' };
+// Siedlungsstil: einfach (Häuser aus einem Gebäude-Set) oder Ortsgenerator des Geländes (js/engine/settlement.js,
+// Feature village + useGenerator) – ältere Geländestände ohne Generator fallen auf ein einfaches Dorf zurück.
+export const SETTLEMENT_STYLES = {
+  simple: 'Einfach (Gebäude-Set)', ukr_village: 'Generator: Ukrainisches Dorf', ukr_town: 'Generator: Ukrainische Kleinstadt',
+  soviet_city: 'Generator: Sowjetische Stadt', afghan_village: 'Generator: Afghanisches Dorf', afghan_town: 'Generator: Afghanische Kleinstadt',
+  normandy_village: 'Generator: Normannisches Dorf', eu_town: 'Generator: Europäische Kleinstadt', german_city: 'Generator: Deutsche Stadt',
+  desert_village: 'Generator: Wüstendorf',
+};
 export const SET_NAMES = { ukraine_village: 'Ukraine – Dorf', ukraine_town: 'Ukraine – Stadt', afghan: 'Afghanistan', normandy: 'Normandie', east_ww2: 'Osteuropa (WK2)', german_town: 'Deutsche Kleinstadt' };
 export const KIND_NAMES = {
   cottage: 'Landhaus', izba: 'Isba (Holzhaus)', barn: 'Scheune', shop: 'Laden', kiosk: 'Kiosk', church_orthodox: 'Orthodoxe Kirche',
@@ -177,7 +185,7 @@ export function sanitizeMap(raw, { source = 'Karte' } = {}) {
       }
       case 'treeline': { const p = pts(e.pts, 2); if (p) o = { type: 'treeline', pts: p }; break; }
       case 'field': { const p = pts(e.poly, 3); if (p) o = { type: 'field', poly: p, crop: oneOf(e.crop, CROPS, 'wheat'), angle: r2(num(e.angle, -7, 7, 0)) }; break; }
-      case 'village': o = { type: 'village', x: X(e.x), z: X(e.z), r: r1(num(e.r, 8, 90, 30)), houses: Math.round(num(e.houses, 1, 60, 10)), set: oneOf(e.set, BUILDING_SETS, ERA_SET[meta.era]), urban: e.urban === true }; break;
+      case 'village': o = { type: 'village', x: X(e.x), z: X(e.z), r: r1(num(e.r, 8, 90, 30)), houses: Math.round(num(e.houses, 1, 60, 10)), set: oneOf(e.set, BUILDING_SETS, ERA_SET[meta.era]), urban: e.urban === true, style: oneOf(e.style, SETTLEMENT_STYLES, 'simple') }; break;
       case 'building': {
         const kind = inList(e.kind, kinds, 'cottage'), dd = buildingDims(kind);
         o = { type: 'building', x: X(e.x), z: X(e.z), rot: r2(num(e.rot, -7, 7, 0)), kind, w: r1(num(e.w, 2, 40, dd.w)), d: r1(num(e.d, 2, 40, dd.d)), floors: Math.round(num(e.floors, 1, 16, dd.floors)) };

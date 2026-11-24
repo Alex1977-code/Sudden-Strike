@@ -7,7 +7,9 @@ import { Music } from './engine/music.js';
 import { Terrain } from './engine/terrain.js';
 import { Game } from './game/game.js';
 import { RTSCamera, Input } from './game/input.js';
+import { getAirShow } from './engine/aircraft.js';
 import { HUD } from './game/hud.js';
+import { GamepadControl } from './game/gamepad.js';
 import { CAMPAIGN, DEMO } from './missions/index.js';
 import { isMobile, isTouchDevice, fmtTime } from './engine/util.js';
 import { createOnline } from './net/onlineui.js';
@@ -50,6 +52,7 @@ game.camera = new RTSCamera(game, gr.camera);
 const hud = new HUD(game, settings);
 const input = new Input(game, canvas, hud);
 hud.input = input;
+const gamepad = new GamepadControl(game, input, hud); // V3-GP
 
 // ---------- Bildschirme ----------
 const screens = ['title', 'campaign', 'skirmish', 'online', 'lobby', 'briefing', 'settings', 'help', 'pause', 'end', 'mods'];
@@ -75,6 +78,7 @@ document.addEventListener('touchstart', () => music.resume(), { once: true, pass
 const eraOf = (m) => { const e = m?.era || m?.meta?.era; if (e) return e === 'ww1' ? 'ww2' : e; const d = String(m?.date || ''); return /19[34]\d/.test(d) ? 'ww2' : /afghan|198\d|200\d/i.test(d) ? 'afghan' : 'modern'; };
 let combat = 0;
 game.on('loaded', () => { combat = 0; music.setIntensity(0); music.start(game.demo || !game.mission ? 'menu' : eraOf(game.mission)); });
+game.on('loaded', () => { try { if (game.mission && !game.demo) getAirShow(game).ambient(eraOf(game.mission)); } catch (e) { console.warn('[air]', e); } }); // V3-A: gelegentliche Ambient-Überflüge
 game.on('underAttack', () => { combat = Math.min(1, combat + 0.12); });
 game.on('kill', (u, killer, silent) => { if (!silent) combat = Math.min(1, combat + 0.07); });
 game.on('end', (won) => music.start(won ? 'victory' : 'defeat'));
@@ -501,6 +505,7 @@ function simTick(dt) {
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
+  gamepad.update(dt);
   input.update(dt);
   simTick(dt);
   online.frameDone();
@@ -517,6 +522,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   // Debug-Zugriff
   window.__game = game;
+  window.__gamepad = gamepad;
   window.__music = music;
   window.__start = (i) => startMission(CAMPAIGN[i]);
   window.__startSkirmish = (setup = {}) => startSkirmishGame({ ...skSetup, ...setup });

@@ -1,7 +1,8 @@
 // Afghanistan-Epoche: Fähigkeiten, werden in das exportierte ABILITIES-Objekt (js/game/abilities.js) eingetragen.
-// Ids: af_bw_cas, af_bw_medevac, af_bw_drone, af_bw_arty | af_sa_su25, af_sa_hind, af_sa_grad | af_muj_ambush, af_muj_mortar | af_tal_mortar, af_tal_ambush
+// Ids (V3-A: Luftschläge nur Optik über AirShow): af_bw_cas, af_bw_medevac, af_bw_drone, af_bw_arty | af_sa_su25, af_sa_hind, af_sa_grad | af_muj_ambush, af_muj_mortar | af_tal_mortar, af_tal_ambush
 import { ABILITIES } from '../../game/abilities.js';
 import { rand } from '../../engine/util.js';
+import { airMission, bombRun, bombLead, AIRCRAFT_MODELS } from '../../engine/aircraft.js';
 
 const BOMB = { name: 'Präzisionsbombe', dmg: 430, splash: 8, vs: { soft: 1, light: 1, heavy: 0.9, air: 0, struct: 1 } };
 const BOMB_SA = { name: 'Fliegerbombe / S-8', dmg: 340, splash: 8, vs: { soft: 1, light: 1, heavy: 0.8, air: 0, struct: 1 } };
@@ -14,26 +15,18 @@ const sfx = (game, k, x, z) => { try { game.audio.shot(k, x, z); } catch (e) { /
 function vanish(game, u) { if (!u || !u.alive) return; u.alive = false; game.scene.remove(u.root); game.removeUnit(u); }
 const owned = (game, p, key) => game.units.filter((u) => u.owner === p.id && u.alive && u.type.key === key);
 
-// Jet-Überflug mit Bombenabwurf: fliegt von der eigenen Kartenkante über das Ziel und wieder ab. Kann abgeschossen werden.
-function flyover(game, p, typeKey, x, z, drop, radioName) {
-  const e = edgeOf(game, p); const sx = e[0] + rand(-15, 15), sz = e[1];
-  let dx = x - sx, dz = z - sz; const d = Math.hypot(dx, dz) || 1; dx /= d; dz /= d;
-  const jet = game.spawn(typeKey, p.team, sx, sz, { owner: p.id, startAlt: 26, heading: Math.atan2(dx, dz) });
-  jet.moveTo(x + dx * 110, z + dz * 110); jet.ai = null;
-  game.sayTo(p.id, radioName, 'Maschine im Anflug – Ziel markieren, Abwurf in Kürze!', 3);
-  let done = false; const t0 = game.time;
-  const poll = () => {
-    if (!jet.alive) { if (!done) game.sayTo(p.id, radioName, 'Maschine verloren – Einsatz abgebrochen!', 4); return; }
-    const dist = Math.hypot(jet.pos.x - x, jet.pos.z - z);
-    if (!done && dist < 30) { done = true; drop(dx, dz); game.later(10, () => vanish(game, jet)); return; }
-    if (game.time - t0 > 28) { vanish(game, jet); return; }
-    game.later(0.1, poll);
-  };
-  game.later(0.1, poll);
-  return jet;
-}
-function bombRun(game, p, x, z, w, n, size, step) {
-  return (dx, dz) => { for (let i = 0; i < n; i++) game.later(i * 0.2, () => { const k = (i - (n - 1) / 2) * step; game.combat.incomingShell(x + dx * k + rand(-2.5, 2.5), z + dz * k + rand(-2.5, 2.5), w, p.team, 1.0, null, size, p.id); }); };
+// V3-A: Jet-Überflug mit Bombenreihe – Flugzeug rein optisch (AirShow, keine Einheit, nicht steuerbar); Würfelprobe gegen
+// feindliche Flugabwehr am Ziel (Flugabwehr-Raketen bis 35 %, MG/Flak 1–20 % je Einheit in Reichweite, gesamt max. 75 %):
+// Abschuss → sichtbarer Absturz vor dem Ziel, keine Wirkung, Funkspruch „Einsatz abgebrochen“.
+const FLAK_NOTE = ' Abschusschance durch feindliche Flugabwehr in Reichweite (Würfelprobe, max. 75 %).';
+function strike(game, p, x, z, o) {
+  const T = o.T ?? 1.0, sp = AIRCRAFT_MODELS[o.model].speed;
+  game.sayTo(p.id, o.radio, 'Maschine im Anflug – Ziel markieren, Abwurf in Kürze!', 3);
+  const f = airMission(game, p, x, z, {
+    model: o.model, mark: o.mark, radio: o.radio, dropAt: bombLead(sp, o.n, o.step, T),
+    onOverTarget: (pos) => bombRun(game, p, f, pos, x, z, { w: o.w, n: o.n, step: o.step, T, size: o.size, jitter: 2.5 }),
+  });
+  return f;
 }
 
 function barrage(game, p, x, z, w, n, spread, t0, dt, size, snd, from) {
@@ -78,8 +71,8 @@ function mortarFire(unitKey, name) {
 Object.assign(ABILITIES, {
   af_bw_cas: {
     name: 'Luftnahunterstützung', icon: '✈️', cooldown: 70, charges: 3, radius: 14,
-    desc: 'Jet-Überflug mit Präzisionsbomben (4 Abwürfe in Flugrichtung). Kann abgeschossen werden.',
-    exec(game, x, z, p) { flyover(game, p, 'af_bw_jet', x, z, bombRun(game, p, x, z, BOMB, 4, 2.2, 5), 'JTAC'); game.markerTo(p.team, x, z, 0xffd500, 8, 14); },
+    desc: 'Tornado-Überflug (nur Optik, nicht steuerbar) mit Präzisionsbomben (4 Abwürfe in Flugrichtung).' + FLAK_NOTE,
+    exec(game, x, z, p) { strike(game, p, x, z, { model: 'tornado', w: BOMB, n: 4, step: 5, size: 2.2, radio: 'JTAC' }); game.markerTo(p.team, x, z, 0xffd500, 8, 14); },
   },
   af_bw_medevac: {
     name: 'Medevac', icon: '🚑', cooldown: 60, charges: 4, radius: 14,
@@ -129,8 +122,13 @@ Object.assign(ABILITIES, {
   },
   af_sa_su25: {
     name: 'Su-25-Angriff', icon: '✈️', cooldown: 65, charges: 3, radius: 16,
-    desc: 'Su-25 fliegt Bomben- und Raketenangriff (6 Treffer in Flugrichtung). Kann abgeschossen werden.',
-    exec(game, x, z, p) { flyover(game, p, 'af_sa_su25', x, z, bombRun(game, p, x, z, BOMB_SA, 6, 2.0, 4.5), 'Flieger'); game.markerTo(p.team, x, z, 0xffd500, 8, 16); },
+    desc: 'Su-25 (nur Optik, nicht steuerbar) fliegt Bomben- und Raketenangriff (6 Treffer in Flugrichtung).' + FLAK_NOTE,
+    exec(game, x, z, p) { strike(game, p, x, z, { model: 'su25', mark: 'sv', w: BOMB_SA, n: 6, step: 4.5, size: 2.0, radio: 'Flieger' }); game.markerTo(p.team, x, z, 0xffd500, 8, 16); },
+  },
+  af_sa_mig23: {
+    name: 'MiG-23-Bombenangriff', icon: '✈️', cooldown: 80, charges: 2, radius: 18,
+    desc: 'MiG-23 (nur Optik, nicht steuerbar) wirft 5 Fliegerbomben in einer Reihe (schneller, etwas schwerer als die Su-25, dafür seltener).' + FLAK_NOTE,
+    exec(game, x, z, p) { strike(game, p, x, z, { model: 'mig23', w: { ...BOMB_SA, name: 'FAB-250', dmg: 400, splash: 9 }, n: 5, step: 6, size: 2.2, radio: 'Flieger' }); game.markerTo(p.team, x, z, 0xffd500, 8, 18); },
   },
   af_sa_hind: {
     name: 'Mi-24-Unterstützung', icon: '🚁', cooldown: 90, charges: 3, radius: 14,
@@ -163,7 +161,7 @@ Object.assign(ABILITIES, {
 
 export const ABILITY_SETS = {
   BW: ['af_bw_cas', 'af_bw_medevac', 'af_bw_drone', 'af_bw_arty'],
-  SA: ['af_sa_su25', 'af_sa_hind', 'af_sa_grad'],
+  SA: ['af_sa_su25', 'af_sa_mig23', 'af_sa_hind', 'af_sa_grad'],
   MUJ: ['af_muj_ambush', 'af_muj_mortar'],
   TAL: ['af_tal_mortar', 'af_tal_ambush'],
 };

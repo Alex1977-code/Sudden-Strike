@@ -75,7 +75,10 @@ export function compileWorld(doc) {
       case 'field': features.push({ type: 'field', poly: e.poly, crop: e.crop, angle: e.angle }); break;
       case 'bridge': features.push({ type: 'causeway', pts: e.pts, width: e.width }); break;
       case 'building': houses.push({ x: e.x, z: e.z, rot: e.rot, w: e.w, d: e.d, floors: e.floors, style: 0, kind: e.kind }); break;
-      case 'village': for (const h of villageHouses(doc, e, taken)) houses.push(h); break;
+      case 'village':
+        if (e.style && e.style !== 'simple') features.push({ type: 'village', x: e.x, z: e.z, r: e.r, houses: e.houses, urban: e.urban, useGenerator: true, genType: e.style, seed: seedOf(doc, e.id), era: doc.meta.era });
+        else for (const h of villageHouses(doc, e, taken)) houses.push(h);
+        break;
     }
   }
   for (const h of houses) features.push({ type: 'house', x: h.x, z: h.z, rot: h.rot, w: h.w, d: h.d, floors: h.floors, style: h.style, kind: h.kind });

@@ -549,7 +549,7 @@ export class HUD {
     if (own && u.smokeMax) p.push(`<span class="muted">Nebel ${u.smokeN}/${u.smokeMax}</span>`);
     const m = u.mods;
     if (m) {
-      if (u.immobilized) p.push('<span style="color:#ff8a8a">Kette/Räder zerstört</span>');
+      if (u.immobilized && !g.logistics) p.push('<span style="color:#ff8a8a">Kette/Räder zerstört</span>'); // Gefecht: steht in der Logistikzeile
       if (m.eng === 2) p.push('<span style="color:#ff5a5a">Motor brennt</span>'); else if (m.eng) p.push('<span style="color:#ffb347">Motor beschädigt</span>');
       if (m.tur) p.push('<span style="color:#ffb347">Turm klemmt</span>');
       if (m.gun) p.push('<span style="color:#ff8a8a">Hauptwaffe zerstört</span>');

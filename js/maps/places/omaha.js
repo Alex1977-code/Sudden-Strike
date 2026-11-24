@@ -5,7 +5,7 @@ const DRAWS = [['D-1 Vierville', -200], ['D-3 Les Moulins', -40], ['E-1 St-Laure
 const feats = [
   water([[-280, -280], [280, -280], [280, -150], [-280, -150]], { depth: 6, bank: 40 }), // Ärmelkanal, flacher Strand
   // Steilhänge (Bluffs) zwischen den Ausgängen
-  hill(-268, -20, 64, 17), hill(-120, -22, 58, 18), hill(20, -24, 52, 17), hill(140, -22, 52, 16), hill(268, -20, 60, 17),
+  hill(-268, -20, 62, 24), hill(-120, -22, 56, 25), hill(20, -24, 50, 24), hill(140, -22, 50, 23), hill(268, -20, 58, 24),
   // Küstenstraße auf dem Plateau, Wege durch die Ausgänge
   road([[-280, 110], [0, 118], [280, 112]], 7, true, { name: 'Küstenstraße' }),
   ...DRAWS.map(([name, x]) => road([[x, -112], [x + 6, -20], [x, 110]], 6, false, { name: 'Ausgang ' + name })),

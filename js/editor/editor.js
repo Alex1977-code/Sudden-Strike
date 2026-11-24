@@ -14,7 +14,7 @@ import { BUILDING_SETS } from '../game/buildingKinds.js';
 import {
   newMap, sanitizeMap, exportMap, mapCapabilities, escapeHtml, MAP_SIZE_OPTIONS, SEASONS, ERAS, ERA_SET, CROPS, FOREST_KINDS,
   ROAD_KINDS, CP_KINDS, CP_DEFAULT_R, AI_MODES, OBJECTIVE_KINDS, SET_NAMES, KIND_NAMES, ALL_BUILDING_KINDS, buildingDims,
-  unitPalette, eraFactions, FACTION_NAMES, unitFaction,
+  unitPalette, eraFactions, FACTION_NAMES, SETTLEMENT_STYLES,
 } from './format.js';
 import { compilePreview, compileMission, objectiveText } from './compile.js';
 import { listSlots, loadSlot, saveSlot, deleteSlot, autosave, loadAutosave } from './storage.js';
@@ -62,7 +62,7 @@ export function createEditor(ctx) {
       hill: { r: 30, h: 6 }, dip: { r: 26, h: -4 }, flat: { r: 26 },
       water: { depth: 5 }, river: { width: 14, depth: 3 }, road: { width: 7 }, track: { width: 4 }, rail: { width: 4 },
       forest: { shape: 'poly', r: 24, kind: 'mixed', density: 0.05 }, treeline: {}, field: { crop: 'wheat', angle: 0 },
-      village: { r: 30, houses: 10, set: null, urban: false }, building: { kind: 'cottage', rot: 0 },
+      village: { r: 30, houses: 10, set: null, urban: false, style: 'simple' }, building: { kind: 'cottage', rot: 0 },
       bridge: { width: 7 }, ford: { width: 8 },
       unit: { type: 'leopard', team: 'UA', heading: null, ai: 'guard', target: false, era: null, faction: 'all', q: '' },
       point: { kind: 'zeppelin' }, zone: { team: 'UA', r: 22 }, hold: { r: 25, minutes: 3 },
@@ -304,7 +304,7 @@ export function createEditor(ctx) {
       case 'dip': { const e = { id: newId('e'), type: 'hill', x, z, r: o.r, h: -Math.abs(o.h || 4) }; E.doc.elements.push(e); sel = { kind: 'el', id: e.id }; break; }
       case 'flat': { const h = Math.max(-6, Math.min(30, r1(game.terrain?.height(x, z) ?? 3))); const e = { id: newId('e'), type: 'flat', x, z, r: o.r, h }; E.doc.elements.push(e); sel = { kind: 'el', id: e.id }; break; }
       case 'forest': { const e = { id: newId('e'), type: 'forest', x, z, r: o.r, kind: o.kind, density: o.density }; E.doc.elements.push(e); sel = { kind: 'el', id: e.id }; break; }
-      case 'village': { const e = { id: newId('e'), type: 'village', x, z, r: o.r, houses: o.houses, set: o.set || ERA_SET[E.doc.meta.era], urban: o.urban }; E.doc.elements.push(e); sel = { kind: 'el', id: e.id }; break; }
+      case 'village': { const e = { id: newId('e'), type: 'village', x, z, r: o.r, houses: o.houses, set: o.set || ERA_SET[E.doc.meta.era], urban: o.urban, style: o.style || 'simple' }; E.doc.elements.push(e); sel = { kind: 'el', id: e.id }; break; }
       case 'building': { const dd = buildingDims(o.kind); const e = { id: newId('e'), type: 'building', x, z, rot: o.rot, kind: o.kind, w: dd.w, d: dd.d, floors: dd.floors }; E.doc.elements.push(e); sel = { kind: 'el', id: e.id }; break; }
       case 'unit': {
         if (!UNIT_TYPES[o.type]) { E.undo.pop(); return; }
@@ -419,13 +419,18 @@ export function createEditor(ctx) {
     if (pts) return pts.map((p, i) => ({ i, x: p[0], z: p[1] }));
     if (o.r !== undefined) return [{ i: 'r', x: o.x + o.r, z: o.z }];
     if (o.type === 'building') { const L = Math.max(o.w, o.d) / 2 + 3; return [{ i: 'rot', x: o.x + Math.cos(o.rot) * L, z: o.z - Math.sin(o.rot) * L }]; }
-    if (s.kind === 'unit') return [{ i: 'rot', x: o.x + Math.sin(o.heading) * 5, z: o.z + Math.cos(o.heading) * 5 }];
+    if (s.kind === 'unit') { const L = Math.max(6, (UNIT_TYPES[o.type]?.radius || 2) * 2.5); return [{ i: 'rot', x: o.x + Math.sin(o.heading) * L, z: o.z + Math.cos(o.heading) * L }]; }
     return [];
   }
   function hitTest(x, y, touch) {
     const tol = touch ? 22 : 12;
     // 1) Handles der Auswahl
-    if (E.sel) for (const h of handlesOf(E.sel)) { const s = proj(h.x, h.z); if (s && Math.hypot(s[0] - x, s[1] - y) < tol + 2) return { ...E.sel, handle: h.i }; }
+    // (Griff nur, wenn er näher liegt als die Mitte des gewählten Objekts – sonst wird verschoben statt gedreht)
+    if (E.sel) {
+      const so = findSel(E.sel), c = so && so.x !== undefined ? proj(so.x, so.z) : null;
+      const dc = c ? Math.hypot(c[0] - x, c[1] - y) : Infinity;
+      for (const h of handlesOf(E.sel)) { const s = proj(h.x, h.z); if (!s) continue; const d = Math.hypot(s[0] - x, s[1] - y); if (d < tol + 2 && d < dc) return { ...E.sel, handle: h.i }; }
+    }
     // 2) Einheiten, Punkte, Zonen, Zielgebiete, Gebäude (Punktobjekte)
     let best = null, bd = tol + 6;
     const tryPt = (kind, o, extra = 0) => { const s = proj(o.x, o.z); if (!s) return; const d = Math.hypot(s[0] - x, s[1] - y) - extra; if (d < bd) { bd = d; best = { kind, id: o.id }; } };
@@ -651,21 +656,22 @@ export function createEditor(ctx) {
           fillPath(sp, COLORS.forest); strokePath(sp, sc || COLORS.forestLine, sel ? 3 : 1.5, [6, 4], true); break;
         }
         case 'field': { const sp = projPath(e.poly, true); fillPath(sp, COLORS.field); strokePath(sp, sc || COLORS.fieldLine, sel ? 3 : 1.5, [3, 3], true); break; }
-        case 'river': strokePath(projPath(e.pts), sc || COLORS.river, Math.max(3, e.width * k * 0.5)); break;
+        // Linien: halbtransparentes Band in echter Breite + Mittellinie (das 3D-Gelände bleibt sichtbar)
+        case 'river': { const sp = projPath(e.pts); strokePath(sp, 'rgba(61,141,224,.25)', Math.max(4, e.width * k)); strokePath(sp, sc || COLORS.river, sel ? 3 : 2); break; }
         case 'road': {
           const sp = projPath(e.pts);
-          strokePath(sp, sc || COLORS[e.kind], Math.max(2, e.width * k * 0.45), e.kind === 'track' ? [8, 6] : null);
-          if (e.kind === 'rail') strokePath(sp, '#e8e8e8', 1.2, [3, 6]);
+          strokePath(sp, e.kind === 'rail' ? 'rgba(40,40,40,.25)' : 'rgba(235,225,200,.2)', Math.max(3, e.width * k));
+          strokePath(sp, sc || COLORS[e.kind], sel ? 3 : 2, e.kind === 'track' ? [8, 6] : e.kind === 'rail' ? [3, 4] : null);
           break;
         }
         case 'treeline': strokePath(projPath(e.pts), sc || COLORS.treeline, 3, [2, 5]); break;
-        case 'bridge': strokePath(projPath(e.pts), sc || (e.kind === 'ford' ? COLORS.ford : COLORS.bridge), Math.max(3, e.width * k * 0.5), e.kind === 'ford' ? [5, 4] : null); break;
+        case 'bridge': { const sp = projPath(e.pts); strokePath(sp, e.kind === 'ford' ? 'rgba(143,211,255,.3)' : 'rgba(255,255,255,.3)', Math.max(4, e.width * k)); strokePath(sp, sc || (e.kind === 'ford' ? COLORS.ford : COLORS.bridge), sel ? 3 : 2, e.kind === 'ford' ? [5, 4] : null); break; }
         case 'hill': case 'flat': case 'village': {
           const col = e.type === 'village' ? COLORS.village : e.type === 'flat' ? COLORS.flat : e.h < 0 ? COLORS.dip : COLORS.hill;
           strokePath(projPath(circlePts(e.x, e.z, e.r), true), sc || col, sel ? 3 : 1.5, e.type === 'village' ? null : [4, 4], true);
           const s = proj(e.x, e.z);
           if (s) { octx.fillStyle = sc || col; octx.fillRect(s[0] - 3, s[1] - 3, 6, 6); }
-          if (sel || e.type === 'village') label(s, e.type === 'village' ? `${SET_NAMES[e.set] || 'Siedlung'} (${e.houses})` : e.type === 'flat' ? `Ebene ${e.h} m` : `${e.h > 0 ? '+' : ''}${e.h} m`, sc || col);
+          if (sel || e.type === 'village') label(s, e.type === 'village' ? (e.style && e.style !== 'simple' ? SETTLEMENT_STYLES[e.style].replace('Generator: ', '') : `${SET_NAMES[e.set] || 'Siedlung'} (${e.houses})`) : e.type === 'flat' ? `Ebene ${e.h} m` : `${e.h > 0 ? '+' : ''}${e.h} m`, sc || col);
           break;
         }
         case 'building': {
@@ -702,7 +708,7 @@ export function createEditor(ctx) {
       octx.fillStyle = COLORS[u.team]; octx.strokeStyle = sel ? COLORS.sel : '#000'; octx.lineWidth = sel ? 2.5 : 1;
       octx.beginPath(); octx.arc(s[0], s[1], sel ? 6 : 4, 0, 7); octx.fill(); octx.stroke();
       if (u.target) { octx.strokeStyle = '#ffd500'; octx.lineWidth = 1.5; octx.strokeRect(s[0] - 8, s[1] - 8, 16, 16); }
-      if (sel) { const f = proj(u.x + Math.sin(u.heading) * 5, u.z + Math.cos(u.heading) * 5, 0.6); if (f) strokePath([s, f], COLORS.sel, 2); label(s, UNIT_TYPES[u.type]?.name || u.type, COLORS.sel); }
+      if (sel) { const L = Math.max(6, (UNIT_TYPES[u.type]?.radius || 2) * 2.5), f = proj(u.x + Math.sin(u.heading) * L, u.z + Math.cos(u.heading) * L, 0.6); if (f) strokePath([s, f], COLORS.sel, 2); label(s, UNIT_TYPES[u.type]?.name || u.type, COLORS.sel); }
     }
     // Handles der Auswahl
     if (E.sel) for (const h of handlesOf(E.sel)) {
@@ -753,6 +759,7 @@ export function createEditor(ctx) {
     houses: { k: 'houses', label: 'Gebäude', min: 1, max: 60, step: 1 },
     set: { k: 'set', label: 'Gebäude-Set', type: 'select', opts: Object.fromEntries(Object.keys(BUILDING_SETS).map((k2) => [k2, SET_NAMES[k2] || k2])) },
     urban: { k: 'urban', label: 'Städtisch (größere Gebäude)', type: 'check' },
+    style: { k: 'style', label: 'Stil', type: 'select', opts: SETTLEMENT_STYLES },
     kind: () => ({ k: 'kind', label: 'Gebäudeart', type: 'select', opts: Object.fromEntries(ALL_BUILDING_KINDS().map((k2) => [k2, KIND_NAMES[k2] || k2])) }),
     rot: { k: 'rotDeg', label: 'Drehung', min: 0, max: 359, step: 1, fmt: (v) => v + '°' },
     floors: { k: 'floors', label: 'Stockwerke', min: 1, max: 16, step: 1 },
@@ -783,7 +790,7 @@ export function createEditor(ctx) {
       case 'forest': return o.poly ? [F.forestKind, F.density] : [F.r(120), F.forestKind, F.density];
       case 'treeline': return [];
       case 'field': return [F.crop, F.angle];
-      case 'village': return [F.r(90, 8), F.houses, F.set, F.urban];
+      case 'village': return [F.style, F.r(90, 8), F.houses, F.set, F.urban];
       case 'building': return [F.kind(), F.rot, F.floors];
       case 'bridge': return [F.bridgeKind, F.width(3, 16)];
     }
@@ -800,7 +807,7 @@ export function createEditor(ctx) {
       case 'track': case 'rail': return [F.width(2, 8)];
       case 'forest': return E.opts.forest.shape === 'circle' ? [F.shape, F.r(120), F.forestKind, F.density] : [F.shape, F.forestKind, F.density];
       case 'field': return [F.crop, F.angle];
-      case 'village': return [F.r(90, 8), F.houses, F.set, F.urban];
+      case 'village': return [F.style, F.r(90, 8), F.houses, F.set, F.urban];
       case 'building': return [F.kind(), F.rot];
       case 'bridge': case 'ford': return [F.width(3, 16)];
       case 'point': return [F.cpKind];

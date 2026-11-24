@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { ABILITIES } from '../../game/abilities.js';
 import { Missile } from '../../game/combat.js';
 import { rand } from '../../engine/util.js';
+import { airMission, bombRun, bombLead, getAirShow } from '../../engine/aircraft.js';
 
 const VS_ALL = { soft: 1, light: 1, heavy: 1, air: 0, struct: 1 };
 const isLocal = (game, p) => p.id === game.localPlayerId;
@@ -38,24 +39,19 @@ function glideBomb(game, p, from, tx, tz, o) {
     onHit: (m) => { game.effects.explosion(m.pos.x, m.pos.y, m.pos.z, o.fx || 2.2, { water: game.terrain.isWater(m.pos.x, m.pos.z) }); game.splashDamage(m.pos.x, m.pos.z, o.splash, o.dmg, w, p.team, null, false, p.id); },
   }).register();
 }
-// Überflug eines Flugzeugs (temporäre Einheit, abschießbar): wirft beim Erreichen von 70 m Abstand zum Ziel seine Last ab
-function airPass(game, p, x, z, jetKey, drop) {
-  const edge = edgeOf(game, p);
-  let dx = x - edge[0], dz = z - edge[1]; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
-  const sx = clampMap(game, x - dx * 150), sz = clampMap(game, z - dz * 150), ex = clampMap(game, x + dx * 190), ez = clampMap(game, z + dz * 190);
-  const jet = game.spawn(jetKey, p.team, sx, sz, { heading: Math.atan2(dx, dz), owner: p.id, startAlt: 30 });
-  jet.ai = null; jet.lifetime = 16; jet.moveTo(ex, ez);
-  game.audio.drone?.(sx, sz);
-  let n = 0, dropped = false;
-  const step = () => {
-    if (dropped || !jet.alive || ++n > 160) { if (!jet.alive && !dropped) game.sayTo(p.id, 'Luftwaffe', 'Flugzeug abgeschossen – Einsatz abgebrochen!', 3); return; }
-    if (Math.hypot(jet.pos.x - x, jet.pos.z - z) <= 72) { dropped = true; drop(jet); return; }
-    game.later(0.1, step);
-  };
-  game.later(0.1, step);
-  return jet;
+// Überflug eines Flugzeugs (V3-A: rein optisch über AirShow, keine Einheit, nicht auswählbar). Beim Erreichen von 60 m Abstand
+// zum Ziel wird die Last abgeworfen (drop(pos)); Würfelprobe gegen feindliche Flugabwehr: bei Abschuss stürzt die Maschine
+// sichtbar vor dem Ziel ab (Rauchfahne, Explosion), es gibt keine Wirkung und den Funkspruch „Einsatz abgebrochen“.
+const FLAK_NOTE = ' Abschusschance durch feindliche Flugabwehr in Reichweite des Ziels (Würfelprobe: Fliegerabwehrraketen bis 35 % je Einheit, Flak/MG 1–20 %, gesamt max. 75 %) – dann Absturz und „Einsatz abgebrochen“.';
+function airPass(game, p, x, z, model, drop, o = {}) {
+  return airMission(game, p, x, z, { model, dropAt: 60, radio: 'Luftwaffe', ...o, onOverTarget: (pos, i, n) => drop(pos, i, n) });
 }
-const jetPos = (jet) => new THREE.Vector3(jet.pos.x, jet.root.position.y || 28, jet.pos.z);
+// Stand-off-Start (Kh-101, Kinschal): Träger fliegt nur bis ~30 % der Strecke zum Ziel, kein Flak-Risiko
+function standOff(game, p, x, z, model, launch, o = {}) {
+  const e = edgeOf(game, p), h = game.terrain.half - 30, k = o.k ?? 0.3;
+  const lx = Math.max(-h, Math.min(h, e[0] + (x - e[0]) * k)), lz = Math.max(-h, Math.min(h, e[1] + (z - e[1]) * k));
+  return airMission(game, p, lx, lz, { model, noFlak: true, heading: Math.atan2(x - e[0], z - e[1]), radio: 'Luftwaffe', onOverTarget: (pos) => launch(pos.clone()) });
+}
 // Glasfaser-FPV/Molniya-Schwarm eines Operators
 function swarm(game, p, x, z, o) {
   const ops = own(game, p, o.requires);
@@ -144,25 +140,25 @@ ABILITIES.m_lyutyi = {
 };
 ABILITIES.m_f16cas = {
   name: 'F-16-Luftnahunterstützung', icon: '✈️', cooldown: 75, charges: 3, radius: 16,
-  desc: 'F-16 überfliegt das Ziel und wirft 3 JDAM-ER-Gleitbomben (nicht abfangbar). Das Flugzeug kann abgeschossen werden.',
+  desc: 'F-16 überfliegt das Ziel (nur Optik, nicht steuerbar) und wirft 3 JDAM-ER-Gleitbomben (nicht abfangbar).' + FLAK_NOTE,
   exec(game, x, z, p) {
     game.sayTo(p.id, 'Luftwaffe', 'F-16 im Anflug – Gleitbomben bereit.', 3);
-    airPass(game, p, x, z, 'm_f16', (jet) => {
-      game.audio.shot('missile', jet.pos.x, jet.pos.z);
-      for (let i = 0; i < 3; i++) game.later(i * 0.35, () => glideBomb(game, p, jetPos(jet), x + rand(-6, 6), z + rand(-6, 6), { name: 'JDAM-ER', dmg: 900, splash: 10, speed: 60 }));
+    airPass(game, p, x, z, 'f16', (pos) => {
+      game.audio.shot('missile', pos.x, pos.z);
+      for (let i = 0; i < 3; i++) game.later(i * 0.35, () => glideBomb(game, p, pos.clone(), x + rand(-6, 6), z + rand(-6, 6), { name: 'JDAM-ER', dmg: 900, splash: 10, speed: 60 }));
     });
     game.markerTo(p.team, x, z, 0x6ab0ff, 6, 16);
   },
 };
 ABILITIES.m_mirage = {
   name: 'Mirage-Schlag (SCALP/Hammer)', icon: '✈️', cooldown: 60, charges: 2, radius: 12,
-  desc: 'Mirage 2000 startet einen SCALP-Marschflugkörper (abfangbar) und wirft zwei AASM-Hammer-Bomben (nicht abfangbar).',
+  desc: 'Mirage 2000 (nur Optik) startet einen SCALP-Marschflugkörper (abfangbar) und wirft zwei AASM-Hammer-Bomben (nicht abfangbar).' + FLAK_NOTE,
   exec(game, x, z, p) {
     game.sayTo(p.id, 'Luftwaffe', 'Mirage 2000 im Anflug – SCALP und Hammer.', 3);
-    airPass(game, p, x, z, 'm_mirage', (jet) => {
-      game.audio.shot('missile', jet.pos.x, jet.pos.z);
-      cruise(game, p, x, z, { name: 'SCALP', dmg: 1800, splash: 10, speed: 50, alt: 9, from: jetPos(jet), track: true, who: 'Luftwaffe' });
-      for (let i = 0; i < 2; i++) game.later(0.5 + i * 0.4, () => glideBomb(game, p, jetPos(jet), x + rand(-5, 5), z + rand(-5, 5), { name: 'AASM Hammer', dmg: 750, splash: 8, speed: 62 }));
+    airPass(game, p, x, z, 'mirage', (pos) => {
+      game.audio.shot('missile', pos.x, pos.z);
+      cruise(game, p, x, z, { name: 'SCALP', dmg: 1800, splash: 10, speed: 50, alt: 9, from: pos.clone(), track: true, who: 'Luftwaffe' });
+      for (let i = 0; i < 2; i++) game.later(0.5 + i * 0.4, () => glideBomb(game, p, pos.clone(), x + rand(-5, 5), z + rand(-5, 5), { name: 'AASM Hammer', dmg: 750, splash: 8, speed: 62 }));
     });
     game.markerTo(p.team, x, z, 0x6ab0ff, 6, 12);
   },
@@ -205,21 +201,103 @@ ABILITIES.m_iskander = {
 };
 ABILITIES.m_kh101 = {
   name: 'Kh-101-Marschflugkörper', icon: '🚀', cooldown: 60, charges: 3, radius: 11,
-  desc: 'Luftgestützter Marschflugkörper (Tu-95): sehr schwerer Gefechtskopf im Tiefflug. Abfangbar.',
+  desc: 'Luftgestützter Marschflugkörper: eine Tu-95 (nur Optik) startet ihn aus sicherer Entfernung. Sehr schwerer Gefechtskopf im Tiefflug. Abfangbar.',
   exec(game, x, z, p) {
-    game.sayTo(p.id, 'Luftwaffe', 'Kh-101 gestartet – Tiefflug.', 3);
-    cruise(game, p, x, z, { name: 'Kh-101', dmg: 2400, splash: 11, speed: 52, alt: 8, scale: 1.3, track: true, who: 'Luftwaffe' });
+    game.sayTo(p.id, 'Luftwaffe', 'Tu-95 im Anflug – Startpunkt wird angeflogen.', 3);
+    standOff(game, p, x, z, 'tu95', (pos) => {
+      game.sayTo(p.id, 'Luftwaffe', 'Kh-101 gestartet – Tiefflug.', 3);
+      game.audio.shot('missile', pos.x, pos.z);
+      cruise(game, p, x, z, { name: 'Kh-101', dmg: 2400, splash: 11, speed: 52, alt: 8, scale: 1.3, from: pos, track: true, who: 'Luftwaffe' });
+    });
   },
 };
 ABILITIES.m_kab = {
   name: 'Gleitbomben-Schlag (KAB/UMPK)', icon: '✈️', cooldown: 55, charges: 4, radius: 15,
-  desc: 'Su-34 wirft zwei KAB-500 mit UMPK-Gleitkit (nicht abfangbar). Das Flugzeug kann abgeschossen werden.',
+  desc: 'Su-34 (nur Optik) wirft zwei KAB-500 mit UMPK-Gleitkit (nicht abfangbar).' + FLAK_NOTE,
   exec(game, x, z, p) {
     game.sayTo(p.id, 'Luftwaffe', 'Su-34 im Anflug – Gleitbomben.', 3);
-    airPass(game, p, x, z, 'm_su34', (jet) => {
-      game.audio.shot('missile', jet.pos.x, jet.pos.z);
-      for (let i = 0; i < 2; i++) game.later(i * 0.45, () => glideBomb(game, p, jetPos(jet), x + rand(-7, 7), z + rand(-7, 7), { name: 'KAB-500', dmg: 1500, splash: 13, speed: 58, scale: 1.9, fx: 3 }));
+    airPass(game, p, x, z, 'su34', (pos) => {
+      game.audio.shot('missile', pos.x, pos.z);
+      for (let i = 0; i < 2; i++) game.later(i * 0.45, () => glideBomb(game, p, pos.clone(), x + rand(-7, 7), z + rand(-7, 7), { name: 'KAB-500', dmg: 1500, splash: 13, speed: 58, scale: 1.9, fx: 3 }));
     });
     game.markerTo(p.team, x, z, 0xff8030, 6, 15);
+  },
+};
+ABILITIES.m_su57 = {
+  name: 'Su-57-Gleitbomben', icon: '✈️', cooldown: 60, charges: 3, radius: 14,
+  desc: 'Su-57 (nur Optik, Tarnkappe: Abschusschance halbiert) wirft drei KAB-250 mit UMPK-Gleitkit (nicht abfangbar), schneller Anflug.' + FLAK_NOTE,
+  exec(game, x, z, p) {
+    game.sayTo(p.id, 'Luftwaffe', 'Su-57 im Anflug – drei Gleitbomben.', 3);
+    const f = airMission(game, p, x, z, {
+      model: 'su57', dropAt: 62, radio: 'Luftwaffe', flakScale: 0.5,
+      onOverTarget: (pos) => {
+        game.audio.shot('missile', pos.x, pos.z);
+        for (let i = 0; i < 3; i++) game.later(i * 0.3, () => glideBomb(game, p, pos.clone(), x + rand(-6, 6), z + rand(-6, 6), { name: 'KAB-250', dmg: 900, splash: 10, speed: 62, scale: 1.6, fx: 2.6 }));
+      },
+    });
+    game.markerTo(p.team, x, z, 0xff8030, 6, 14);
+  },
+};
+ABILITIES.m_kinzhal = {
+  name: 'Kinschal-Hyperschallrakete', icon: '🚀', cooldown: 90, charges: 2, radius: 15,
+  desc: 'MiG-31K (nur Optik) startet aus großer Höhe eine Ch-47M2 Kinschal: sehr schnell (kaum Vorwarnzeit), schwerer Gefechtskopf. Nur Patriot hat reale Abfangchancen.',
+  exec(game, x, z, p) {
+    game.sayTo(p.id, 'Luftwaffe', 'MiG-31K im Anflug – Kinschal-Start.', 3);
+    standOff(game, p, x, z, 'mig31k', (pos) => {
+      game.sayTo(p.id, 'Luftwaffe', 'Kinschal gestartet – Flugzeit wenige Sekunden.', 3);
+      game.audio.shot('missile', pos.x, pos.z);
+      const W = { name: 'Kinschal', dmg: 3000, splash: 15, vs: VS_ALL };
+      const tx = x + rand(-2, 2), tz = z + rand(-2, 2);
+      new Missile(game, {
+        from: pos, to: new THREE.Vector3(tx, game.terrain.surface(tx, tz), tz), mode: 'straight', speed: 125, side: p.team, model: 'hypersonic', threat: 'hypersonic', trail: 'hypersonic', scale: 1.3,
+        onHit: (mm) => {
+          game.audio.boom();
+          game.effects.explosion(mm.pos.x, mm.pos.y, mm.pos.z, 4.2, { water: game.terrain.isWater(mm.pos.x, mm.pos.z) });
+          for (let i = 0; i < 4; i++) game.later(0.1 * i, () => game.effects.explosion(tx + rand(-6, 6), mm.pos.y, tz + rand(-6, 6), 2));
+          game.splashDamage(mm.pos.x, mm.pos.z, W.splash, W.dmg, W, p.team, null, false, p.id);
+          game.effects.shake = Math.max(game.effects.shake || 0, 2);
+        },
+        onIntercepted: () => { game.sayTo(p.id, 'Luftwaffe', 'Kinschal wurde abgefangen!', 3); game.audio.boom(); },
+      }).register();
+    }, { k: 0.35 });
+    game.markerTo(p.team, x, z, 0xff3030, 8, 15);
+  },
+};
+
+// ======================= Fiktive Szenarien (Westen) =======================
+// `fictional: true` – nur in als fiktiv gekennzeichneten Szenarien/Missionen vergeben (nicht in ABIL_MODERN).
+ABILITIES.m_b52 = {
+  name: 'B-52-Bombenteppich', icon: '✈️', cooldown: 150, charges: 1, radius: 30, fictional: true,
+  desc: 'B-52 (nur Optik) legt einen 100 m langen Teppich aus 15 Bomben längs der Anflugrichtung.' + FLAK_NOTE + ' (fiktiv)',
+  exec(game, x, z, p) {
+    game.sayTo(p.id, 'Luftwaffe', 'B-52 im Anflug – Bombenteppich.', 4);
+    const o = { w: { name: 'Mk-82-Teppich', dmg: 480, splash: 9, vs: VS_ALL }, n: 15, step: 7, T: 1.5, size: 1.6, jitter: 2 };
+    const f = airMission(game, p, x, z, { model: 'b52', dropAt: bombLead(52, o.n, o.step, o.T), radio: 'Luftwaffe', onOverTarget: (pos) => bombRun(game, p, f, pos, x, z, o) });
+    game.markerTo(p.team, x, z, 0xff8030, 8, 30);
+  },
+};
+ABILITIES.m_b2 = {
+  name: 'B-2-Präzisionsschlag', icon: '🛩️', cooldown: 140, charges: 1, radius: 14, fictional: true,
+  desc: 'B-2 (nur Optik, Tarnkappe: Abschusschance halbiert) wirft zwei 2000-lb-JDAM (sehr schwerer Schlag).' + FLAK_NOTE + ' (fiktiv)',
+  exec(game, x, z, p) {
+    game.sayTo(p.id, 'Luftwaffe', 'B-2 im Anflug – zwei JDAM.', 4);
+    const o = { w: { name: 'GBU-31 JDAM', dmg: 1900, splash: 12, vs: VS_ALL }, n: 2, step: 9, T: 1.8, size: 2.6, jitter: 1 };
+    const f = airMission(game, p, x, z, { model: 'b2', dropAt: bombLead(54, o.n, o.step, o.T), radio: 'Luftwaffe', flakScale: 0.5, onOverTarget: (pos) => bombRun(game, p, f, pos, x, z, o) });
+    game.markerTo(p.team, x, z, 0xff8030, 8, 14);
+  },
+};
+ABILITIES.m_f35 = {
+  name: 'F-35-Präzisionsschlag', icon: '✈️', cooldown: 80, charges: 2, radius: 12, fictional: true,
+  desc: 'F-35 (nur Optik, Tarnkappe: Abschusschance halbiert) wirft zwei GBU-39-Gleitbomben (nicht abfangbar).' + FLAK_NOTE + ' (fiktiv)',
+  exec(game, x, z, p) {
+    game.sayTo(p.id, 'Luftwaffe', 'F-35 im Anflug – zwei Präzisionsbomben.', 3);
+    airMission(game, p, x, z, {
+      model: 'f35', dropAt: 62, radio: 'Luftwaffe', flakScale: 0.5,
+      onOverTarget: (pos) => {
+        game.audio.shot('missile', pos.x, pos.z);
+        for (let i = 0; i < 2; i++) game.later(i * 0.4, () => glideBomb(game, p, pos.clone(), x + rand(-4, 4), z + rand(-4, 4), { name: 'GBU-39 SDB', dmg: 800, splash: 9, speed: 62, scale: 1.4 }));
+      },
+    });
+    game.markerTo(p.team, x, z, 0x6ab0ff, 6, 12);
   },
 };
