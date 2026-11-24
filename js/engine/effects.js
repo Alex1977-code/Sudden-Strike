@@ -517,8 +517,8 @@ export class Effects {
       this.smoke.emit(x + Math.cos(a) * 1.5, y + 1.0, z + Math.sin(a) * 1.5, Math.cos(a) * sp, rand(0.3, 1.5), Math.sin(a) * sp, rand(2.6, 4.2) * size, rand(1.4, 2.6), c, c * 0.88, c * 0.7, 0.6, { grow: 1.5, drag: 2.6, fadeIn: 0.05 });
     }
     // Erdfontäne: Einschläge werfen vor allem Erde steil nach oben (Partikel) …
-    const nF = Math.floor((10 + 8 * sc) * m);
-    for (let i = 0; i < nF; i++) {
+    const nE = Math.floor((10 + 8 * sc) * m);
+    for (let i = 0; i < nE; i++) {
       const a = Math.random() * 6.28, sp = rand(1, 5) * Math.sqrt(size);
       const c = rand(0.16, 0.26);
       this.smoke.emit(x + rand(-0.5, 0.5), y + 0.5, z + rand(-0.5, 0.5), Math.cos(a) * sp, rand(10, 22) * Math.sqrt(size), Math.sin(a) * sp,
