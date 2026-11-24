@@ -450,3 +450,43 @@ body.touch .key { display: none; }
   .role-desc { font-size: 10.5px; padding: 4px 6px; line-height: 1.3; }
   .sk-form .role-desc { grid-column: span 2; order: 0; max-height: 58px; overflow-y: auto; margin: 2px 0 4px; }
 }
+
+/* ---------- Icon-Set (js/game/icons.js): Inline-SVG, currentColor; --ic-acc = Teamfarbe/Akzent ---------- */
+.ic { width: 1em; height: 1em; display: block; flex-shrink: 0; overflow: visible; }
+i.ic-slot { display: inline-flex; font-style: normal; vertical-align: -0.2em; }
+i.ic-slot .ic { width: 1.15em; height: 1.15em; }
+.ic-in { display: inline-block; width: 1.15em; height: 1.15em; vertical-align: -0.2em; }
+.icon-btn .ic { width: 20px; height: 20px; }
+#net-chat-form button .ic { width: 18px; height: 18px; }
+#orders button .ic, #abilities button .ic, #buildbar button .ic { width: 26px; height: 26px; color: #dfe6ef; }
+#abilities button .ic { color: #e9eef5; }
+#orders button.active .ic, #abilities button.active .ic, #buildbar button.active .ic { color: var(--accent); --ic-acc: var(--accent); }
+#buildbar button:disabled .ic { color: #7d8794; }
+#abilities button:disabled .ic { color: #7d8794; }
+#orders button:hover .ic, #abilities button:hover .ic, #buildbar button:hover .ic { color: #fff; }
+#buildbar .mat .ic { width: 15px; height: 15px; margin-right: 4px; }
+.sel-unit { color: #e3e9f1; }
+.sel-unit .ic { width: 30px; height: 30px; margin-top: -4px; }
+.sel-unit .cnt { text-shadow: 0 1px 2px #000; }
+#objectives .obj .box { width: 16px; height: 16px; display: inline-flex; align-self: center; }
+#objectives .obj .box .ic { width: 16px; height: 16px; }
+#objectives .obj.open .box, #objectives .obj .box { color: var(--muted); }
+#objectives .obj.done .box { color: var(--green); --ic-acc: var(--green); }
+#objectives .obj.failed .box { color: var(--red); --ic-acc: var(--red); }
+#sk-cps .cp b { display: flex; width: 62%; height: 62%; }
+#sk-cps .cp b .ic { width: 100%; height: 100%; filter: drop-shadow(0 1px 1px #000); }
+.mission-card .state .ic { width: 26px; height: 26px; }
+.mission-card.locked .state .ic { color: var(--muted); }
+.mission-card .state .ic-medal { color: var(--accent); }
+.tl-row .nm .ic-in { width: 14px; height: 14px; }
+.sel-mini .ic-in, .logi-m .ic-in, .sel-detail .ic-in { width: 12px; height: 12px; }
+.sk-end-table .ic-in { width: 14px; height: 14px; }
+.seg button .ic-slot, #sk-reroll .ic, #ls-reroll .ic { width: 18px; height: 18px; }
+.seedrow button { display: inline-flex; align-items: center; justify-content: center; }
+.slot button .ic, .slot .st .ic-in { width: 13px; height: 13px; }
+#sk-reinf .ic-in, #sk-score .ic-in { width: 14px; height: 14px; }
+.big .ic-slot .ic, .big i.ic-slot .ic { width: 1em; height: 1em; }
+@media (max-width: 760px), (max-height: 500px) {
+  #orders button .ic, #abilities button .ic, #buildbar button .ic { width: 22px; height: 22px; }
+  .sel-unit .ic { width: 26px; height: 26px; }
+}

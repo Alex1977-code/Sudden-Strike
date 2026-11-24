@@ -1,4 +1,5 @@
 // Einstiegspunkt: Menüs, Einstellungen, Kampagnenfortschritt, Spielschleife
+import { icon } from './game/icons.js';
 import './eras/index.js';
 import { GameRenderer } from './engine/renderer.js';
 import { Audio } from './engine/audio.js';
@@ -96,7 +97,7 @@ function renderCampaign() {
     const done = progress.done[m.id];
     const el = document.createElement('div');
     el.className = 'mission-card' + (locked ? ' locked' : '');
-    el.innerHTML = `<div class="num">${i + 1}</div><div><div class="t">${m.title}</div><div class="p">${m.place} · ${m.date}</div>${done ? `<div class="p">Abgeschlossen in ${fmtTime(done.time)} · ${done.kills} Abschüsse</div>` : ''}</div><div class="state">${locked ? '🔒' : done ? '🏅' : '▶'}</div>`;
+    el.innerHTML = `<div class="num">${i + 1}</div><div><div class="t">${m.title}</div><div class="p">${m.place} · ${m.date}</div>${done ? `<div class="p">Abgeschlossen in ${fmtTime(done.time)} · ${done.kills} Abschüsse</div>` : ''}</div><div class="state">${icon(locked ? 'lock' : done ? 'medal' : 'play', { label: locked ? 'Gesperrt' : done ? 'Abgeschlossen' : 'Starten' })}</div>`;
     if (!locked) el.onclick = () => openBriefing(m);
     list.appendChild(el);
   });
@@ -163,8 +164,8 @@ try { Object.assign(skSetup, JSON.parse(localStorage.getItem(SKIRMISH_KEY) || '{
 const saveSk = () => { try { localStorage.setItem(SKIRMISH_KEY, JSON.stringify(skSetup)); } catch (e) { /* ignorieren */ } };
 const opt = (v, t) => `<option value="${v}">${t}</option>`;
 $('sk-mode').innerHTML = [1, 2, 3, 4, 5, 6].map((n) => `<button data-v="${n}">${n}v${n}</button>`).join('');
-$('sk-role').innerHTML = Object.entries(ROLES).map(([k, r]) => opt(k, `${r.icon} ${r.name}`)).join('');
-$('sk-preset').innerHTML = opt('random', '🎲 Zufall') + MAP_PRESETS.map((p) => opt(p.id, p.name)).join('');
+$('sk-role').innerHTML = Object.entries(ROLES).map(([k, r]) => opt(k, r.name)).join('');
+$('sk-preset').innerHTML = opt('random', 'Zufall') + MAP_PRESETS.map((p) => opt(p.id, p.name)).join('');
 $('sk-size').innerHTML = opt('auto', 'Auto (empfohlen)') + Object.entries(MAP_SIZES).map(([k, z]) => opt(k, `${z.label} (${z.size} m, bis ${z.maxPerTeam}v${z.maxPerTeam})`)).join('');
 $('sk-diff').innerHTML = Object.entries(DIFFICULTIES).map(([k, t]) => opt(k, t)).join('');
 $('sk-victory').innerHTML = Object.entries(VICTORY).map(([k, t]) => opt(k, t)).join('');
@@ -280,7 +281,7 @@ function updatePauseInfo() {
 function showSkirmishEnd(won, text) {
   const sk = game.mission.skirmish;
   const draw = sk.result && sk.result.winner === null;
-  $('end-title').textContent = draw ? '⚖ Unentschieden' : won ? '✔ Sieg' : '✖ Niederlage';
+  $('end-title').textContent = draw ? 'Unentschieden' : won ? 'Sieg' : 'Niederlage';
   $('end-title').style.color = draw ? '#e5b93e' : won ? '#46c46b' : '#e5484d';
   $('end-text').innerHTML = `<p>${text}</p>`;
   const rows = [];
@@ -288,9 +289,9 @@ function showSkirmishEnd(won, text) {
     const ps = game.playersOfTeam(team);
     const sum = (k) => ps.reduce((s, p) => s + (p.stats[k] || 0), 0);
     rows.push(`<tr class="team"><td style="color:${TEAM_COLOR[team]}">${TEAM_NAME[team]} – ${sk.scores[team]} Punkte</td><td>${sum('kills')}</td><td>${sum('lost')}</td><td>${sum('captured')}</td><td>${sum('reinf')}</td></tr>`);
-    for (const p of ps) rows.push(`<tr class="${p.id === game.localPlayerId ? 'me' : ''}"><td><span class="dot" style="background:${p.color}"></span>${ROLES[p.role]?.icon || ''} ${p.name}${p.defeated ? ' ✝' : ''}</td><td>${p.stats.kills}</td><td>${p.stats.lost}</td><td>${p.stats.captured || 0}</td><td>${p.stats.reinf || 0}</td></tr>`);
+    for (const p of ps) rows.push(`<tr class="${p.id === game.localPlayerId ? 'me' : ''}"><td><span class="dot" style="background:${p.color}"></span>${ROLES[p.role] ? icon(ROLES[p.role].iconKey, { cls: 'ic-in', label: ROLES[p.role].name }) : ''} ${p.name}${p.defeated ? ' ' + icon('close', { cls: 'ic-in', label: 'Ausgeschieden' }) : ''}</td><td>${p.stats.kills}</td><td>${p.stats.lost}</td><td>${p.stats.captured || 0}</td><td>${p.stats.reinf || 0}</td></tr>`);
   }
-  $('end-stats').innerHTML = `<div>⏱ Gefechtsdauer: <b>${fmtTime(game.time)}</b> · Seed ${sk.setup.seed}</div><table class="sk-end-table"><tr><th>Spieler</th><th>Abschüsse</th><th>Verluste</th><th>Erobert</th><th>Verstärkung</th></tr>${rows.join('')}</table>`;
+  $('end-stats').innerHTML = `<div>${icon('clock', { cls: 'ic-in' })} Gefechtsdauer: <b>${fmtTime(game.time)}</b> · Seed ${sk.setup.seed}</div><table class="sk-end-table"><tr><th>Spieler</th><th>Abschüsse</th><th>Verluste</th><th>Erobert</th><th>Verstärkung</th></tr>${rows.join('')}</table>`;
   const next = $('btn-end-next');
   $('btn-end-retry').classList.toggle('hidden', online.inGame);
   if (online.inGame) {
@@ -332,11 +333,11 @@ game.on('end', (won, text) => {
   $('btn-end-retry').textContent = 'Erneut versuchen';
   const m = currentMission;
   const idx = CAMPAIGN.indexOf(m);
-  $('end-title').textContent = won ? '✔ Mission erfüllt' : '✖ Mission gescheitert';
+  $('end-title').textContent = won ? 'Mission erfüllt' : 'Mission gescheitert';
   $('end-title').style.color = won ? '#46c46b' : '#e5484d';
   $('end-text').innerHTML = `<p>${text}</p>${won && m.victory ? `<p style="color:#9aa4b2;white-space:pre-line">${m.victory}</p>` : ''}`;
   const t = game.time;
-  $('end-stats').innerHTML = `<div class="cols"><div>⏱ Einsatzzeit: <b>${fmtTime(t)}</b><br>💥 Feindliche Verluste: <b>${game.stats.kills}</b></div><div>🪦 Eigene Verluste: <b>${game.stats.lost}</b><br>🛡️ Abgefangene Flugkörper: <b>${game.stats.intercepts}</b></div></div>`;
+  $('end-stats').innerHTML = `<div class="cols"><div>${icon('clock', { cls: 'ic-in' })} Einsatzzeit: <b>${fmtTime(t)}</b><br>${icon('attack', { cls: 'ic-in' })} Feindliche Verluste: <b>${game.stats.kills}</b></div><div>${icon('close', { cls: 'ic-in' })} Eigene Verluste: <b>${game.stats.lost}</b><br>${icon('obj_protect', { cls: 'ic-in' })} Abgefangene Flugkörper: <b>${game.stats.intercepts}</b></div></div>`;
   if (won) {
     progress.done[m.id] = { time: t, kills: game.stats.kills };
     progress.unlocked = Math.max(progress.unlocked, idx + 2);
@@ -344,7 +345,7 @@ game.on('end', (won, text) => {
   }
   const next = $('btn-end-next');
   if (won) {
-    next.textContent = idx + 1 < CAMPAIGN.length ? 'Nächste Mission ▶' : 'Zum Hauptmenü';
+    next.textContent = idx + 1 < CAMPAIGN.length ? 'Nächste Mission' : 'Zum Hauptmenü';
     next.onclick = async () => { if (idx + 1 < CAMPAIGN.length) { await loadDemo(); openBriefing(CAMPAIGN[idx + 1]); } else { await loadDemo(); show('title'); } };
   } else {
     next.textContent = 'Zur Kampagne';

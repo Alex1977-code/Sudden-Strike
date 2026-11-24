@@ -3,6 +3,7 @@
 //   ctx = { game, show(name), hideScreens(), startGame(S, session) → Promise, toMenu() → Promise, simTick(dt) }
 // Verbindungsart 'peer' (Internet, PeerJS/WebRTC) oder 'local' (BroadcastChannel – mehrere Tabs desselben Browsers).
 // TURN-Server (für Mobilfunk/CGNAT): NET_CONFIG.peerOptions.config.iceServers unten bzw. window.STST_NET_CONFIG.
+import { icon } from '../game/icons.js';
 import { createTransport, normalizeRoomCode } from './transport.js';
 import { Lobby, TEAMS, MAX_PER_TEAM } from './lobby.js';
 import { HostSession, ClientSession, setupFromStart, ROLE_ORDER } from './session.js';
@@ -75,7 +76,7 @@ class OnlineUI {
     for (const t of TEAMS) $('lobby-team-' + t).addEventListener('click', (e) => this._slotClick(e));
     // Einstellungen (Host)
     $('ls-mode').innerHTML = [1, 2, 3, 4, 5, 6].map((n) => `<button data-v="${n}">${n}v${n}</button>`).join('');
-    $('ls-preset').innerHTML = opt('random', '🎲 Zufall') + MAP_PRESETS.map((p) => opt(p.id, p.name)).join('');
+    $('ls-preset').innerHTML = opt('random', 'Zufall') + MAP_PRESETS.map((p) => opt(p.id, p.name)).join('');
     $('ls-size').innerHTML = Object.entries(MAP_SIZES).map(([k, z]) => opt(k, `${z.label} (${z.size} m, bis ${z.maxPerTeam}v${z.maxPerTeam})`)).join('');
     $('ls-diff').innerHTML = Object.entries(DIFFICULTIES).map(([k, t]) => opt(k, t)).join('');
     $('ls-victory').innerHTML = Object.entries(VICTORY).map(([k, t]) => opt(k, t)).join('');
@@ -207,7 +208,7 @@ class OnlineUI {
     for (const team of TEAMS) {
       const slots = st.slots.filter((s) => s.team === team);
       const humans = slots.filter((s) => s.kind === 'human').length, ais = slots.filter((s) => s.kind === 'ai').length;
-      let h = `<h4 style="color:${TEAM_COLOR[team]}"><span>${team === 'UA' ? '🇺🇦 ' : ''}${TEAM_NAME[team]}</span><span class="muted">${humans} Spieler · ${ais} KI</span></h4>`;
+      let h = `<h4 style="color:${TEAM_COLOR[team]}"><span>${TEAM_NAME[team]}</span><span class="muted">${humans} Spieler · ${ais} KI</span></h4>`;
       for (const s of slots) h += this._slotRow(s, st, host, me, n);
       // Nur bei Änderungen neu aufbauen (offene Auswahllisten bleiben bedienbar); Ping separat aktualisieren
       const box = $('lobby-team-' + team);
@@ -242,7 +243,7 @@ class OnlineUI {
     // Knöpfe
     $('btn-lobby-ready').classList.toggle('hidden', host);
     $('btn-lobby-start').classList.toggle('hidden', !host);
-    if (!host && mine) { $('btn-lobby-ready').textContent = mine.ready ? '✔ Bereit (zurücknehmen)' : 'Bereit melden'; $('btn-lobby-ready').classList.toggle('ready', !!mine.ready); }
+    if (!host && mine) { $('btn-lobby-ready').innerHTML = mine.ready ? icon('check', { cls: 'ic-in' }) + ' Bereit (zurücknehmen)' : 'Bereit melden'; $('btn-lobby-ready').classList.toggle('ready', !!mine.ready); }
     if (host) {
       const notReady = st.slots.filter((s) => s.kind === 'human' && !s.ready && s.peerId !== st.hostId);
       const has = (t) => st.slots.some((s) => s.team === t && (s.kind === 'human' || s.kind === 'ai' || (s.kind === 'open' && S.fillAI)));
@@ -259,23 +260,23 @@ class OnlineUI {
     const isHostSlot = human && s.peerId === st.hostId;
     let name;
     if (human) name = `<span class="nm" title="${esc(s.name)}">${esc(s.name)}${isMe ? ' (du)' : ''}</span>`;
-    else if (ai) name = `<span class="nm">🤖 KI · ${DIFFICULTIES[s.difficulty] || 'Normal'}</span>`;
+    else if (ai) name = `<span class="nm">${icon('robot', { cls: 'ic-in', label: 'KI' })} KI · ${DIFFICULTIES[s.difficulty] || 'Normal'}</span>`;
     else name = `<span class="nm open">${s.kind === 'closed' ? 'Geschlossen' : 'Offen – KI, falls frei'}</span>`;
     let roleEl = '<span></span>';
     if (human || ai || (s.kind === 'open' && st.settings.fillAI)) {
       const can = isMe || (host && ai);
       // MP-T7 (P3a): Tooltip mit Ausstattung der Rolle (je Team)
       const tip = (k) => esc(roleSummaryText(k, s.team));
-      roleEl = can ? `<select data-act="role" data-slot="${s.slot}" title="${tip(role)}">${Object.entries(ROLES).map(([k, r]) => opt(k, `${r.icon} ${r.name}`, k === role).replace('<option ', `<option title="${tip(k)}" `)).join('')}</select>`
-        : `<span class="muted" title="${tip(role)}">${ROLES[role].icon} ${ROLES[role].name.split(' ')[0]}</span>`;
+      roleEl = can ? `<select data-act="role" data-slot="${s.slot}" title="${tip(role)}">${Object.entries(ROLES).map(([k, r]) => opt(k, r.name, k === role).replace('<option ', `<option title="${tip(k)}" `)).join('')}</select>`
+        : `<span class="muted" title="${tip(role)}">${icon(ROLES[role].iconKey, { cls: 'ic-in', label: ROLES[role].name })} ${ROLES[role].name.split(' ')[0]}</span>`;
     }
-    const stTxt = isHostSlot ? '<span class="st ok">★ Host</span>' : human ? (s.ready ? '<span class="st ok">✔ bereit</span>' : '<span class="st wait">⏳ wartet</span>') : ai ? '<span class="st ok">KI</span>' : '<span class="st"></span>';
+    const stTxt = isHostSlot ? `<span class="st ok">${icon('star', { cls: 'ic-in' })} Host</span>` : human ? (s.ready ? `<span class="st ok">${icon('check', { cls: 'ic-in' })} bereit</span>` : `<span class="st wait">${icon('hourglass', { cls: 'ic-in' })} wartet</span>`) : ai ? '<span class="st ok">KI</span>' : '<span class="st"></span>';
     const pingEl = `<span class="ping" data-slot="${s.slot}"></span>`;
     let ctl = '<span></span>';
     if (host && !human) {
       const v = s.kind === 'ai' ? 'ai:' + (s.difficulty || 'normal') : s.kind;
       ctl = `<select data-act="kind" data-slot="${s.slot}" title="Platz">${opt('open', 'Offen', v === 'open')}${opt('ai:easy', 'KI leicht', v === 'ai:easy')}${opt('ai:normal', 'KI normal', v === 'ai:normal')}${opt('ai:hard', 'KI schwer', v === 'ai:hard')}${opt('closed', 'Geschlossen', v === 'closed')}</select>`;
-    } else if (host && human && !isMe) ctl = `<button data-act="kick" data-slot="${s.slot}" title="Spieler entfernen">✖</button>`;
+    } else if (host && human && !isMe) ctl = `<button data-act="kick" data-slot="${s.slot}" title="Spieler entfernen" aria-label="Spieler entfernen">${icon('close')}</button>`;
     return `<div class="slot${isMe ? ' me' : ''}"><i class="dot" style="background:${s.kind === 'closed' ? '#444' : s.color}"></i>${name}${roleEl}${stTxt}${pingEl}${ctl}</div>`;
   }
   _slotChange(e) {

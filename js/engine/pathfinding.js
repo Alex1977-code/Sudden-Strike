@@ -49,6 +49,7 @@ export class Pathfinder {
     this.closed = new Uint32Array(n);
     this.cur = 1;
     this.clr = null; // Abstandsfeld (lazy)
+    this._si = 0; this._sj = 0; this._near = -1; // Startbereich der laufenden Suche (Korridortest)
   }
   passable(k, mode) {
     const t = this.t;
@@ -170,6 +171,7 @@ export class Pathfinder {
     heap.push(start, 0);
     const h = (k) => { const i = k % gw, j = (k / gw) | 0; const dx = Math.abs(i - ei), dy = Math.abs(j - ej); return (dx + dy) + (1.414 - 2) * Math.min(dx, dy); };
     const near = Math.ceil(rad / 2) + 1; // Startbereich (Zellen), in dem auch zu enge Zellen erlaubt sind
+    this._si = si; this._sj = sj; this._near = wide ? near : -1;
     let found = false, iter = 0, best = start, bestH = h(start);
     while (heap.size && iter < 30000) {
       iter++;
@@ -212,14 +214,17 @@ export class Pathfinder {
     const pts = [];
     let anchor = 0;
     pts.push(cells[0]);
-    let segMin = wide ? Math.min(req, clr[cells[0]]) : 0;
+    // (zu enge Zellen des Startbereichs zählen dabei als Mindestbreite und sind beim Korridortest ausgenommen)
+    const cw = (k) => Math.max(cmin, clr[k]);
+    let segMin = wide ? Math.min(req, cw(cells[0])) : 0;
     for (let n = 2; n < cells.length; n++) {
-      if (wide) segMin = Math.min(segMin, clr[cells[n - 1]], clr[cells[n]]);
+      if (wide) segMin = Math.min(segMin, cw(cells[n - 1]), cw(cells[n]));
       if (!this.lineClear(cells[anchor], cells[n], mode, segMin)) {
         anchor = n - 1; pts.push(cells[anchor]);
-        if (wide) segMin = Math.min(req, clr[cells[anchor]], clr[cells[n]]);
+        if (wide) segMin = Math.min(req, cw(cells[anchor]), cw(cells[n]));
       }
     }
+    this._near = -1;
     pts.push(cells[cells.length - 1]);
     const world = pts.slice(1).map((k) => t.cellCenter(k % gw, (k / gw) | 0));
     if (found && !targetAdjusted) { if (world.length) world[world.length - 1] = [ex, ez]; else world.push([ex, ez]); }
@@ -235,7 +240,7 @@ export class Pathfinder {
     for (;;) {
       const k = y0 * gw + x0;
       if (!this.passable(k, mode)) return false;
-      if (need > 0 && clr[k] < need - 1e-6) return false;
+      if (need > 0 && clr[k] < need - 1e-6 && !(Math.abs(x0 - this._si) <= this._near && Math.abs(y0 - this._sj) <= this._near)) return false;
       if (mode === 'ground' && this.t.gForest[k] && !this.t.gForest[a]) return false;
       if (x0 === x1 && y0 === y1) return true;
       const e2 = 2 * err;

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { fmtTime } from '../engine/util.js';
 import { UNIT_TYPES } from './unitTypes.js';
 import { BUILD_KINDS } from './logistics.js';
+import { icon, iconLabel, drawIcon, unitIconKey } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -96,7 +97,8 @@ export class HUD {
   refreshObjectives() {
     const g = this.game;
     this.objEl.innerHTML = (g.objectives || []).filter((o) => !o.hidden).map((o) => {
-      const box = o.state === 'done' ? '☑' : o.state === 'failed' ? '☒' : '☐';
+      const bn = o.state === 'done' ? 'obj_done' : o.state === 'failed' ? 'obj_failed' : 'obj_open';
+      const box = icon(bn, { label: iconLabel(bn) });
       return `<div class="obj ${o.state} ${o.optional ? 'optional' : ''}"><span class="box">${box}</span><span>${o.optional ? '(Optional) ' : ''}${o.text}</span></div>`;
     }).join('') || '<div class="obj">—</div>';
   }
@@ -133,7 +135,8 @@ export class HUD {
     const col = hp > 0.6 ? '#46c46b' : hp > 0.3 ? '#e5b93e' : '#e5484d';
     if (sup === null && cnt === undefined && this.game.logistics && u.supply) sup = this._supplyFrac([u]);
     const supBar = sup !== null ? `<div class="sup" title="Lkw-Vorrat"><i style="width:${Math.max(0, sup * 100)}%"></i></div>` : '';
-    return `<div class="sel-unit" title="${u.name}">${u.type.icon}${cnt > 1 ? `<span class="cnt">${cnt}</span>` : ''}${supBar}<div class="hp"><i style="width:${Math.max(0, hp * 100)}%;background:${col}"></i></div></div>`;
+    const tc = SK_COL[u.side] || SK_COL.N;
+    return `<div class="sel-unit" title="${u.name}" role="button" aria-label="${u.name}" style="--tc:${tc}">${icon(unitIconKey(u.type), { color: tc })}${cnt > 1 ? `<span class="cnt">${cnt}</span>` : ''}${supBar}<div class="hp"><i style="width:${Math.max(0, hp * 100)}%;background:${col}"></i></div></div>`;
   }
 
   // ---------- Fähigkeiten ----------
@@ -143,7 +146,8 @@ export class HUD {
     g.abilities.forEach((a, i) => {
       const b = document.createElement('button');
       b.title = `${a.def.name} (F${i + 1})\n${a.def.desc}`;
-      b.innerHTML = `<span class="key">F${i + 1}</span>${a.def.icon}<span>${a.def.name.split(/[ -]/)[0]}</span>${a.charges !== Infinity ? `<span class="charges">${a.charges}</span>` : ''}<div class="cd"></div>`;
+      b.setAttribute('aria-label', a.def.name);
+      b.innerHTML = `<span class="key">F${i + 1}</span>${icon(a.id)}<span>${a.def.name.split(/[ -]/)[0]}</span>${a.charges !== Infinity ? `<span class="charges">${a.charges}</span>` : ''}<div class="cd"></div>`;
       if (this.input?.pendingAbility === a) b.classList.add('active');
       b.onclick = () => this.input.startAbility(a);
       a.btn = b;
@@ -219,9 +223,7 @@ export class HUD {
         ctx.lineWidth = 2; ctx.strokeStyle = p.owner ? SK_COL[p.owner] : '#c8ccd0';
         ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.stroke();
         if (p.capTeam && p.progress > 0) { ctx.strokeStyle = p.contested ? '#ffa030' : SK_COL[p.capTeam]; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, r + 2.5, -Math.PI / 2, -Math.PI / 2 + p.progress * 6.2832); ctx.stroke(); }
-        ctx.fillStyle = '#fff'; ctx.font = '700 9px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(SK_ICON[p.kind] || '•', x, y + 0.5);
-        ctx.textBaseline = 'alphabetic';
+        drawIcon(ctx, 'cp_' + p.kind, x, y, Math.max(9, r * 1.5), '#fff');
       }
     }
     for (const u of g.units) {
@@ -302,10 +304,11 @@ export class HUD {
         ctx.fillStyle = u.tags.has('protect') ? '#5db8ff' : '#ffd500';
         ctx.font = '600 11px system-ui';
         ctx.textAlign = 'center';
-        ctx.fillText(u.tags.has('protect') ? '◆ SCHÜTZEN' : '◆ ZIEL', x, y - 4);
+        drawIcon(ctx, u.tags.has('protect') ? 'obj_protect' : 'obj_target', x - 26, y - 9, 11, ctx.fillStyle);
+        ctx.textAlign = 'left'; ctx.fillText(u.tags.has('protect') ? 'SCHÜTZEN' : 'ZIEL', x - 19, y - 4); ctx.textAlign = 'center';
       }
-      if (u.abandoned) { ctx.fillStyle = '#ffd500'; ctx.font = '700 10px system-ui'; ctx.textAlign = 'center'; ctx.fillText('⚑ verlassen', x, y - 4); }
-      if (building) { ctx.fillStyle = '#5dff8a'; ctx.font = '700 10px system-ui'; ctx.textAlign = 'center'; ctx.fillText(`🔨 ${Math.round(u.build.progress * 100)} %`, x, y - 4); }
+      if (u.abandoned) { ctx.fillStyle = '#ffd500'; ctx.font = '700 10px system-ui'; ctx.textAlign = 'left'; drawIcon(ctx, 'flag', x - 26, y - 9, 11, '#ffd500'); ctx.fillText('verlassen', x - 19, y - 4); ctx.textAlign = 'center'; }
+      if (building) { ctx.fillStyle = '#5dff8a'; ctx.font = '700 10px system-ui'; ctx.textAlign = 'left'; drawIcon(ctx, 'repair', x - 19, y - 9, 11, '#5dff8a'); ctx.fillText(`${Math.round(u.build.progress * 100)} %`, x - 12, y - 4); ctx.textAlign = 'center'; }
       // Logistik: Munitions-/Treibstoffbalken, Vorrat (Lkw), Baumaterial
       let yy = y + bh + 3;
       if (sel && g.logistics && u.side === ls) {
@@ -315,7 +318,7 @@ export class HUD {
         if (u.maxFuel) bar(u.fuel / u.maxFuel, u.fuel <= 0 ? '#ff5a5a' : '#ffb347');
         if (u.supply) { bar(u.supply.ammo / u.type.supply.ammo, '#6fb7ff'); bar(u.supply.fuel / u.type.supply.fuel, '#ffb347'); }
         ctx.font = '10px system-ui'; ctx.textAlign = 'center';
-        if (u.maxMaterial || u.supply) { ctx.fillStyle = '#ffd500'; ctx.fillText(`⛏ ${Math.floor((u.maxMaterial ? u.material : u.supply.material) + 1e-6)}`, x, yy + 8); yy += 11; }
+        if (u.maxMaterial || u.supply) { ctx.fillStyle = '#ffd500'; drawIcon(ctx, 'material', x - 8, yy + 4, 10, '#ffd500'); ctx.textAlign = 'left'; ctx.fillText(`${Math.floor((u.maxMaterial ? u.material : u.supply.material) + 1e-6)}`, x - 1, yy + 8); ctx.textAlign = 'center'; yy += 11; }
         if (u.immobilized) { ctx.fillStyle = '#ff8a8a'; ctx.fillText('Kette zerstört', x, yy + 8); yy += 11; }
         else if (u.maxFuel && u.fuel <= 0) { ctx.fillStyle = '#ff8a8a'; ctx.fillText('Tank leer', x, yy + 8); yy += 11; }
         else if (am && am.cur < 1) { ctx.fillStyle = '#ff8a8a'; ctx.fillText('Munition leer', x, yy + 8); yy += 11; }
@@ -327,7 +330,7 @@ export class HUD {
           ctx.fillStyle = '#9ec5ff'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
           ctx.fillText(w.ammo > 0 ? `${w.ammo}/${w.def.ammo}` : `Nachladen ${Math.ceil(w.reloadT)}s`, x, yy + 9);
         }
-        if (u.lifetime) { ctx.fillStyle = '#ffd500'; ctx.font = '10px system-ui'; ctx.textAlign = 'center'; ctx.fillText(`🔋${Math.ceil(u.lifetime)}s`, x, yy + 9); }
+        if (u.lifetime) { ctx.fillStyle = '#ffd500'; ctx.font = '10px system-ui'; ctx.textAlign = 'center'; drawIcon(ctx, 'battery', x - 10, yy + 5, 10, '#ffd500'); ctx.textAlign = 'left'; ctx.fillText(`${Math.ceil(u.lifetime)}s`, x - 3, yy + 9); ctx.textAlign = 'center'; }
       }
     }
     // Eroberungspunkte: Name + Fortschritt über dem Punkt
@@ -339,7 +342,7 @@ export class HUD {
         const x = (v.x * 0.5 + 0.5) * W, y = (-v.y * 0.5 + 0.5) * H;
         const col = p.owner ? SK_COL[p.owner] : '#c8ccd0';
         ctx.font = '700 12px system-ui'; ctx.textAlign = 'center';
-        const label = `${p.name}${p.contested ? ' ⚔' : ''}`;
+        const label = `${p.name}${p.contested ? ' (umkämpft)' : ''}`;
         ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillText(label, x + 1, y + 1);
         ctx.fillStyle = col; ctx.fillText(label, x, y);
         if (p.capTeam && p.progress > 0) {
@@ -418,10 +421,10 @@ export class HUD {
     if (!this.game.logistics || u.side !== this.game.localSide) return '';
     const p = [];
     const am = u.ammoInfo();
-    if (am) p.push(`<span title="Munition">🎯${Math.floor(am.cur)}/${am.max}</span>`);
-    if (u.maxFuel) p.push(`<span title="Treibstoff">⛽${Math.round(u.fuel / u.maxFuel * 100)}%</span>`);
-    if (u.maxMaterial) p.push(`<span title="Material">🧱${Math.floor(u.material + 1e-6)}/${u.maxMaterial}</span>`);
-    if (u.supply) p.push(`<span class="sup-txt" title="Lkw-Vorrat Munition · Treibstoff · Material">📦 M${Math.round(u.supply.ammo / u.type.supply.ammo * 100)}% S${Math.round(u.supply.fuel / u.type.supply.fuel * 100)}% B${Math.floor(u.supply.material)}</span>`);
+    if (am) p.push(`<span title="Munition">${icon('ammo', { cls: 'ic-in' })}${Math.floor(am.cur)}/${am.max}</span>`);
+    if (u.maxFuel) p.push(`<span title="Treibstoff">${icon('fuel', { cls: 'ic-in' })}${Math.round(u.fuel / u.maxFuel * 100)}%</span>`);
+    if (u.maxMaterial) p.push(`<span title="Material">${icon('material', { cls: 'ic-in' })}${Math.floor(u.material + 1e-6)}/${u.maxMaterial}</span>`);
+    if (u.supply) p.push(`<span class="sup-txt" title="Lkw-Vorrat Munition · Treibstoff · Material">${icon('supply', { cls: 'ic-in' })} M${Math.round(u.supply.ammo / u.type.supply.ammo * 100)}% S${Math.round(u.supply.fuel / u.type.supply.fuel * 100)}% B${Math.floor(u.supply.material)}</span>`);
     if (u.immobilized) p.push('<span style="color:#ff8a8a">Kette!</span>');
     else if (u.maxFuel && u.fuel <= 0) p.push('<span style="color:#ff8a8a">Tank leer</span>');
     return p.join(' ');
@@ -444,21 +447,21 @@ export class HUD {
     if (!force && sig === this.buildSig) return;
     this.buildSig = sig;
     if (!eng.length && !bail.length && !inf.length && !gar.length && !obs.length) { el.classList.add('hidden'); el.innerHTML = ''; return; }
-    const btn = (act, kind, icon, label, dis, active) => `<button data-act="${act}"${kind ? ` data-kind="${kind}"` : ''}${dis ? ' disabled' : ''}${active ? ' class="active"' : ''} title="${label}">${icon}<span>${label}</span></button>`;
+    const btn = (act, kind, ic, label, dis, active) => `<button data-act="${act}"${kind ? ` data-kind="${kind}"` : ''}${dis ? ' disabled' : ''}${active ? ' class="active"' : ''} title="${label}" aria-label="${label}">${icon(ic)}<span>${label}</span></button>`;
     let h = '';
     if (eng.length) {
-      h += `<div class="mat" title="Baumaterial-Ladungen der gewählten Pioniere (Nachschub am Versorgungs-Lkw)">⛏ ${Math.floor(mat + 1e-6)}/${eng.reduce((n, u) => n + u.maxMaterial, 0)}</div>`;
+      h += `<div class="mat" title="Baumaterial-Ladungen der gewählten Pioniere (Nachschub am Versorgungs-Lkw)">${icon('material', { cls: 'ic-in' })} ${Math.floor(mat + 1e-6)}/${eng.reduce((n, u) => n + u.maxMaterial, 0)}</div>`;
       for (const k of BUILD_KINDS) {
         const d = UNIT_TYPES[k];
-        h += btn('build', k, d.icon, `${d.name.replace('Schützengraben', 'Graben').replace('Sandsackwall', 'Sandsäcke').replace('Panzersperre', 'Sperre')} ${d.build.cost}`, mat + 1e-6 < d.build.cost, pend?.mode === 'build' && pend.kind === k);
+        h += btn('build', k, unitIconKey(d), `${d.name.replace('Schützengraben', 'Graben').replace('Sandsackwall', 'Sandsäcke').replace('Panzersperre', 'Sperre')} ${d.build.cost}`, mat + 1e-6 < d.build.cost, pend?.mode === 'build' && pend.kind === k);
       }
-      h += btn('clearmines', '', '🧹', 'Räumen', false, pend?.mode === 'clearmines');
-      h += btn('demolish', '', '💥', 'Sprengen 2', mat + 1e-6 < 2, pend?.mode === 'demolish');
+      h += btn('clearmines', '', 'clearmines', 'Räumen', false, pend?.mode === 'clearmines');
+      h += btn('demolish', '', 'demolish', 'Sprengen 2', mat + 1e-6 < 2, pend?.mode === 'demolish');
     }
-    if (obs.length) h += btn('binoculars', '', '🔭', 'Fernglas', false, pend?.mode === 'binoculars');
-    if (inf.length) h += btn('garrison', '', '🏠', 'Besetzen', false, pend?.mode === 'garrison');
-    if (gar.length) h += btn('ungarrison', '', '🚪', 'Verlassen', false, false);
-    if (bail.length) h += btn('bailout', '', '🚪', 'Aussteigen', false, false);
+    if (obs.length) h += btn('binoculars', '', 'binoculars', 'Fernglas', false, pend?.mode === 'binoculars');
+    if (inf.length) h += btn('garrison', '', 'garrison', 'Besetzen', false, pend?.mode === 'garrison');
+    if (gar.length) h += btn('ungarrison', '', 'ungarrison', 'Verlassen', false, false);
+    if (bail.length) h += btn('bailout', '', 'bailout', 'Aussteigen', false, false);
     el.innerHTML = h;
     el.classList.remove('hidden');
   }
@@ -474,7 +477,7 @@ export class HUD {
     this.lastBeep = null;
     if (!sk) return;
     if (window.innerWidth > 900 && window.innerHeight > 560) teams.classList.add('open'); else teams.classList.remove('open');
-    $('sk-cps').innerHTML = sk.points.map((p) => `<div class="cp" data-id="${p.id}" title="${p.name}"><i class="ring"></i><b>${SK_ICON[p.kind]}</b></div>`).join('');
+    $('sk-cps').innerHTML = sk.points.map((p) => `<div class="cp" data-id="${p.id}" title="${p.name}"><i class="ring"></i><b>${icon('cp_' + p.kind, { label: p.name })}</b></div>`).join('');
     this.skCpEls = [...$('sk-cps').children];
     this.skCpEls.forEach((el, i) => { el.onclick = () => { const p = sk.points[i]; this.game.camera.focus(p.x, p.z); }; });
     this.skDirty = true; this.skT = 0;
@@ -509,7 +512,7 @@ export class HUD {
     const ls = g.localSide, os = ls === 'UA' ? 'RU' : 'UA';
     let extra = '';
     if (sk.pointsLimit) extra = `<span class="lim">Ziel ${sk.pointsLimit}</span>`;
-    else if (sk.timeLimit) extra = `<span class="lim">⏱ ${fmtTime(Math.max(0, sk.timeLimit - g.time))}</span>`;
+    else if (sk.timeLimit) extra = `<span class="lim">${icon('clock', { cls: 'ic-in' })} ${fmtTime(Math.max(0, sk.timeLimit - g.time))}</span>`;
     $('sk-score').innerHTML = `<span style="color:${SK_COL[ls]}">${ls} ${sk.scores[ls]}</span> : <span style="color:${SK_COL[os]}">${sk.scores[os]} ${os}</span>${extra}`;
     const tl = $('sk-teams');
     if (!tl.classList.contains('open')) return;
@@ -522,7 +525,7 @@ export class HUD {
         if (p.netUnits !== undefined) n = p.netUnits; // Online-Client: Zahl vom Host (Feinde sind nicht alle bekannt)
         if (team !== ls || n < 0) n = '–'; // MP-T6: keine Feindstärke anzeigen (Nebel des Krieges)
         const st = p.defeated ? ' defeated' : p.waiting && team === ls ? ' waiting' : '';
-        rows.push(`<div class="tl-row${p.id === g.localPlayerId ? ' me' : ''}${st}"><i style="background:${p.color}"></i><span class="nm">${SK_ROLE[p.role] || ''} ${p.name}</span><span class="n">${n}</span><span class="kl">${p.stats.kills}/${p.stats.lost}</span></div>`);
+        rows.push(`<div class="tl-row${p.id === g.localPlayerId ? ' me' : ''}${st}"><i style="background:${p.color}"></i><span class="nm">${SK_ROLE[p.role] ? icon(SK_ROLE[p.role], { cls: 'ic-in' }) : ''} ${p.name}</span><span class="n">${n}</span><span class="kl">${p.stats.kills}/${p.stats.lost}</span></div>`);
       }
     }
     $('sk-teamlist').innerHTML = rows.join('');
@@ -530,5 +533,4 @@ export class HUD {
   _beep(f) { const a = this.game.audio; if (!a.ctx) return; a._tone({ freq: f, dur: 0.12, type: 'square', gain: 0.06 }); }
 }
 const SK_COL = { UA: '#2f7de1', RU: '#e5484d', N: '#8c9096' };
-const SK_ICON = { zeppelin: 'Z', aerostat: 'B', airfield: 'F', depot: 'D', radio: 'T', railway: 'H', village: 'O' };
-const SK_ROLE = { armor: '🛡️', infantry: '🪖', support: '💥', logistics: '🚚' };
+const SK_ROLE = { armor: 'role_armor', infantry: 'role_infantry', support: 'role_support', logistics: 'role_logistics' };

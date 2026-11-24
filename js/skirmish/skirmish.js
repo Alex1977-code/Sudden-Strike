@@ -22,10 +22,10 @@ import { ABILITIES } from '../game/abilities.js';
 export const TEAM_NAME = { UA: 'Ukraine', RU: 'Russland' };
 export const TEAM_COLOR = { UA: '#2f7de1', RU: '#e5484d', N: '#8c9096' };
 export const ROLES = {
-  armor: { name: 'Panzerkeil', icon: '🛡️', desc: 'Kampfpanzer, Schützenpanzer und ein Panzerjäger mit Begleitinfanterie – Durchbruch und Panzerduell.' },
-  infantry: { name: 'Infanterie & Aufklärung', icon: '🪖', desc: 'Viel Infanterie, Scharfschütze, Panzerabwehr, Beobachter und Kamikazedrohnen – Wald, Ortschaft, Häuser besetzen.' },
-  support: { name: 'Artillerie & Flugabwehr', icon: '💥', desc: 'Raketen-/Rohrartillerie, Flugabwehr gegen Drohnen, Beobachter und elektronische Kampfführung.' },
-  logistics: { name: 'Logistik & Pioniere', icon: '🚚', desc: 'Versorgungs-Lkw (Munition/Treibstoff), Bergepanzer, Pioniere mit Sperren und Minen, Sanitäter.' },
+  armor: { name: 'Panzerkeil', iconKey: 'role_armor', desc: 'Kampfpanzer, Schützenpanzer und ein Panzerjäger mit Begleitinfanterie – Durchbruch und Panzerduell.' },
+  infantry: { name: 'Infanterie & Aufklärung', iconKey: 'role_infantry', desc: 'Viel Infanterie, Scharfschütze, Panzerabwehr, Beobachter und Kamikazedrohnen – Wald, Ortschaft, Häuser besetzen.' },
+  support: { name: 'Artillerie & Flugabwehr', iconKey: 'role_support', desc: 'Raketen-/Rohrartillerie, Flugabwehr gegen Drohnen, Beobachter und elektronische Kampfführung.' },
+  logistics: { name: 'Logistik & Pioniere', iconKey: 'role_logistics', desc: 'Versorgungs-Lkw (Munition/Treibstoff), Bergepanzer, Pioniere mit Sperren und Minen, Sanitäter.' },
 };
 export const DIFFICULTIES = { easy: 'Leicht', normal: 'Normal', hard: 'Schwer' };
 export const VICTORY = { annihilation: 'Vernichtung', points: 'Punkte-Limit', time30: 'Zeitlimit 30 min', time60: 'Zeitlimit 60 min', time90: 'Zeitlimit 90 min' };
@@ -155,7 +155,7 @@ export function roleSummary(role, team = 'UA') {
   const R = ROLES[role] ? role : 'armor';
   const units = ARMIES[R][team].map(([k, n]) => `${n}× ${UNIT_TYPES[k]?.name || k}`).join(', ');
   const abil = ABIL[R][team].map((a) => { const id = typeof a === 'string' ? a : a.id; const nm = ABILITIES[id]?.name || id; return a.charges ? `${nm} ×${a.charges}` : nm; }).join(', ');
-  return { title: `${ROLES[R].icon} ${ROLES[R].name}`, text: ROLES[R].desc, units, abil,
+  return { title: ROLES[R].name, text: ROLES[R].desc, units, abil,
     logi: R === 'logistics' ? 'Versorgt das ganze Team.' : '+1 Versorgungs-Lkw, wenn niemand im Team Logistik spielt.' };
 }
 export function roleSummaryText(role, team) {

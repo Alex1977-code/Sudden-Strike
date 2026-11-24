@@ -501,7 +501,9 @@ export class Unit {
         if (footPen(this, p.x, p.z, h, 0) > Math.max(FP_EPS, pOld)) { p.x = ox; p.z = oz; this.heading = h = this._okH; turnBlocked = true; }
       }
     }
-    if (footPen(this, p.x, p.z, h) > FP_EPS) this._depenetrate(dt);
+    // Sicherheitsabstand halten – außer kurz nach einem Pendel-Stillstand (enge Gasse: dann nur exakte Wanne)
+    if (this._fpNoMarginT > 0) this._fpNoMarginT -= dt;
+    if (footPen(this, p.x, p.z, h, this._fpNoMarginT > 0 ? 0 : FP_M) > FP_EPS) this._depenetrate(dt);
     // Maßgeblich ist die exakte Wanne (ohne Sicherheitsabstand): sie darf nie tiefer eindringen
     const cur = footPen(this, p.x, p.z, h, 0);
     if (cur <= FP_EPS) this._okH = h;
@@ -546,6 +548,11 @@ export class Unit {
         this._fpBlockT = 0; this._fpStuckT = 0;
         this._fpDir = turnBlocked ? d : 0;
         if (footPen(this, p.x, p.z, h, 0) <= FP_EPS) this._okH = h;
+        // Fortschrittskontrolle: pendelt das Fahrzeug nur hin und her (Schritt ↔ Herausdrücken), gilt es als blockiert
+        const pr = this._fpProg || (this._fpProg = { x: p.x, z: p.z, h, t: 0 });
+        pr.t += dt;
+        if (Math.hypot(p.x - pr.x, p.z - pr.z) > 0.6 || Math.abs(angleDiff(pr.h, h)) > 0.3) { pr.x = p.x; pr.z = p.z; pr.h = h; pr.t = 0; }
+        else if (pr.t > 1.5) { pr.t = 0; this._fpNoMarginT = 4; this._fpBlockT = 1; this._fpStalled(); }
         return;
       }
     }
@@ -564,13 +571,15 @@ export class Unit {
       }
       if (bp <= cur + 0.03) { p.x = bx; p.z = bz; this._fpStuckT = 0.5; }
     }
-    // Kein Durchkommen: letzter Wegpunkt → so nah wie möglich, Auftrag erfüllt; sonst (gedrosselt) neu planen
-    if (this.path && this.path.length) {
-      if (this.path.length === 1 && this._fpBlockT > 0.6) { this.path.shift(); return; }
-      if (this._fpBlockT > 0.4 && this.path.length > 1) {
-        this._fpBlockT = 0; this.repathT = 0;
-        if (this.order && this.order.type !== 'attack') this.computePath(this.order.x, this.order.z);
-      }
+    this._fpStalled();
+  }
+  // Kein Durchkommen: letzter Wegpunkt → so nah wie möglich, Auftrag erfüllt; sonst (gedrosselt) neu planen
+  _fpStalled() {
+    if (!this.path || !this.path.length) return;
+    if (this.path.length === 1 && this._fpBlockT > 0.6) { this.path.shift(); return; }
+    if (this._fpBlockT > 0.4 && this.path.length > 1) {
+      this._fpBlockT = 0; this.repathT = 0;
+      if (this.order && this.order.type !== 'attack') this.computePath(this.order.x, this.order.z);
     }
   }
   // Aus harten Hindernissen herausdrücken (mit Sicherheitsabstand FP_M; je Iteration höchstens 0,4 m). Nur Schritte, die

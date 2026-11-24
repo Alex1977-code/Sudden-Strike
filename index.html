@@ -26,8 +26,8 @@
   <!-- ============ HUD ============ -->
   <div id="hud" class="hidden">
     <div id="topbar">
-      <button id="btn-menu" class="icon-btn" title="Menü (Esc)">☰</button>
-      <button id="btn-chat" class="icon-btn hidden" title="Chat (Enter)">💬</button>
+      <button id="btn-menu" class="icon-btn" title="Menü (Esc)" aria-label="Menü"><i data-icon="menu"></i></button>
+      <button id="btn-chat" class="icon-btn hidden" title="Chat (Enter)" aria-label="Chat"><i data-icon="chat"></i></button>
       <div id="objectives"></div>
       <div id="topright">
         <div id="timer"></div>
@@ -35,7 +35,7 @@
       </div>
     </div>
     <div id="skbar" class="hidden"><div id="sk-cps"></div><div id="sk-reinf"></div><div id="sk-score"></div></div>
-    <div id="sk-teams" class="hidden"><button id="sk-teams-btn" class="icon-btn" title="Teams &amp; Spieler">👥</button><div id="sk-teamlist"></div></div>
+    <div id="sk-teams" class="hidden"><button id="sk-teams-btn" class="icon-btn" title="Teams &amp; Spieler" aria-label="Teams und Spieler"><i data-icon="team"></i></button><div id="sk-teamlist"></div></div>
     <div id="alert" class="hidden"></div>
     <div id="subtitle" class="hidden"></div>
     <div id="minimap-wrap"><canvas id="minimap" width="180" height="180"></canvas></div>
@@ -43,10 +43,10 @@
       <div id="buildbar" class="hidden"></div>
       <div id="selection"></div>
       <div id="orders">
-        <button data-order="stop" title="Halt (S)">■<span>Halt</span></button>
-        <button data-order="hold" title="Feuer halten (H)">✋<span>Feuer</span></button>
-        <button data-order="all" title="Alle wählen (Strg+A)">⬚<span>Alle</span></button>
-        <button data-order="box" id="btn-box" class="touch-only" title="Auswahlrahmen">▭<span>Rahmen</span></button>
+        <button data-order="stop" title="Halt (S)"><i data-icon="stop"></i><span>Halt</span></button>
+        <button data-order="hold" title="Feuer halten (H)"><i data-icon="holdfire"></i><span>Feuer</span></button>
+        <button data-order="all" title="Alle wählen (Strg+A)"><i data-icon="selectall"></i><span>Alle</span></button>
+        <button data-order="box" id="btn-box" class="touch-only" title="Auswahlrahmen"><i data-icon="box"></i><span>Rahmen</span></button>
       </div>
       <div id="abilities"></div>
     </div>
@@ -54,7 +54,7 @@
     <div id="net-wait" class="hidden"></div>
     <div id="net-chat" class="hidden">
       <div id="net-chat-log"></div>
-      <form id="net-chat-form" class="hidden"><input id="net-chat-input" maxlength="300" autocomplete="off" placeholder="Nachricht an alle – mit /t nur ans Team"><button type="submit">➤</button></form>
+      <form id="net-chat-form" class="hidden"><input id="net-chat-input" maxlength="300" autocomplete="off" placeholder="Nachricht an alle – mit /t nur ans Team"><button type="submit" title="Senden" aria-label="Senden"><i data-icon="send"></i></button></form>
     </div>
   </div>
   <div id="selbox" class="hidden"></div>
@@ -93,7 +93,7 @@
       <div class="sk-grid">
         <div class="sk-form">
           <div class="sk-field"><span>Modus</span><div class="seg" id="sk-mode"></div></div>
-          <div class="sk-field"><span>Team</span><div class="seg" id="sk-team"><button data-v="UA">🇺🇦 Ukraine</button><button data-v="RU">Russland</button></div></div>
+          <div class="sk-field"><span>Team</span><div class="seg" id="sk-team"><button data-v="UA">Ukraine</button><button data-v="RU">Russland</button></div></div>
           <label>Deine Rolle <select id="sk-role"></select></label>
           <div id="sk-role-desc" class="role-desc"></div>
           <label>Kartenthema <select id="sk-preset"></select></label>
@@ -103,14 +103,14 @@
           <label>KI-Stärke <select id="sk-diff"></select></label>
           <label>Verstärkung alle <select id="sk-reinforce"><option value="120">2 min</option><option value="180">3 min</option><option value="300">5 min</option></select></label>
           <label>Siegbedingung <select id="sk-victory"></select></label>
-          <label>Seed <span class="seedrow"><input id="sk-seed" type="number" min="1" max="999999" inputmode="numeric"><button id="sk-reroll" title="Neuer Zufallsseed">🎲</button></span></label>
+          <label>Seed <span class="seedrow"><input id="sk-seed" type="number" min="1" max="999999" inputmode="numeric"><button id="sk-reroll" title="Neuer Zufallsseed" aria-label="Neuer Zufallsseed"><i data-icon="dice"></i></button></span></label>
         </div>
         <div class="sk-preview">
           <canvas id="sk-map" width="240" height="240"></canvas>
           <div id="sk-info"></div>
         </div>
       </div>
-      <div class="row"><button class="back">Zurück</button><button id="btn-sk-start" class="big">Gefecht starten ▶</button></div>
+      <div class="row"><button class="back">Zurück</button><button id="btn-sk-start" class="big">Gefecht starten <i data-icon="play"></i></button></div>
     </div>
   </div>
 
@@ -118,7 +118,7 @@
     <div class="panel net-panel">
       <h2>Online-Gefecht <span class="sub">bis 6 gegen 6, mit KI-Plätzen</span></h2>
       <label>Dein Name <input id="net-name" maxlength="20" autocomplete="nickname" spellcheck="false"></label>
-      <div class="sk-field"><span>Verbindung</span><div class="seg" id="net-conn"><button data-v="peer">🌐 Internet (PeerJS)</button><button data-v="local">🧪 Lokal (gleicher Browser, Test)</button></div></div>
+      <div class="sk-field"><span>Verbindung</span><div class="seg" id="net-conn"><button data-v="peer"><i data-icon="globe"></i> Internet (PeerJS)</button><button data-v="local"><i data-icon="flask"></i> Lokal (gleicher Browser, Test)</button></div></div>
       <p id="net-conn-note" class="note"></p>
       <div class="net-actions">
         <button id="btn-net-host" class="big">Raum erstellen</button>
@@ -134,14 +134,14 @@
     <div class="panel wide net-lobby">
       <div class="lobby-head">
         <div class="lobby-codebox"><span class="muted">Raumcode</span><span id="lobby-code" class="room-code"></span></div>
-        <button id="btn-lobby-copy" title="Raumcode kopieren">📋 Kopieren</button>
+        <button id="btn-lobby-copy" title="Raumcode kopieren"><i data-icon="copy"></i> Kopieren</button>
         <span id="lobby-me" class="muted"></span>
       </div>
       <div class="lobby-grid">
         <div class="lobby-left">
           <div id="lobby-team-UA" class="lobby-team"></div>
           <div id="lobby-team-RU" class="lobby-team"></div>
-          <div class="lobby-tools"><button id="btn-lobby-team">⇄ Team wechseln</button></div>
+          <div class="lobby-tools"><button id="btn-lobby-team"><i data-icon="swap"></i> Team wechseln</button></div>
           <div id="lobby-role-desc" class="role-desc"></div>
           <div class="lobby-chat">
             <div id="lobby-chat-log"></div>
@@ -157,12 +157,12 @@
           <label>Verstärkung alle <select id="ls-reinforce"><option value="120">2 min</option><option value="180">3 min</option><option value="300">5 min</option></select></label>
           <label>Siegbedingung <select id="ls-victory"></select></label>
           <label>KI-Stärke <select id="ls-diff"></select></label>
-          <label>Seed <span class="seedrow"><input id="ls-seed" type="number" min="1" inputmode="numeric"><button id="ls-reroll" title="Neuer Zufallsseed">🎲</button></span></label>
+          <label>Seed <span class="seedrow"><input id="ls-seed" type="number" min="1" inputmode="numeric"><button id="ls-reroll" title="Neuer Zufallsseed" aria-label="Neuer Zufallsseed"><i data-icon="dice"></i></button></span></label>
           <div class="ls-preview"><canvas id="ls-map" width="200" height="200"></canvas><div id="ls-info"></div></div>
         </div>
       </div>
       <p id="lobby-status" class="net-status"></p>
-      <div class="row"><button id="btn-lobby-leave">Verlassen</button><span class="grow"></span><button id="btn-lobby-ready" class="big">Bereit</button><button id="btn-lobby-start" class="big">Spiel starten ▶</button></div>
+      <div class="row"><button id="btn-lobby-leave">Verlassen</button><span class="grow"></span><button id="btn-lobby-ready" class="big">Bereit</button><button id="btn-lobby-start" class="big">Spiel starten <i data-icon="play"></i></button></div>
     </div>
   </div>
 
@@ -238,7 +238,7 @@
       <h2>Steuerung</h2>
       <div class="cols">
         <div>
-          <h3>🖱️ PC</h3>
+          <h3>PC</h3>
           <ul>
             <li><b>Linksklick</b> – Einheit wählen</li>
             <li><b>Linke Maus ziehen</b> – Auswahlrahmen</li>
@@ -252,7 +252,7 @@
           </ul>
         </div>
         <div>
-          <h3>📱 Handy / Tablet</h3>
+          <h3>Handy / Tablet</h3>
           <ul>
             <li><b>Tippen</b> – Einheit wählen</li>
             <li><b>Tippen auf Gelände/Feind</b> – Bewegen / Angreifen</li>
@@ -277,7 +277,7 @@
         <li><b>Panzerjäger</b> und Schützenpanzer, die im Wald stehen und nicht feuern, werden erst aus kurzer Distanz entdeckt – Fahren oder Schießen verrät sie.</li>
         <li><b>Pioniere</b> wählen → Leiste über den Befehlen: Panzersperre, Sandsäcke, Graben, Minenfeld, Räumen, Sprengen.</li>
         <li><b>Versorgungs-Lkw</b> füllen Munition, Treibstoff und Baumaterial im Umkreis auf, <b>Bergepanzer</b> reparieren Fahrzeuge und Ketten – einfach danebenstellen. Spielt niemand im Team Logistik, hat jeder Spieler einen eigenen Lkw.</li>
-        <li><b>Beobachter</b> stehen still und nutzen das 🔭 Fernglas (große Sichtweite im Kegel). Infanterie kann Häuser über 🏠 <b>Besetzen</b> halten.</li>
+        <li><b>Beobachter</b> stehen still und nutzen das <i data-icon="binoculars"></i> Fernglas (große Sichtweite im Kegel). Infanterie kann Häuser über <i data-icon="garrison"></i> <b>Besetzen</b> halten.</li>
         <li>Hügelkämme, Wald und Häuser blockieren die Sicht. Verlassene Fahrzeuge kann Infanterie per Rechtsklick/Antippen übernehmen.</li>
       </ul>
       <div class="row"><button class="back">Zurück</button></div>
