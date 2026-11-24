@@ -673,8 +673,14 @@ export class Game {
       for (const r of revealsOf[team]) f.reveal(r.x, r.z, r.r);
       if (!fogOn) f.revealAll();
     }
+    const vc = this.mission?.vehicleConceal; // MP-T7: Fahrzeugtarnung im Wald (nur Missionen, die sie setzen – Gefecht)
     const concealOf = (u) => {
-      const c = u.type.conceal || 0;
+      let c = u.type.conceal || 0;
+      if (vc && u.type.vehicle && !u.type.structure) {
+        // nur stehend, im Wald und ohne kürzlich gefeuert zu haben (Abschuss/Mündungsfeuer verrät das Fahrzeug 6 s lang)
+        if (u.moving || !t.inForest(u.pos.x, u.pos.z) || (u.lastFired && this.time - u.lastFired < 6)) return 1;
+        c = vc[u.type.key] ?? vc.default ?? 0;
+      }
       if (!c) return 1;
       const cover = t.inForest(u.pos.x, u.pos.z) || this.nearHouse(u.pos.x, u.pos.z) || !!this.logi.coverOf(u);
       let k = 1 - c * (cover ? 1 : 0.45) * (u.moving ? 0.6 : 1);

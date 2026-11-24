@@ -118,6 +118,7 @@ export class AICommander {
       gr.cz = units.reduce((s, u) => s + u.pos.z, 0) / units.length;
       if (gr.kind === 'garrison') { this.runGarrison(gr, units); continue; }
       gr.power = units.reduce((s, u) => s + weightOf(u) * (0.4 + 0.6 * u.hp / u.maxHp), 0);
+      if (this.regroup(gr, units)) { this.drive(gr, units); continue; }
       if (this.checkFallback(gr, units, enemies)) { this.drive(gr, units); continue; }
       this.chooseTarget(gr, units, enemies);
       if (gr.target) claims.push(gr.target.id);
@@ -163,6 +164,27 @@ export class AICommander {
   // Stärke aufgeklärter Feinde in der Nähe eines Punkts
   enemyPower(enemies, x, z, r) { let s = 0; const r2 = r * r; for (const e of enemies) if (!e.type.air && d2(e.pos.x, e.pos.z, x, z) < r2) s += weightOf(e); return s; }
   ownPower(x, z, r) { let s = 0; const r2 = r * r; for (const u of this.g.units) if (u.alive && u.side === this.p.team && !u.type.structure && !u.type.air && d2(u.pos.x, u.pos.z, x, z) < r2) s += weightOf(u); return s; }
+
+  // Sammeln (MP-T7): Eine zusammengeschmolzene Hauptgruppe greift nicht mehr tröpfchenweise an, sondern sammelt
+  // Nachschub am hintersten eigenen Punkt bzw. vor dem Aufmarschraum, bis sie wieder Gefechtsstärke hat (Hysterese
+  // 5 → 10 Stärkepunkte; Infanterie 1, leichte Fahrzeuge 2, Kampfpanzer 4). Verhindert den Schneeball, bei dem
+  // jede Verstärkung einzeln in die überlegene Front läuft.
+  regroup(gr, units) {
+    if (gr.kind !== 'main') return false;
+    const g = this.g, team = this.p.team, LO = 5, HI = 10;
+    if (!gr.gather && gr.power < LO && g.time > 60) gr.gather = true;
+    if (gr.gather && gr.power >= HI) { gr.gather = false; gr.target = null; gr.dest = null; gr.lastCmd = -99; return false; }
+    if (!gr.gather) return false;
+    let rx = this.home[0], rz = this.home[1] + (team === 'UA' ? -18 : 18), bd = Infinity;
+    for (const cp of this.sk.points) {
+      if (cp.owner !== team) continue;
+      const dd = d2(cp.x, cp.z, this.home[0], this.home[1]);
+      if (dd < bd) { bd = dd; rx = cp.x; rz = cp.z; }
+    }
+    if (!gr.dest || gr.mode !== 'gather' || d2(gr.dest[0], gr.dest[1], rx, rz) > 15 * 15) { gr.target = null; gr.mode = 'gather'; gr.dest = [rx + gr.jx, rz + gr.jz]; gr.lastCmd = -99; }
+    this.stats.gathers = (this.stats.gathers || 0) + 1;
+    return true;
+  }
 
   // Front halten: Gegen deutlich überlegene, aufgeklärte Kräfte zieht sich die Gruppe zum nächsten eigenen Punkt
   // (bzw. Aufmarschraum) zurück und sammelt sich, statt hineinzulaufen.
@@ -221,14 +243,27 @@ export class AICommander {
       if (s > bs) { bs = s; best = cp; bmode = mode; }
     }
     if (best) { if (best !== gr.target) { gr.target = best; gr.dest = null; } gr.mode = bmode; return; }
-    // Keine Punkte offen: Jagd auf sichtbare Feinde, sonst Vorstoß zum gegnerischen Aufmarschraum
+    // Keine Punkte offen: Feinde in der Nähe eigener Punkte jagen, sonst den vordersten eigenen Punkt halten.
+    // MP-T7: früher stieß die Gruppe bis in den gegnerischen Aufmarschraum vor und vernichtete dort jede eintreffende
+    // Verstärkung („Spawn-Campen") – nach dem ersten verlorenen Treffen war jede Partie entschieden.
     gr.target = null; gr.mode = 'hunt';
     let tx, tz;
+    const own = sk.points.filter((cp) => cp.owner === team);
     if (enemies.length) {
       let bd = Infinity;
-      for (const e of enemies) { if (e.type.air) continue; const dd = d2(e.pos.x, e.pos.z, gr.cx, gr.cz); if (dd < bd) { bd = dd; tx = e.pos.x; tz = e.pos.z; } }
+      for (const e of enemies) {
+        if (e.type.air) continue;
+        if (!own.some((cp) => d2(e.pos.x, e.pos.z, cp.x, cp.z) < 70 * 70)) continue;
+        const dd = d2(e.pos.x, e.pos.z, gr.cx, gr.cz); if (dd < bd) { bd = dd; tx = e.pos.x; tz = e.pos.z; }
+      }
     }
-    if (tx === undefined) { const es = this.g.playersOfTeam(other(team)).find((q) => !q.defeated) || this.g.playersOfTeam(other(team))[0]; tx = es.spawn.x; tz = es.spawn.z; }
+    if (tx === undefined) {
+      gr.mode = 'hold';
+      const es = this.g.playersOfTeam(other(team)).find((q) => !q.defeated) || this.g.playersOfTeam(other(team))[0];
+      let bd = Infinity;
+      for (const cp of own) { const dd = d2(cp.x, cp.z, es.spawn.x, es.spawn.z); if (dd < bd) { bd = dd; tx = cp.x + gr.jx; tz = cp.z + gr.jz; } }
+      if (tx === undefined) { tx = this.home[0] + gr.jx; tz = this.home[1] + (team === 'UA' ? -18 : 18); }
+    }
     if (!gr.dest || d2(gr.dest[0], gr.dest[1], tx, tz) > 30 * 30) gr.dest = [tx, tz], gr.lastCmd = -99;
   }
 
@@ -601,7 +636,7 @@ export class AICommander {
         const ops = g.units.filter((u) => u.alive && u.owner === p.id && u.type.key === a.def.requires);
         const veh = enemies.filter((e) => e.type.vehicle && ops.some((o) => d2(o.pos.x, o.pos.z, e.pos.x, e.pos.z) < 170 * 170));
         if (veh.length) { const c = this.bestCluster(veh, R); if (c && c.score >= 2) target = [c.x, c.z]; }
-      } else if (a.id === 'artillery' || a.id === 'himars' || a.id === 'stormshadow') {
+      } else if (a.id === 'artillery' || a.id === 'himars' || a.id === 'tornado' || a.id === 'stormshadow') {
         const gnd = enemies.filter((e) => !e.type.air);
         const c = this.bestCluster(gnd, R);
         if (c && c.score >= L.clusterMin && !this.friendlyNear(c.x, c.z, R + 4)) target = [c.x, c.z];

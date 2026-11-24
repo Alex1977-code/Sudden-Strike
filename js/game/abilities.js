@@ -86,6 +86,31 @@ export const ABILITIES = {
       }
     },
   },
+  // Gefechtsmodus (MP-T7): russisches Gegenstück zum HIMARS-Schlag – Salve einer rückwärtigen Tornado-S-Batterie,
+  // vom Msta-Zug geleitet (ohne Msta keine Feuerleitung). 6 Raketen, etwas mehr Streuung als GMLRS.
+  tornado: {
+    name: 'Tornado-S-Salve', icon: '🎆', cooldown: 60, requires: 'msta', radius: 13,
+    desc: '6 Raketen einer rückwärtigen Tornado-S-Batterie (Feuerleitung über die Msta). Ohne Sicht auf das Ziel deutlich ungenauer.',
+    exec(game, x, z, p) {
+      const fdc = game.units.find((u) => u.owner === p.id && u.alive && u.type.key === 'msta');
+      if (!fdc) return false;
+      const visible = game.fowFor(p.team).isVisible(x, z);
+      const spread = visible ? 8 : 18;
+      const edge = game.mission.friendlyEdges?.[p.team] || [0, (p.team === 'UA' ? 1 : -1) * (game.terrain.half + 40)];
+      game.sayTo(p.id, 'Tornado-S', visible ? 'Ziel erfasst. Salve unterwegs!' : 'Kein Sichtkontakt – Salve nach Koordinaten. Streuung erhöht!', 3);
+      for (let i = 0; i < 6; i++) {
+        game.later(i * 0.4, () => {
+          const from = new THREE.Vector3(fdc.pos.x + rand(-6, 6), 40, edge[1]);
+          const tx = x + rand(-spread, spread), tz = z + rand(-spread, spread);
+          const dist = Math.hypot(tx - from.x, tz - from.z);
+          new Missile(game, {
+            from, to: new THREE.Vector3(tx, game.terrain.surface(tx, tz), tz), speed: 110, arc: Math.max(40, dist * 0.5), side: p.team, model: 'rocket', scale: 1.5, threat: 'rocket',
+            onHit: (m) => { game.effects.explosion(m.pos.x, m.pos.y, m.pos.z, 1.6, { water: game.terrain.isWater(m.pos.x, m.pos.z) }); game.splashDamage(m.pos.x, m.pos.z, HIMARS_W.splash, HIMARS_W.dmg, HIMARS_W, p.team, null, false, p.id); },
+          }).register();
+        });
+      }
+    },
+  },
   artillery: {
     name: 'Artillerie', icon: '💥', cooldown: 40, radius: 14,
     desc: 'M777-Batterie: 8 Granaten auf das Zielgebiet (Flugzeit ~5 s).',

@@ -95,6 +95,7 @@
           <div class="sk-field"><span>Modus</span><div class="seg" id="sk-mode"></div></div>
           <div class="sk-field"><span>Team</span><div class="seg" id="sk-team"><button data-v="UA">🇺🇦 Ukraine</button><button data-v="RU">Russland</button></div></div>
           <label>Deine Rolle <select id="sk-role"></select></label>
+          <div id="sk-role-desc" class="role-desc"></div>
           <label>Kartenthema <select id="sk-preset"></select></label>
           <label>Größe <select id="sk-size"></select></label>
           <label>Jahreszeit <select id="sk-season"><option value="summer">Sommer</option><option value="autumn">Herbst</option><option value="winter">Winter</option></select></label>
@@ -141,6 +142,7 @@
           <div id="lobby-team-UA" class="lobby-team"></div>
           <div id="lobby-team-RU" class="lobby-team"></div>
           <div class="lobby-tools"><button id="btn-lobby-team">⇄ Team wechseln</button></div>
+          <div id="lobby-role-desc" class="role-desc"></div>
           <div class="lobby-chat">
             <div id="lobby-chat-log"></div>
             <form id="lobby-chat-form"><input id="lobby-chat-input" maxlength="300" autocomplete="off" placeholder="Nachricht an alle …"><button type="submit">Senden</button></form>
@@ -271,9 +273,10 @@
       </ul>
       <h3>Gefecht &amp; Online</h3>
       <ul>
-        <li><b>Zeppeline und Punkte</b> erobern: 6 s allein im Ring stehen. Wer sie beim Ablauf von „Verstärkung in …“ hält, bekommt Nachschub – ein Späher in letzter Sekunde kann ihn klauen.</li>
+        <li><b>Zeppeline und Punkte</b> erobern: 6 s allein im Ring stehen. Wer sie beim Ablauf von „Verstärkung in …“ hält, bekommt Nachschub – ein Späher in letzter Sekunde kann ihn klauen. Zusätzlich bekommt jeder Spieler Grundnachschub, das Team mit weniger Punkten Frontnachschub.</li>
+        <li><b>Panzerjäger</b> und Schützenpanzer, die im Wald stehen und nicht feuern, werden erst aus kurzer Distanz entdeckt – Fahren oder Schießen verrät sie.</li>
         <li><b>Pioniere</b> wählen → Leiste über den Befehlen: Panzersperre, Sandsäcke, Graben, Minenfeld, Räumen, Sprengen.</li>
-        <li><b>Versorgungs-Lkw</b> füllen Munition, Treibstoff und Baumaterial im Umkreis auf, <b>Bergepanzer</b> reparieren Fahrzeuge und Ketten – einfach danebenstellen.</li>
+        <li><b>Versorgungs-Lkw</b> füllen Munition, Treibstoff und Baumaterial im Umkreis auf, <b>Bergepanzer</b> reparieren Fahrzeuge und Ketten – einfach danebenstellen. Spielt niemand im Team Logistik, hat jeder Spieler einen eigenen Lkw.</li>
         <li><b>Beobachter</b> stehen still und nutzen das 🔭 Fernglas (große Sichtweite im Kegel). Infanterie kann Häuser über 🏠 <b>Besetzen</b> halten.</li>
         <li>Hügelkämme, Wald und Häuser blockieren die Sicht. Verlassene Fahrzeuge kann Infanterie per Rechtsklick/Antippen übernehmen.</li>
       </ul>

@@ -8,7 +8,7 @@ import { HUD } from './game/hud.js';
 import { CAMPAIGN, DEMO } from './missions/index.js';
 import { isMobile, isTouchDevice, fmtTime } from './engine/util.js';
 import { createOnline } from './net/onlineui.js';
-import { startSkirmish, createSkirmish, normalizeSetup, ROLES, DIFFICULTIES, VICTORY, TEAM_NAME, TEAM_COLOR, MAP_PRESETS, MAP_SIZES } from './skirmish/skirmish.js';
+import { startSkirmish, createSkirmish, normalizeSetup, roleSummary, roleSummaryText, ROLES, DIFFICULTIES, VICTORY, TEAM_NAME, TEAM_COLOR, MAP_PRESETS, MAP_SIZES } from './skirmish/skirmish.js';
 import { generateSkirmishMap } from './skirmish/maps.js';
 
 const $ = (id) => document.getElementById(id);
@@ -172,7 +172,16 @@ function renderSkSetup() {
   $('sk-role').value = skSetup.role; $('sk-preset').value = skSetup.preset; $('sk-size').value = skSetup.size; $('sk-season').value = skSetup.season;
   $('sk-night').checked = !!skSetup.night; $('sk-diff').value = skSetup.difficulty; $('sk-reinforce').value = String(skSetup.reinforce);
   $('sk-victory').value = skSetup.victory; $('sk-seed').value = skSetup.seed;
+  renderRoleDesc();
   schedulePreview();
+}
+// MP-T7 (P3a): Was bringt die Rolle mit? (Zeile unter der Auswahl + Tooltip je Option, abhängig vom Team)
+function renderRoleDesc() {
+  const team = skSetup.team === 'RU' ? 'RU' : 'UA';
+  const r = roleSummary(skSetup.role, team);
+  $('sk-role-desc').innerHTML = `<span>${r.text}</span><br><b>Bringt mit:</b> ${r.units}<br><b>Fähigkeiten:</b> ${r.abil}<br><span class="muted">${r.logi}</span>`;
+  $('sk-role').querySelectorAll('option').forEach((o) => { o.title = roleSummaryText(o.value, team); });
+  $('sk-role').title = roleSummaryText(skSetup.role, team);
 }
 const skChanged = () => { saveSk(); renderSkSetup(); };
 for (const id of ['sk-mode', 'sk-team']) $(id).addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; skSetup[id === 'sk-mode' ? 'mode' : 'team'] = id === 'sk-mode' ? +b.dataset.v : b.dataset.v; skChanged(); });

@@ -17,13 +17,14 @@ import * as THREE from 'three';
 import { generateSkirmishMap, MAP_PRESETS, MAP_SIZES } from './maps.js';
 import { AICommander, TeamIntel } from './ai.js';
 import { UNIT_TYPES, W } from '../game/unitTypes.js';
+import { ABILITIES } from '../game/abilities.js';
 
 export const TEAM_NAME = { UA: 'Ukraine', RU: 'Russland' };
 export const TEAM_COLOR = { UA: '#2f7de1', RU: '#e5484d', N: '#8c9096' };
 export const ROLES = {
-  armor: { name: 'Panzerkeil', icon: '🛡️', desc: 'Kampfpanzer und Schützenpanzer mit Begleitinfanterie.' },
-  infantry: { name: 'Infanterie & Aufklärung', icon: '🪖', desc: 'Infanterie, Scharfschütze, Panzerabwehr, Drohnen.' },
-  support: { name: 'Artillerie & Flugabwehr', icon: '💥', desc: 'Raketen-/Rohrartillerie, Flugabwehr, Aufklärung.' },
+  armor: { name: 'Panzerkeil', icon: '🛡️', desc: 'Kampfpanzer, Schützenpanzer und ein Panzerjäger mit Begleitinfanterie – Durchbruch und Panzerduell.' },
+  infantry: { name: 'Infanterie & Aufklärung', icon: '🪖', desc: 'Viel Infanterie, Scharfschütze, Panzerabwehr, Beobachter und Kamikazedrohnen – Wald, Ortschaft, Häuser besetzen.' },
+  support: { name: 'Artillerie & Flugabwehr', icon: '💥', desc: 'Raketen-/Rohrartillerie, Flugabwehr gegen Drohnen, Beobachter und elektronische Kampfführung.' },
   logistics: { name: 'Logistik & Pioniere', icon: '🚚', desc: 'Versorgungs-Lkw (Munition/Treibstoff), Bergepanzer, Pioniere mit Sperren und Minen, Sanitäter.' },
 };
 export const DIFFICULTIES = { easy: 'Leicht', normal: 'Normal', hard: 'Schwer' };
@@ -34,8 +35,8 @@ export const CAPTURE_TIME = 6; // Sekunden bis zum Besitzerwechsel
 // ---------- Startarmeen je Rolle und Fraktion ----------
 export const ARMIES = {
   armor: {
-    UA: [['leopard', 3], ['bradley', 2], ['rifle', 4], ['javelin', 1], ['mg', 1], ['stinger', 1], ['ua_engineer', 1]],
-    RU: [['t90', 2], ['t72', 2], ['bmp', 2], ['btr', 1], ['e_rifle', 5], ['e_atgm', 1], ['e_igla', 1], ['e_engineer', 1]],
+    UA: [['leopard', 3], ['bradley', 2], ['ua_tankdestroyer', 1], ['rifle', 4], ['javelin', 1], ['mg', 1], ['stinger', 1], ['ua_engineer', 1]],
+    RU: [['t90', 2], ['t72', 2], ['bmp', 2], ['btr', 1], ['ru_tankdestroyer', 1], ['e_rifle', 5], ['e_atgm', 1], ['e_igla', 1], ['e_engineer', 1]],
   },
   infantry: {
     UA: [['rifle', 5], ['mg', 2], ['javelin', 2], ['sniper', 1], ['dronepilot', 1], ['sso', 1], ['recon', 1], ['ua_engineer', 1], ['ua_medic', 1], ['ua_observer', 2]],
@@ -54,17 +55,28 @@ export const ARMIES = {
 export const ABIL = {
   armor: { UA: ['scan', { id: 'artillery', charges: 3 }], RU: ['scan', { id: 'artillery', charges: 3 }] },
   infantry: { UA: [{ id: 'fpv', charges: 6 }, 'scan'], RU: [{ id: 'lancet', charges: 6 }, 'scan'] },
-  support: { UA: ['himars', 'artillery', 'scan', 'ew'], RU: ['artillery', 'scan', 'ew'] },
+  support: { UA: ['himars', 'artillery', 'scan', 'ew'], RU: ['tornado', 'artillery', 'scan', 'ew'] }, // MP-T7: RU-Gegenstück zum HIMARS
   logistics: { UA: ['scan', { id: 'artillery', charges: 3 }], RU: ['scan', { id: 'artillery', charges: 3 }] },
 };
 // Verstärkungs-Reihenfolge je Rolle (wird zyklisch abgearbeitet)
 export const REINF = {
-  armor: { UA: ['leopard', 'rifle', 'bradley', 'rifle', 'javelin', 'leopard', 'mg', 'bradley'], RU: ['t90', 'e_rifle', 'bmp', 'e_rifle', 'e_rpg', 't72', 'e_mg', 'btr'] },
+  armor: { UA: ['leopard', 'rifle', 'bradley', 'rifle', 'javelin', 'leopard', 'mg', 'ua_tankdestroyer', 'bradley'], RU: ['t90', 'e_rifle', 'bmp', 'e_rifle', 'e_rpg', 't72', 'e_mg', 'ru_tankdestroyer', 'btr'] },
   infantry: { UA: ['rifle', 'rifle', 'javelin', 'mg', 'sniper', 'rifle', 'sso', 'javelin'], RU: ['e_rifle', 'e_rifle', 'e_atgm', 'e_mg', 'e_sniper', 'e_rifle', 'e_spetsnaz', 'e_atgm'] },
   support: { UA: ['rifle', 'gepard', 'javelin', 'rifle', 'stinger', 'pickup'], RU: ['e_rifle', 'pantsir', 'e_atgm', 'e_rifle', 'e_igla', 'btr'] },
   logistics: { UA: ['ua_supply', 'rifle', 'bradley', 'ua_engineer', 'rifle', 'pickup', 'ua_recovery', 'javelin', 'ua_medic'], RU: ['ru_supply', 'e_rifle', 'bmp', 'e_engineer', 'e_rifle', 'btr', 'ru_recovery', 'e_rpg', 'e_medic'] },
 };
 const PARA = { UA: 'rifle', RU: 'e_rifle' };
+// MP-T7 (P2c): Versorgung für jede Rollenkombination. Hat ein Team keinen Logistik-Spieler, bekommt jeder Spieler des
+// Teams einen Versorgungs-Lkw (Start) und – falls dieser verloren ging – beim Countdown einen Ersatz aus dem Grundnachschub.
+export const SUPPLY_TRUCK = { UA: 'ua_supply', RU: 'ru_supply' };
+export const teamHasLogistics = (players, team) => players.some((p) => p.team === team && p.role === 'logistics');
+// Tarnung stehender, nicht feuernder Fahrzeuge im Wald (game.updateVision, nur Gefecht): Anteil, um den die
+// Entdeckungsweite sinkt (wie type.conceal bei Infanterie). Panzerjäger/ATGM-Träger am besten, Kampfpanzer am wenigsten.
+export const VEHICLE_CONCEAL = {
+  ua_tankdestroyer: 0.75, ru_tankdestroyer: 0.75, bradley: 0.6, bmp: 0.6, btr: 0.5, pickup: 0.55,
+  leopard: 0.45, t72: 0.45, t90: 0.45, gepard: 0.4, pantsir: 0.4, msta: 0.4, himars: 0.45,
+  ua_supply: 0.45, ru_supply: 0.45, ua_recovery: 0.4, ru_recovery: 0.4, default: 0.4,
+};
 // Fraktionsausgleich nur im Gefecht (Kampagnenwerte bleiben unverändert): die ukrainischen Typen sind für die
 // Kampagne qualitativ überlegen (Leopard ≈ 1,7× Feuerkraft eines T-90, Bradley mit TOW …). Russland erhält dafür
 // mehr Einheiten (Masse statt Klasse) und robustere Fahrzeuge/Infanterie (hpMul beim Spawnen).
@@ -76,18 +88,18 @@ export const FACTION_HP = { t90: 1.35, t72: 1.3, bmp: 1.3, btr: 1.2, pantsir: 1.
 // und traf (46 m, 60 Schaden/s) weiter und öfter als T-72/T-90 (34–36 m, 42 m, 35 Schaden/s); der Bradley hat TOW, der BMP
 // keine Panzerabwehr; RU-Infanterie sah 2 m kürzer; Lancet schwächer als FPV. Folge: russische Panzer- und
 // Infanterierollen verloren jedes Treffen (Abschüsse je Rolle bis 1:5) und das Team brach nach 3–6 min ein.
-const T125 = { range: 44, reload: 5.2, acc: 0.78 };            // 125 mm mit moderner Feuerleitung (T-72B3/T-90M)
+const T125 = { range: 46, reload: 5.0, acc: 0.8 };             // 125 mm mit moderner Feuerleitung (T-72B3/T-90M), Reichweite wie 120 mm
 const RIFLE_RU = { range: 24, acc: 0.53, reload: 1.45 };
 const INF_SIGHT = 34 / 32;                                     // RU-Infanterie sieht wie UA-Infanterie
 export const FACTION_MODS = {
   t90: { sight: 38 / 36, weapons: { tank125: T125 } },
-  t72: { sight: 37 / 34, weapons: { tank125: T125 } },
+  t72: { sight: 38 / 34, weapons: { tank125: T125 } },
   bmp: { sight: 35 / 32, add: ['konkurs'] },                   // BMP-2 mit 9M113 Konkurs (Gegenstück zum TOW des Bradley)
   btr: { sight: 34 / 32 },
   e_rifle: { sight: INF_SIGHT, weapons: { rifleRU: RIFLE_RU } },
   e_mg: { sight: INF_SIGHT },
   e_rpg: { sight: INF_SIGHT, weapons: { rifleRU: RIFLE_RU } },
-  e_atgm: { sight: 1, weapons: { kornet: { dmg: 500, reload: 10, acc: 0.88 }, rifleRU: RIFLE_RU } },
+  e_atgm: { sight: 1, weapons: { kornet: { dmg: 520, reload: 9.5, acc: 0.9 }, rifleRU: RIFLE_RU } },
   e_engineer: { sight: INF_SIGHT },
   e_medic: { sight: 30 / 28 },
   e_recon: { sight: INF_SIGHT },
@@ -127,7 +139,7 @@ export const REINF_BONUS = { UA: 0, RU: 0 }; // Zusatz-Einheit je Paket ab 3 Ein
 //   POINTS_LIMIT_MUL – Punkte-Limit = Summe Punktwerte × 100 × Faktor (Partiedauer 25–45 min)
 export const BASE_REINF = 2;
 export const CATCHUP = 0.65;
-export const POINTS_LIMIT_MUL = 1.0;
+export const POINTS_LIMIT_MUL = 1.6;
 // Reserve (Aufholmechanik): Beim Countdown erhält das Team mit weniger gehaltenen Punkten je Spieler mit < 8 Bodeneinheiten
 // einen kleinen Reservetrupp am eigenen Aufmarschraum.
 export const RESERVE = { UA: ['rifle', 'rifle', 'javelin'], RU: ['e_rifle', 'e_rifle', 'e_atgm'] };
@@ -136,6 +148,19 @@ export function reinforceSize(cp) {
   if (cp.kind === 'zeppelin') return 3 + cp.value; // 5–6 (+ Fallschirmtrupp)
   if (cp.kind === 'aerostat') return 1 + cp.value; // 2–3
   return 2 + cp.value; // 3–4
+}
+
+// MP-T7 (P3a): Kurzbeschreibung einer Rolle für Setup und Lobby – was sie mitbringt (aus ARMIES/ABIL abgeleitet)
+export function roleSummary(role, team = 'UA') {
+  const R = ROLES[role] ? role : 'armor';
+  const units = ARMIES[R][team].map(([k, n]) => `${n}× ${UNIT_TYPES[k]?.name || k}`).join(', ');
+  const abil = ABIL[R][team].map((a) => { const id = typeof a === 'string' ? a : a.id; const nm = ABILITIES[id]?.name || id; return a.charges ? `${nm} ×${a.charges}` : nm; }).join(', ');
+  return { title: `${ROLES[R].icon} ${ROLES[R].name}`, text: ROLES[R].desc, units, abil,
+    logi: R === 'logistics' ? 'Versorgt das ganze Team.' : '+1 Versorgungs-Lkw, wenn niemand im Team Logistik spielt.' };
+}
+export function roleSummaryText(role, team) {
+  const r = roleSummary(role, team);
+  return `${r.title}: ${r.text}\nBringt mit: ${r.units}\nFähigkeiten: ${r.abil}\n${r.logi}`;
 }
 
 const PLAYER_COLORS = { UA: ['#4da3ff', '#ffd500', '#5dff8a', '#38e0d0', '#a98bff', '#9fd36b'], RU: ['#ff4d4d', '#ff9a3c', '#e05cb0', '#c9a26b', '#ff6f91', '#d0d0d0'] };
@@ -213,6 +238,7 @@ export function createSkirmish(setup) {
     camera: { x: mySpawn.x, z: mySpawn.z + (myTeam === 'UA' ? -16 : 16), dist: camBase.dist, yaw: camBase.yaw },
     players: players.map((p) => ({ ...p })),
     noDefaultDefeat: true,
+    vehicleConceal: VEHICLE_CONCEAL,
     // MP-T7: Fraktionsausgleich je gespawnter Einheit (Startarmee, Verstärkung, Fallschirmjäger, Besatzungen, Online-Spiegel)
     onSpawn(g, u) { if (u.side === 'UA' || u.side === 'RU') applyFactionMods(g, u); },
     logistics: true, // Munition, Treibstoff, Versorgung, Pioniere, Besatzungen (MP-T4b)
@@ -391,6 +417,7 @@ function spawnArmy(g, p, S, sk) {
   const team = p.team, sp = p.spawn;
   const dir = team === 'UA' ? -1 : 1; // Richtung zur Kartenmitte (z)
   let list = ARMIES[p.role][team].map(([t, n]) => [t, n]);
+  if (!teamHasLogistics(g.players, team)) list.push([SUPPLY_TRUCK[team], 1]); // P2c: Team-Logistik-Fallback
   // Große Gefechte: etwas kleinere Startarmeen (Leistung, < 250 Einheiten)
   const cut = (S.mode >= 5 ? 2 : S.mode >= 4 ? 1 : 0) + Math.round((1 - S.startArmyMul) * 6);
   for (let i = 0, k = cut; k > 0 && i < list.length; i++) {
@@ -512,7 +539,16 @@ function deliverReinforcements(g, sk) {
     sk.log.push({ t: g.time, type: kind, team: p.team, player: p.id, n, types });
     return n;
   };
-  for (const p of g.players) if (!p.defeated && (p.team === 'UA' || p.team === 'RU')) extra[p.team] += give(p, BASE_REINF, 'baseReinforce');
+  for (const p of g.players) {
+    if (p.defeated || (p.team !== 'UA' && p.team !== 'RU')) continue;
+    let n = BASE_REINF;
+    // P2c: Ersatz-Versorgungs-Lkw für Teams ohne Logistik-Spieler (zählt zum Grundnachschub)
+    if (!teamHasLogistics(g.players, p.team) && !g.units.some((u) => u.alive && u.owner === p.id && u.type.supply) && sk.popCap - unitCount(g, p) - queued(p) > 0) {
+      enqueue(p, [SUPPLY_TRUCK[p.team]]); p.stats.reinf++; extra[p.team]++; n--;
+      sk.log.push({ t: g.time, type: 'supplyTruck', team: p.team, player: p.id });
+    }
+    extra[p.team] += give(p, n, 'baseReinforce');
+  }
   for (const team of ['UA', 'RU']) {
     let n = Math.round((pkg[other(team)] - pkg[team]) * CATCHUP);
     const ps = g.playersOfTeam(team).filter((p) => !p.defeated);

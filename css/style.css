@@ -440,3 +440,10 @@ body.touch .key { display: none; }
   .net-actions { margin-top: 6px; gap: 6px; }
   #net-chat { bottom: calc(110px + var(--safe-b)); }
 }
+
+/* MP-T7 (P3a): Rollenbeschreibung im Gefechts-Setup und in der Lobby */
+.role-desc { font-size: 11.5px; line-height: 1.4; color: #c9d3de; background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin: 2px 0 8px; }
+.role-desc b { color: var(--accent); font-weight: 600; }
+.role-desc .muted { color: var(--muted); }
+#lobby-role-desc:empty { display: none; }
+@media (max-height: 500px) { .role-desc { font-size: 10.5px; padding: 4px 6px; } }

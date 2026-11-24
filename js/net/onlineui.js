@@ -6,7 +6,7 @@
 import { createTransport, normalizeRoomCode } from './transport.js';
 import { Lobby, TEAMS, MAX_PER_TEAM } from './lobby.js';
 import { HostSession, ClientSession, setupFromStart, ROLE_ORDER } from './session.js';
-import { ROLES, DIFFICULTIES, VICTORY, TEAM_NAME, TEAM_COLOR, MAP_PRESETS, MAP_SIZES } from '../skirmish/skirmish.js';
+import { ROLES, roleSummary, roleSummaryText, DIFFICULTIES, VICTORY, TEAM_NAME, TEAM_COLOR, MAP_PRESETS, MAP_SIZES } from '../skirmish/skirmish.js';
 import { generateSkirmishMap } from '../skirmish/maps.js';
 import { Terrain } from '../engine/terrain.js';
 
@@ -220,6 +220,13 @@ class OnlineUI {
       });
     }
     const mine = L.mySlot;
+    // MP-T7 (P3a): Beschreibung der eigenen Rolle unter den Teams
+    if (mine) {
+      const pos = mine.team === 'RU' ? mine.slot - n : mine.slot;
+      const r = roleSummary(ROLES[mine.role] ? mine.role : ROLE_ORDER[pos % ROLE_ORDER.length], mine.team);
+      const html = `<b>Deine Rolle ${r.title}:</b> ${r.text}<br><b>Bringt mit:</b> ${r.units}<br><b>Fähigkeiten:</b> ${r.abil} · <span class="muted">${r.logi}</span>`;
+      const rd = $('lobby-role-desc'); if (rd._html !== html) { rd._html = html; rd.innerHTML = html; }
+    }
     $('lobby-me').textContent = mine ? `Du: ${mine.name} · Team ${TEAM_NAME[mine.team]}${host ? ' · Host' : ''}` : '';
     $('btn-lobby-team').disabled = !mine || !st.slots.some((s) => s.team !== mine.team && s.kind === 'open');
     // Einstellungen
@@ -257,8 +264,10 @@ class OnlineUI {
     let roleEl = '<span></span>';
     if (human || ai || (s.kind === 'open' && st.settings.fillAI)) {
       const can = isMe || (host && ai);
-      roleEl = can ? `<select data-act="role" data-slot="${s.slot}" title="Rolle">${Object.entries(ROLES).map(([k, r]) => opt(k, `${r.icon} ${r.name}`, k === role)).join('')}</select>`
-        : `<span class="muted" title="${ROLES[role].name}">${ROLES[role].icon} ${ROLES[role].name.split(' ')[0]}</span>`;
+      // MP-T7 (P3a): Tooltip mit Ausstattung der Rolle (je Team)
+      const tip = (k) => esc(roleSummaryText(k, s.team));
+      roleEl = can ? `<select data-act="role" data-slot="${s.slot}" title="${tip(role)}">${Object.entries(ROLES).map(([k, r]) => opt(k, `${r.icon} ${r.name}`, k === role).replace('<option ', `<option title="${tip(k)}" `)).join('')}</select>`
+        : `<span class="muted" title="${tip(role)}">${ROLES[role].icon} ${ROLES[role].name.split(' ')[0]}</span>`;
     }
     const stTxt = isHostSlot ? '<span class="st ok">★ Host</span>' : human ? (s.ready ? '<span class="st ok">✔ bereit</span>' : '<span class="st wait">⏳ wartet</span>') : ai ? '<span class="st ok">KI</span>' : '<span class="st"></span>';
     const pingEl = `<span class="ping" data-slot="${s.slot}"></span>`;
