@@ -1,6 +1,7 @@
 // Wegfindung des Spiels: erweitert den Engine-Pathfinder um Panzersperren (MP-T4b).
 // Rasterwert gBlocked = 4 („Panzersperre“) sperrt Fahrzeuge, Infanterie passiert. Alle anderen Werte (1 Gebäude/Hang,
-// 2 Wasser-Sperre, 3 Wrack) bleiben für alle gesperrt. Der Engine-Code (js/engine) bleibt unverändert.
+// 2 Wasser-Sperre, 3 Wrack) bleiben für alle gesperrt. Das Abstandsfeld (Fahrzeugbreite) gilt nur für Fahrzeuge und
+// zählt Panzersperren daher als hartes Hindernis.
 import { Pathfinder } from '../engine/pathfinding.js';
 
 export const BLOCK_TRAP = 4;
@@ -14,9 +15,10 @@ export class GamePathfinder extends Pathfinder {
     const b = t.gBlocked[k];
     return t.gWater[k] === 0 && (b === 0 || (b === BLOCK_TRAP && !veh));
   }
-  find(sx, sz, ex, ez, mode = 'ground', vehicle = false) {
+  hardBlock(k) { return this.t.gBlocked[k] === BLOCK_TRAP || super.hardBlock(k); }
+  find(sx, sz, ex, ez, mode = 'ground', vehicle = false, radius) {
     const prev = this._veh;
     this._veh = !!vehicle;
-    try { return super.find(sx, sz, ex, ez, mode, vehicle); } finally { this._veh = prev; }
+    try { return super.find(sx, sz, ex, ez, mode, vehicle, radius); } finally { this._veh = prev; }
   }
 }

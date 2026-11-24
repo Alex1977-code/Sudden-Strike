@@ -9,6 +9,45 @@ let NEXT_ID = 1;
 export function resetUnitIds(n = 1) { NEXT_ID = n; }
 const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _m = new THREE.Matrix4(), _up = new THREE.Vector3(0, 1, 0), _n = new THREE.Vector3();
 
+// ---------------- Fahrzeug-Grundfläche ----------------
+// Orientiertes Rechteck (Halbachsen 0,55·radius quer, 1,15·radius längs ≈ Wanne) gegen harte Hinderniszellen
+// (Gebäude, Bauwerke, Wracks, Panzersperren; pf.hardBlock). Liefert die größte Eindringtiefe (m) und in _fp.nx/_fp.nz
+// die Richtung, in die die Einheit herausgedrückt wird. Steile Hänge und Ufer prüft weiterhin nur der Mittelpunkt.
+const FP_EPS = 0.01;
+const _fp = { pen: 0, nx: 0, nz: 0 };
+function footPen(u, x, z, h) {
+  const g = u.game, t = g.terrain, pf = g.pathfinder, gw = t.gw;
+  const r = u.radius, hw = 0.55 * r, hl = 1.15 * r;
+  const c = Math.cos(h), s = Math.sin(h), ac = Math.abs(c), as = Math.abs(s);
+  const ex = hw * ac + hl * as, ez = hw * as + hl * ac, axy = ac + as; // Ausdehnung in x/z; Zellprojektion auf Rechteckachsen
+  const [i0, j0] = t.cellOf(x - ex - 1, z - ez - 1), [i1, j1] = t.cellOf(x + ex + 1, z + ez + 1);
+  let pen = 0, px = 0, pz = 0;
+  for (let j = Math.max(0, j0); j <= Math.min(gw - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(gw - 1, i1); i++) {
+    const k = j * gw + i;
+    if (!t.gBlocked[k] || !pf.hardBlock(k)) continue;
+    const [cx, cz] = t.cellCenter(i, j);
+    const dx = cx - x, dz = cz - z;
+    // Trennachsentest: Welt-x, Welt-z, Rechteck quer (c,-s), Rechteck längs (s,c)
+    const ox = ex + 1 - Math.abs(dx); if (ox <= FP_EPS) continue;
+    const oz = ez + 1 - Math.abs(dz); if (oz <= FP_EPS) continue;
+    const dr = dx * c - dz * s, df = dx * s + dz * c;
+    const or = hw + axy - Math.abs(dr); if (or <= FP_EPS) continue;
+    const of = hl + axy - Math.abs(df); if (of <= FP_EPS) continue;
+    let m = ox, vx = -Math.sign(dx), vz = 0;
+    if (oz < m) { m = oz; vx = 0; vz = -Math.sign(dz); }
+    if (or < m) { m = or; const sg = -Math.sign(dr); vx = c * sg; vz = -s * sg; }
+    if (of < m) { m = of; const sg = -Math.sign(df); vx = s * sg; vz = c * sg; }
+    px += vx * m; pz += vz * m;
+    if (m > pen) pen = m;
+  }
+  const l = Math.hypot(px, pz) || 1;
+  _fp.pen = pen; _fp.nx = px / l; _fp.nz = pz / l;
+  return pen;
+}
+// Gilt der Grundflächentest für diese Einheit? (Bodenfahrzeuge, keine Boote/Bauwerke)
+if (typeof window !== "undefined") window.__fpPen = footPen; // DEBUG-TEMP
+function usesFootprint(u) { const ty = u.type; return !!ty.vehicle && !ty.air && !ty.naval && !ty.structure && !!u.game.pathfinder?.hardBlock; }
+
 export class Unit {
   constructor(game, typeKey, side, x, z, opts = {}) {
     const type = UNIT_TYPES[typeKey];
@@ -114,6 +153,9 @@ export class Unit {
       this.root.rotation.set(Math.sin(this.animT * 1.1) * 0.03 - (this.moving ? 0.06 : 0), this.heading, Math.sin(this.animT * 0.9) * 0.04);
       return;
     }
+    // Stehendes Fahrzeug überlappt ein hartes Hindernis (z. B. von Nachbarn abgedrängt, frisches Wrack, Drehung im Stand):
+    // sanft herausdrücken (fahrende Fahrzeuge erledigt stepForward)
+    if (dt > 0 && !this.moving && !this.remote && !this.cantMove && usesFootprint(this) && footPen(this, p.x, p.z, this.heading) > FP_EPS) this._depenetrate(dt);
     p.y = t.height(p.x, p.z);
     if (this.garrison) p.y = this.garrison.roofY - 1.4; // Fensterhöhe
     this.root.position.copy(p);
@@ -178,7 +220,7 @@ export class Unit {
   computePath(x, z) {
     if (this.type.air) { this.path = [[x, z]]; return; }
     const mode = this.type.naval ? 'water' : 'ground';
-    this.path = this.game.pathfinder.find(this.pos.x, this.pos.z, x, z, mode, this.type.vehicle);
+    this.path = this.game.pathfinder.find(this.pos.x, this.pos.z, x, z, mode, this.type.vehicle, this.radius);
   }
 
   // ---------------- Kampf ----------------
@@ -415,6 +457,7 @@ export class Unit {
     const nx = this.pos.x + Math.sin(this.heading) * s, nz = this.pos.z + Math.cos(this.heading) * s;
     const t = this.game.terrain;
     if (!this.type.air) {
+      if (usesFootprint(this)) { this._stepVehicle(nx, nz, dt); return; }
       const k = t.cellIndex(nx, nz);
       if (k < 0) return;
       const pf = this.game.pathfinder;
@@ -436,6 +479,58 @@ export class Unit {
     } else if (!t.inBounds(nx, nz, -30)) return;
     this.pos.x = nx; this.pos.z = nz;
     this.moving = true;
+  }
+  // Bodenfahrzeug: Mittelpunkt wie bisher gegen gesperrte Zellen, zusätzlich die Grundfläche gegen harte Hindernisse.
+  // Kollision → entlang des Hindernisses gleiten; nie tiefer eindringen; steckt das Fahrzeug bereits (Drehung, Abdrängen,
+  // frisches Wrack), wird es zuerst sanft herausgedrückt.
+  _stepVehicle(nx, nz, dt) {
+    const t = this.game.terrain, pf = this.game.pathfinder, p = this.pos, h = this.heading;
+    if (t.cellIndex(nx, nz) < 0) return;
+    let cur = footPen(this, p.x, p.z, h);
+    if (cur > FP_EPS) { this._depenetrate(dt); cur = footPen(this, p.x, p.z, h); }
+    const curK = t.cellIndex(p.x, p.z);
+    const stuckInside = curK >= 0 && !pf.passable(curK, 'ground', true);
+    const lim = Math.max(FP_EPS, cur + 1e-4);
+    const canAt = (x, z) => {
+      const k = t.cellIndex(x, z);
+      if (k < 0 || (!pf.passable(k, 'ground', true) && !stuckInside)) return false;
+      return footPen(this, x, z, h) <= lim;
+    };
+    const sx = nx - p.x, sz = nz - p.z;
+    this.moving = true;
+    if (canAt(nx, nz)) { p.x = nx; p.z = nz; this._fpBlockT = 0; return; }
+    // Gleiten: Schrittanteil in Richtung Hindernis entfernen (Normale aus dem Grundflächentest am Zielpunkt)
+    footPen(this, nx, nz, h);
+    const dn = sx * _fp.nx + sz * _fp.nz;
+    if (dn < 0) {
+      const tx = sx - dn * _fp.nx, tz = sz - dn * _fp.nz;
+      if (tx * tx + tz * tz > 1e-8 && canAt(p.x + tx, p.z + tz)) { p.x += tx; p.z += tz; this._fpBlockT = 0; return; }
+    }
+    if (canAt(nx, p.z)) { p.x = nx; this._fpBlockT = 0; return; }
+    if (canAt(p.x, nz)) { p.z = nz; this._fpBlockT = 0; return; }
+    // Kein Durchkommen: Wegpunkt dicht vor dem Ziel als erreicht werten, sonst (gedrosselt) neu planen
+    this._fpBlockT = (this._fpBlockT || 0) + dt;
+    if (this.path && this.path.length) {
+      const [wx, wz] = this.path[0];
+      if (this.path.length === 1 && Math.hypot(wx - p.x, wz - p.z) < this.radius * 2.2) { this.path.shift(); return; }
+      if (this._fpBlockT > 0.4) {
+        this._fpBlockT = 0; this.repathT = 0;
+        if (this.order && this.order.type !== 'attack') this.computePath(this.order.x, this.order.z);
+      }
+    }
+  }
+  // Aus harten Hindernissen herausdrücken (je Iteration höchstens 0,4 m, nur auf befahrbare Mittelpunktzellen)
+  _depenetrate(dt) {
+    const t = this.game.terrain, pf = this.game.pathfinder, p = this.pos;
+    for (let it = 0; it < 6; it++) {
+      const pen = footPen(this, p.x, p.z, this.heading);
+      if (pen <= FP_EPS) return;
+      const step = Math.min(pen + 0.02, 0.4);
+      const x = p.x + _fp.nx * step, z = p.z + _fp.nz * step;
+      const k = t.cellIndex(x, z), curK = t.cellIndex(p.x, p.z);
+      if (k < 0 || (!pf.passable(k, 'ground', true) && curK >= 0 && pf.passable(curK, 'ground', true))) return;
+      p.x = x; p.z = z;
+    }
   }
 
   findKamikazeTarget() {

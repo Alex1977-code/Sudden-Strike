@@ -154,6 +154,9 @@ export class Terrain {
     const n = this.gw * this.gw;
     this.gWater = new Uint8Array(n);
     this.gBlocked = new Uint8Array(n); // Gebäude, steile Hänge
+    // „Harte“ Sperren (Gebäude, Bauwerke, Wracks – alles, was über blockRect/blockCircle gesetzt wird). Im Unterschied zu
+    // steilen Hängen (nur gBlocked) zählen sie für das Abstandsfeld der Wegfindung und die Fahrzeug-Grundfläche.
+    this.gHard = new Uint8Array(n);
     this.gForest = new Uint8Array(n);
     this.gRoad = new Uint8Array(n);
     this.gDeepWater = new Uint8Array(n);
@@ -194,7 +197,7 @@ export class Terrain {
     for (let j = cj - cr; j <= cj + cr; j++) for (let i = ci - cr; i <= ci + cr; i++) {
       if (i < 0 || j < 0 || i >= this.gw || j >= this.gw) continue;
       const [cx, cz] = this.cellCenter(i, j);
-      if (Math.hypot(cx - x, cz - z) <= r) this.gBlocked[j * this.gw + i] = v;
+      if (Math.hypot(cx - x, cz - z) <= r) { const k = j * this.gw + i; this.gBlocked[k] = v; this.gHard[k] = v ? 1 : 0; }
     }
   }
   blockRect(x, z, w, d, rot, v = 1) {
@@ -207,7 +210,7 @@ export class Terrain {
       const [cx, cz] = this.cellCenter(i, j);
       const dx = cx - x, dz = cz - z;
       const lx = dx * c - dz * s, lz = dx * s + dz * c;
-      if (Math.abs(lx) <= w / 2 + 0.6 && Math.abs(lz) <= d / 2 + 0.6) this.gBlocked[j * this.gw + i] = v;
+      if (Math.abs(lx) <= w / 2 + 0.6 && Math.abs(lz) <= d / 2 + 0.6) { const k = j * this.gw + i; this.gBlocked[k] = v; this.gHard[k] = v ? 1 : 0; }
     }
   }
 
