@@ -252,7 +252,8 @@ class ParticlePool {
 
 const _dummy = new THREE.Object3D();
 const _col = new THREE.Color();
-const DEBRIS_COLORS = [0x8a7d70, 0x9a8a76, 0x6e6a66, 0xb09070, 0xa65a30, 0x707880];
+// Erdklumpen/Splitter: dunkle Erdtöne statt heller „Steinbrocken"
+const DEBRIS_COLORS = [0x3b3127, 0x4a3c2e, 0x2e2a25, 0x55473a, 0x40362c, 0x5a5048];
 
 export class Effects {
   constructor(scene, terrain, quality, audio) {
@@ -422,7 +423,7 @@ export class Effects {
     this.dr[i * 3] = Math.random() * 6; this.dr[i * 3 + 1] = Math.random() * 6; this.dr[i * 3 + 2] = Math.random() * 6;
     this.ds[i * 3] = rand(-9, 9); this.ds[i * 3 + 1] = rand(-9, 9); this.ds[i * 3 + 2] = rand(-9, 9);
     this.dsize[i * 3] = sz * rand(0.7, 1.3); this.dsize[i * 3 + 1] = sz * rand(0.5, 1); this.dsize[i * 3 + 2] = sz * rand(0.7, 1.2);
-    this.dlife[i] = rand(1.6, 3.2); this.dtrail[i] = Math.random() * 0.08;
+    this.dlife[i] = rand(0.9, 1.6); this.dtrail[i] = Math.random() < 0.15 ? Math.random() * 0.08 : 99; // nur wenige ziehen eine Staubspur
   }
   _updateDebris(dt) {
     if (this.dalive <= 0) return;
@@ -444,14 +445,14 @@ export class Effects {
         this.dp[i3 + 1] = g + 0.1;
         if (T.isWater(this.dp[i3], this.dp[i3 + 2])) { this.dlife[i] = 0.01; this.smoke.emit(this.dp[i3], g, this.dp[i3 + 2], 0, 2, 0, 1, 0.6, 0.9, 0.95, 1, 0.5, { grow: 1.8 }); continue; }
         if (this.dv[i3 + 1] < -3) { this.dv[i3 + 1] *= -0.3; this.dv[i3] *= 0.6; this.dv[i3 + 2] *= 0.6; this.ds[i3] *= 0.5; this.ds[i3 + 1] *= 0.5; this.ds[i3 + 2] *= 0.5; }
-        else { this.dv[i3] = this.dv[i3 + 1] = this.dv[i3 + 2] = 0; this.ds[i3] = this.ds[i3 + 1] = this.ds[i3 + 2] = 0; flying = false; if (this.dlife[i] > 0.8) this.dlife[i] = 0.8; }
+        else { this.dv[i3] = this.dv[i3 + 1] = this.dv[i3 + 2] = 0; this.ds[i3] = this.ds[i3 + 1] = this.ds[i3 + 2] = 0; flying = false; if (this.dlife[i] > 0.35) this.dlife[i] = 0.35; }
       }
       if (flying) {
         this.dr[i3] += this.ds[i3] * dt; this.dr[i3 + 1] += this.ds[i3 + 1] * dt; this.dr[i3 + 2] += this.ds[i3 + 2] * dt;
         this.dtrail[i] -= dt;
         if (this.dtrail[i] <= 0) {
           this.dtrail[i] = 0.07;
-          this.smoke.emit(this.dp[i3], this.dp[i3 + 1], this.dp[i3 + 2], rand(-0.4, 0.4), rand(0.2, 1), rand(-0.4, 0.4), rand(0.5, 0.9), rand(0.7, 1.3), 0.3, 0.28, 0.26, 0.5, { grow: 1.6, drag: 1 });
+          this.smoke.emit(this.dp[i3], this.dp[i3 + 1], this.dp[i3 + 2], rand(-0.3, 0.3), rand(0.1, 0.5), rand(-0.3, 0.3), rand(0.25, 0.45), rand(0.4, 0.8), 0.34, 0.29, 0.24, 0.35, { grow: 1.5, drag: 1.5 });
         }
       }
       const sc = Math.min(1, this.dlife[i] * 3);
@@ -515,11 +516,19 @@ export class Effects {
       const c = rand(0.4, 0.55);
       this.smoke.emit(x + Math.cos(a) * 1.5, y + 1.0, z + Math.sin(a) * 1.5, Math.cos(a) * sp, rand(0.3, 1.5), Math.sin(a) * sp, rand(2.6, 4.2) * size, rand(1.4, 2.6), c, c * 0.88, c * 0.7, 0.6, { grow: 1.5, drag: 2.6, fadeIn: 0.05 });
     }
-    // Truemmer
-    const nT = Math.floor((5 + 4 * sc) * m);
+    // Erdfontäne: Einschläge werfen vor allem Erde steil nach oben (Partikel) …
+    const nF = Math.floor((10 + 8 * sc) * m);
+    for (let i = 0; i < nF; i++) {
+      const a = Math.random() * 6.28, sp = rand(1, 5) * Math.sqrt(size);
+      const c = rand(0.16, 0.26);
+      this.smoke.emit(x + rand(-0.5, 0.5), y + 0.5, z + rand(-0.5, 0.5), Math.cos(a) * sp, rand(10, 22) * Math.sqrt(size), Math.sin(a) * sp,
+        rand(0.9, 1.8) * size, rand(0.9, 1.5), c, c * 0.85, c * 0.7, 0.85, { grow: 1.35, drag: 0.9, grav: 16 });
+    }
+    // … dazu kleine dunkle Erdklumpen/Splitter (keine großen hellen Brocken)
+    const nT = Math.floor((7 + 6 * sc) * m);
     for (let i = 0; i < nT; i++) {
-      const a = Math.random() * 6.28, sp = rand(5, 16) * Math.sqrt(size);
-      this._debris(x, y + 0.6, z, Math.cos(a) * sp, rand(9, 22) * Math.sqrt(size), Math.sin(a) * sp, rand(0.25, 0.65) * Math.sqrt(size));
+      const a = Math.random() * 6.28, sp = rand(3, 10) * Math.sqrt(size);
+      this._debris(x, y + 0.5, z, Math.cos(a) * sp, rand(10, 24) * Math.sqrt(size), Math.sin(a) * sp, rand(0.07, 0.2) * Math.sqrt(size));
     }
     // Rauchsaeule (Stiel)
     const nStem = Math.floor((5 + 5 * sc) * m);

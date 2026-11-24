@@ -59,7 +59,7 @@ export function createModsUI(ctx) {
     }).join('') : '<p class="muted">Keine Mods installiert.</p>';
     $('mods-list').querySelectorAll('[data-toggle]').forEach((c) => (c.onchange = () => { setModEnabled(c.dataset.toggle, c.checked); render(); }));
     $('mods-list').querySelectorAll('[data-remove]').forEach((b) => (b.onclick = () => {
-      if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Sicher?'; setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.innerHTML = icon('trash'); } }, 3000); return; }
+      if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Sicher?'; setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.innerHTML = icon('trash'); } }, 5000); return; }
       removeMod(b.dataset.remove); render(); msg('Mod entfernt.');
     }));
     $('mods-fields').textContent = `Einheiten: ${Object.keys(UNIT_FIELDS).join(', ')} · Waffen: ${Object.keys(WEAPON_FIELDS).join(', ')}`;

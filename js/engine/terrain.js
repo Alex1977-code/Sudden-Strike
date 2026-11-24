@@ -106,7 +106,10 @@ export class Terrain {
   _hedgeHeight(h, x, z) {
     const R = this._rel;
     if (!R || !R.hedges.length) return h;
-    for (const e of R.hedges) {
+    const HG = R.hedgeGrid, ci = Math.floor((x + this.half) / 16), cj = Math.floor((z + this.half) / 16);
+    const L = ci >= 0 && cj >= 0 && ci < HG.gw && cj < HG.gw ? HG.cells[cj * HG.gw + ci] : null;
+    if (!L) return h;
+    for (const e of L) {
       if (x < e.bx0 || x > e.bx1 || z < e.bz0 || z > e.bz1) continue;
       const dd = distToPolyline(x, z, e.pts);
       if (dd >= e.hw) continue;
@@ -376,6 +379,12 @@ export class Terrain {
         (cells[j * gw + i] || (cells[j * gw + i] = [])).push(c);
       }
       R.craters = { gw, cells };
+    }
+    if (R.hedges.length) {
+      // räumliches Raster (16 m) der Hecken für die Höhenberechnung
+      const gw = Math.ceil(this.size / 16) + 1, cells = new Array(gw * gw), c = (v) => clamp(Math.floor((v + this.half) / 16), 0, gw - 1);
+      for (const e of R.hedges) for (let j = c(e.bz0); j <= c(e.bz1); j++) for (let i = c(e.bx0); i <= c(e.bx1); i++) (cells[j * gw + i] || (cells[j * gw + i] = [])).push(e);
+      R.hedgeGrid = { gw, cells };
     }
     this.snowLine = snow;
     const any = R.valleys.length || R.mountains.length || R.ridges.length || R.plateaus.length || R.cliffs.length || R.craters || R.hedges.length;
@@ -2203,7 +2212,11 @@ class VegB {
     const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
     const fx = uy * vz - uz * vy, fy = uz * vx - ux * vz, fz = ux * vy - uy * vx;
     if (fx * (na[0] + nb[0] + nc[0]) + fy * (na[1] + nb[1] + nc[1]) + fz * (na[2] + nb[2] + nc[2]) < 0) { [b, c] = [c, b]; [nb, nc] = [nc, nb]; [cb, cc] = [cc, cb]; [tb, tc] = [tc, tb]; }
-    for (const [p, n, col, t] of [[a, na, ca, ta], [b, nb, cb, tb], [c, nc, cc, tc]]) { this.P.push(p[0], p[1], p[2]); this.N.push(n[0], n[1], n[2]); this.C.push(col[0], col[1], col[2]); this.T.push(t); }
+    const P = this.P, N = this.N, C = this.C;
+    P.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+    N.push(na[0], na[1], na[2], nb[0], nb[1], nb[2], nc[0], nc[1], nc[2]);
+    C.push(ca[0], ca[1], ca[2], cb[0], cb[1], cb[2], cc[0], cc[1], cc[2]);
+    this.T.push(ta, tb, tc);
   }
   // beidseitiges Dreieck (Wedel, Blätter)
   tri2(a, b, c, col, t, colB) {

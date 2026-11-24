@@ -719,7 +719,6 @@ function layoutGrid(C) {
   for (const b of blocks) {
     if (b === sqB || b === parkB) continue;
     const zone = zoneAt(b.x, b.z);
-    const rot = -ang + Math.PI / 2; // Ausrichtung am Raster (w entlang u)
     const rotU = Math.atan2(-vx, -vz);
     if (Tt.micro && zone !== 'ind') {
       // Mikrorajon: zwei Zeilen im Blockinneren (parallel zur Hauptachse) um einen Hof, Schule/Kindergarten in der Mitte
@@ -734,7 +733,6 @@ function layoutGrid(C) {
     } else if (Tt.courtTrees && (C.courts || 0) < 10 && zone !== 'ind') {
       C.courts = (C.courts || 0) + 1; C.out.push({ type: 'forest', x: r1(b.x), z: r1(b.z), r: 8, kind: 'deciduous', density: 0.04, gen: 'settlement' });
     }
-    void rot;
   }
   // Friedhof am Rand
   if (C.f.cemetery !== false && Tt.set !== 'afghan') {

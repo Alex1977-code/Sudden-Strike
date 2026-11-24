@@ -517,6 +517,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   // Debug-Zugriff
   window.__game = game;
+  window.__music = music;
   window.__start = (i) => startMission(CAMPAIGN[i]);
   window.__startSkirmish = (setup = {}) => startSkirmishGame({ ...skSetup, ...setup });
   window.__openSkirmish = openSkirmish;

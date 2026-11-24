@@ -68,7 +68,7 @@ const THEMES = {
     bpm: 84,
     prog: [[48, [0, 3, 7, 12]], [44, [0, 4, 7, 12]], [41, [0, 3, 7, 12]], [43, [0, 4, 7, 10]], [48, [0, 3, 7, 12]], [41, [0, 3, 7, 12]], [43, [0, 4, 7, 10]], [48, [0, 3, 7, 12]]],
     scale: [0, 2, 3, 5, 7, 8, 11],
-    layers: { pad: [0.5, 0.35], bass: [0.5, 0.2], mel: [0.5, 0.35], drum: [0.7, 0.18] },
+    layers: { pad: [0.5, 0.35], bass: [0.5, 0.2], mel: [0.5, 0.35], drum: [0.42, 0.18] },
     step(S, i, t, bar, s) {
       const ch = S.chordAt(bar), I = S.I;
       if (s === 0) {
@@ -98,7 +98,7 @@ const THEMES = {
     bpm: 72, echo: true,
     prog: [[38, [0, 5, 7, 12]], [38, [0, 5, 7, 12]], [38, [0, 5, 7, 12]], [38, [0, 5, 7, 12]], [38, [0, 5, 7, 12]], [38, [0, 5, 7, 12]], [36, [0, 5, 7, 12]], [36, [0, 5, 7, 12]]],
     scale: [2, 3, 5, 7, 9, 10, 0],
-    layers: { pad: [0.5, 0.45], bass: [0.4, 0.2], mel: [0.55, 0.5], drum: [0.7, 0.2] },
+    layers: { pad: [0.5, 0.45], bass: [0.4, 0.2], mel: [0.55, 0.5], drum: [0.5, 0.2] },
     setup(S) {
       const d = this.drone(S, 50, 0.05); S.drone = d;
     },
@@ -135,7 +135,7 @@ const THEMES = {
     bpm: 88, echo: true,
     prog: [[52, [0, 3, 7, 14]], [48, [0, 4, 7, 14]], [55, [0, 4, 7, 12]], [50, [0, 4, 7, 14]], [52, [0, 3, 7, 14]], [48, [0, 4, 7, 11]], [43, [0, 4, 7, 12]], [50, [0, 4, 7, 9]]],
     scale: [4, 6, 7, 9, 11, 0, 2],
-    layers: { pad: [0.5, 0.65], bass: [0.6, 0.15], mel: [0.45, 0.7], drum: [0.7, 0.35] },
+    layers: { pad: [0.5, 0.65], bass: [0.5, 0.15], mel: [0.45, 0.7], drum: [0.5, 0.35] },
     step(S, i, t, bar, s) {
       const ch = S.chordAt(bar), I = S.I;
       if (s === 0) {
@@ -259,7 +259,7 @@ export class Music {
     S.nodes.push(S.fadeDry, S.fadeWet);
     S.L = {};
     for (const [k, [g, w]] of Object.entries(T.layers || { pad: [0.5, 0.5], bass: [0.5, 0.2], mel: [0.5, 0.5], drum: [0.6, 0.3] })) S.L[k] = this._layer(S, g, w);
-    if (T.once) { S.L.pad.g.gain.value = 1; S.L.bass.g.gain.value = 1; S.L.mel.g.gain.value = 1; S.L.drum.g.gain.value = 1; }
+    if (T.once) { S.L.pad.g.gain.value = 0.7; S.L.bass.g.gain.value = 0.7; S.L.mel.g.gain.value = 0.55; S.L.drum.g.gain.value = 0.6; }
     if (T.echo) {
       const e = c.createDelay(2), fb = c.createGain(), lp = c.createBiquadFilter(), send = c.createGain(), out = this._layer(S, 1, 0.55);
       e.delayTime.value = sd * 3; fb.gain.value = 0.38; lp.type = 'lowpass'; lp.frequency.value = 2400; send.gain.value = 0.42;
