@@ -134,8 +134,10 @@ export class BridgeSystem {
     if (!T?.hasWater || !Array.isArray(pts) || pts.length < 2) return null;
     const width = o.width || 8, kind = o.kind === 'rail' ? 'rail' : 'road';
     const style = BRIDGE_STYLES.includes(o.style) ? o.style : this.eraStyle(kind);
-    const P = pts.map((p) => [+p[0], +p[1]]), cum = polyLen(P), L = cum[cum.length - 1];
-    // Wasserabschnitte (echtes Gelände), Unterbrechungen < 70 m (Inseln) zusammenfassen
+    // Abschluss V3-M2: endet die Linie im Wasser (Ortsvorlagen: Krimbrücke, Antoniwka, Hafenmolen …), bis zum nächsten
+    // trockenen Ufer (≤ 45 m) verlängern – sonst fehlt dort die Rampe und Panzer kommen nicht auf das Deck
+    const P = this._toShore(pts.map((p) => [+p[0], +p[1]])), cum = polyLen(P), L = cum[cum.length - 1];
+    // Wasserabschnitte (echtes Gelände), Unterbrechungen < 100 m (Inseln, z. B. Tusla) zusammenfassen
     T._deckOff = true;
     const runs = [];
     let cur = null;
@@ -146,9 +148,61 @@ export class BridgeSystem {
     if (cur) runs.push(cur);
     T._deckOff = false;
     const merged = [];
-    for (const r of runs) { const last = merged[merged.length - 1]; if (last && r[0] - last[1] < 70) last[1] = r[1]; else merged.push([...r]); }
-    const run = merged.sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0];
+    for (const r of runs) { const last = merged[merged.length - 1]; if (last && r[0] - last[1] < 100) last[1] = r[1]; else merged.push([...r]); }
+    merged.sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]));
+    const run = merged[0];
     if (!run || run[1] - run[0] < 2) return null;
+    // weitere Wasserabschnitte derselben Linie erhalten eigene Bauwerke (das Pfadraster macht die ganze causeway-Linie
+    // begehbar – ohne Bauwerk führe man dort über den Grund)
+    if (!o._sub) {
+      const main = this._addRun(P, cum, run, o, width, kind, style);
+      for (const r of merged.slice(1)) {
+        if (r[1] - r[0] < 3) continue;
+        const a = Math.max(0, r[0] - 40), e = Math.min(L, r[1] + 40), sub = [];
+        for (let t = a; t <= e + 0.01; t += 2) { const q = polyAt(P, cum, Math.min(t, e)); sub.push([q.x, q.z]); }
+        this.add(sub, { ...o, id: undefined, _sub: true });
+      }
+      return main;
+    }
+    return this._addRun(P, cum, run, o, width, kind, style);
+  }
+  // Linienenden: im Wasser → bis zum Ufer (≤ 45 m) verlängern; danach ≥ 34 m Land vor dem ersten Wasser (Platz für die
+  // Rampe, max. 32 m). Endet die Linie im Wasser ohne Ufer in Reichweite (Mole, Anleger, gesprengter Stummel), bleibt sie.
+  _toShore(P) {
+    const T = this.g.terrain, NEED = 34;
+    if (P.length < 2) return P;
+    T._deckOff = true;
+    try {
+      for (const end of [0, 1]) {
+        const [ex, ez] = end ? P[P.length - 1] : P[0], [nx, nz] = end ? P[P.length - 2] : P[1];
+        const l = Math.hypot(ex - nx, ez - nz) || 1, dx = (ex - nx) / l, dz = (ez - nz) / l;
+        let need = 0;
+        if (T.isWater(ex, ez)) {
+          let shore = -1;
+          for (let e = 2; e <= 45; e += 1) {
+            const x = ex + dx * e, z = ez + dz * e;
+            if (!T.inBounds(x, z, 4)) break;
+            if (!T.isWater(x, z)) { shore = e; break; }
+          }
+          if (shore < 0) continue;
+          need = shore + 1.5 + NEED;
+        } else {
+          const cum = polyLen(P), L = cum[cum.length - 1];
+          for (let s = 0; s <= Math.min(NEED, L); s += 1) {
+            const q = polyAt(P, cum, end ? L - s : s);
+            if (T.isWater(q.x, q.z)) { need = NEED - s; break; }
+          }
+        }
+        while (need > 1 && !T.inBounds(ex + dx * need, ez + dz * need, 4)) need -= 1;
+        if (need <= 1) continue;
+        const q = [ex + dx * need, ez + dz * need];
+        if (end) P.push(q); else P.unshift(q);
+      }
+    } finally { T._deckOff = false; }
+    return P;
+  }
+  _addRun(P, cum, run, o, width, kind, style) {
+    const g = this.g, T = g.terrain, L = cum[cum.length - 1];
     const sea = T.seaLevel, sA = Math.max(0, run[0] - 1.5), sB = Math.min(L, run[1] + 1.5), span = sB - sA;
     const hAbove = style === 'pontoon' ? 0.35 : style === 'wood' ? clamp(1.8 + span * 0.02, 2, 2.8)
       : style === 'stone_arch' ? clamp(2.8 + span * 0.04, 3, 5.5) : style === 'steel_truss' ? clamp(3.2 + span * 0.025, 3.5, 6)

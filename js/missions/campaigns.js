@@ -87,6 +87,10 @@ function normalize(c) {
 export function registerCampaign(def) {
   if (!def || !def.id) throw new Error('registerCampaign: id fehlt');
   const prev = registry.get(def.id);
+  // Platzhalter-Registrierung (missions: []) darf bereits eingetragene Missionen nicht überschreiben (Importreihenfolge)
+  if (prev && Array.isArray(def.missions) && !def.missions.length && prev.missions?.length) { def = { ...def }; delete def.missions; }
+  // V3-C1: ebenso eine Teilliste (z. B. Ukraine m1–m5 aus index.js), deren Missionen alle schon enthalten sind
+  else if (prev && Array.isArray(def.missions) && prev.missions?.length > def.missions.length && def.missions.every((m) => prev.missions.some((x) => x === m || (m?.id && x.id === m.id)))) { def = { ...def }; delete def.missions; }
   const c = prev ? Object.assign(prev, def) : { era: 'modern', faction: '', title: def.id, subtitle: '', years: '', desc: '', accent: '#c8a84b', order: 100, missions: [], ...def };
   registry.set(c.id, normalize(c));
   return c;

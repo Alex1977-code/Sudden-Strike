@@ -7,6 +7,9 @@ import m2 from './m2_kharkiv.js';
 import m3 from './m3_hypersonic.js';
 import m4 from './m4_zaporizhzhia.js';
 import m5 from './m5_crimea.js';
+import './ww2_soviet/index.js';
+import './ww2_allies/index.js';
+import './ukraine/index.js';
 
 // Ukraine-Missionen: Epoche, Schwierigkeit und Kurztext für die Missionsliste (Missionsdateien bleiben unverändert)
 const UA_META = {
