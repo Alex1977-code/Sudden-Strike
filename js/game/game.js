@@ -269,7 +269,8 @@ export class Game {
 
   // ================== Einheiten ==================
   spawn(typeKey, side, x, z, opts = {}) {
-    const owner = side === 'N' ? null : (opts.owner !== undefined && this.playerById(opts.owner) ? this.playerById(opts.owner).id : this.playersOfTeam(side)[0]?.id ?? null);
+    let owner = side === 'N' ? null : (opts.owner !== undefined && this.playerById(opts.owner) ? this.playerById(opts.owner).id : this.playersOfTeam(side)[0]?.id ?? null);
+    if (this.coop && side !== 'N' && opts.owner === undefined) owner = this.coop.ownerFor?.(typeKey, side, opts) ?? owner; // V3-RS: Koop – Einheiten auf beide Spieler verteilen (js/net/coop.js)
     const u = new Unit(this, typeKey, side, x, z, { ...opts, owner });
     this.units.push(u);
     this.unitMap.set(u.id, u);
@@ -485,6 +486,7 @@ export class Game {
   // ================== Kommandos ==================
   // Einstieg für Input/HUD: Client schickt an den Host, sonst direkt ausführen
   issueCommand(cmd) {
+    if (this.replayDriver || this.spectator) return false; // V3-RS: Wiederholung bzw. Zuschauer – keine Befehle
     if (this.net?.isClient) return this.net.sendCommand(cmd);
     const R = this.recorder?.on ? this.recorder : null; // V3-X: Spielerkommandos für Speichern/Laden protokollieren
     if (!R) return this.command(this._localPlayerId, cmd);
@@ -634,7 +636,7 @@ export class Game {
   }
   abilityAvailable(a) {
     if (!a || a.cd > 0 || a.charges <= 0) return false;
-    if (a.def.requires && !this.units.some((u) => u.alive && u.owner === a.owner && u.type.key === a.def.requires)) return false;
+    if (a.def.requires && !this.units.some((u) => u.alive && (u.owner === a.owner || (this.coop && u.side === this.coop.team)) && u.type.key === a.def.requires)) return false; // V3-RS: Koop – gemeinsame Fähigkeiten
     return true;
   }
   useAbility(playerId, abilityId, x, z) {
@@ -896,9 +898,11 @@ export class Game {
   // ================== Hauptschleife ==================
   update(dt) {
     if (!this.active) return;
+    if (this.replayDriver) return this.replayDriver.frame(dt); // V3-RS: Wiederholung – Simulation aus dem Protokoll (replay.js)
     this.frame = (this.frame || 0) + 1;
     // V3-X: bei aktiver Aufzeichnung (Speichern/Laden) dt quantisiert und Simulation im Seed-RNG (savegame.js)
-    const R = this.recorder?.on && !this.recorder.replaying && !this.net ? this.recorder : null;
+    // V3-RS: auch der Online-Host zeichnet auf (Wiederholung mit den Kommandos aller Spieler)
+    const R = this.recorder?.on && !this.recorder.replaying && (!this.net || this.net.isHost) ? this.recorder : null;
     let edt = Math.min(dt, 0.05);
     if (!this.paused) {
       if (R) edt = R.quantize(edt);
@@ -967,7 +971,7 @@ export class Game {
       if (this.countdown.t <= 0) { const c = this.countdown; this.countdown = null; c.onEnd && c.onEnd(); }
     }
     // Fähigkeiten-Cooldowns
-    for (const p of this.players) for (const a of p.abilities) if (a.cd > 0) a.cd = Math.max(0, a.cd - dt);
+    for (const p of this.players) if (!p.coopShare) for (const a of p.abilities) if (a.cd > 0) a.cd = Math.max(0, a.cd - dt); // V3-RS: Koop-Partner teilt die Liste
     if (this.mission && !this.ended) {
       if (this.demo) { this.mission.demoUpdate && this.mission.demoUpdate(this, dt); }
       else if (this.mission.update) this.mission.update(this, dt);
@@ -1001,12 +1005,17 @@ export class Game {
     if (this.trackedMissile?.dead) this.trackedMissile = null;
     this.updateVision(dt);
     this.fow.upload(dt);
-    for (const p of this.players) for (const a of p.abilities) if (a.cd > 0) a.cd = Math.max(0, a.cd - dt);
+    for (const p of this.players) if (!p.coopShare) for (const a of p.abilities) if (a.cd > 0) a.cd = Math.max(0, a.cd - dt); // V3-RS: Koop-Partner teilt die Liste
     if (this.mission?.netUpdate) this.mission.netUpdate(this, dt);
     this.audio.listener.x = this.camera.target.x; this.audio.listener.z = this.camera.target.z; this.audio.listener.zoom = this.camera.dist;
   }
   hasCombatUnits(p) { return this.units.some((u) => u.owner === p.id && u.alive && !u.type.structure && !u.type.kamikaze); }
   checkDefeat() {
+    if (this.coop) { // V3-RS: Koop-Kampagne – verloren erst, wenn beide Spieler keine Einheiten mehr haben (kein automatischer Sieg)
+      const hs = this.coop.humans.map((id) => this.playerById(id)).filter(Boolean);
+      if (hs.length && hs.every((p) => !this.hasCombatUnits(p))) { for (const p of hs) p.defeated = true; this.lose('Alle Einheiten sind gefallen.'); }
+      return;
+    }
     if (!this.teamMode) {
       // Kampagne: nur der lokale Spieler
       const lp = this.localPlayer;

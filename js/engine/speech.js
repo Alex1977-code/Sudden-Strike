@@ -8,16 +8,18 @@
 const HIGH = /(⚠|alarm|achtung|warnung|luftangriff|im anflug|feuer frei|zurückziehen|rückzug|verloren|gefallen|hilfe)/i;
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 // Sonderzeichen/Emoji entfernen, Abkürzungen sprechbar machen
-export function speakable(text) {
+export function speakable(text, lang = 'de') {
+  const en = lang === 'en';
   return String(text || '')
     .replace(/<[^>]+>/g, ' ')
     .replace(/[\u{1F000}-\u{1FFFF}☀-➿⬀-⯿️★✔✖✚⚑⚠]/gu, ' ')
-    .replace(/\bkm\/h\b/g, 'Kilometer pro Stunde').replace(/(\d)\s?m\b/g, '$1 Meter')
+    .replace(/\bkm\/h\b/g, en ? 'kilometers per hour' : 'Kilometer pro Stunde').replace(/(\d)\s?m\b/g, en ? '$1 meters' : '$1 Meter')
     .replace(/\s+/g, ' ').trim();
 }
 
 export class RadioVoice {
-  constructor(game, settings, { getLang = () => 'de', isActive = () => true } = {}) {
+  constructor(game, settings, { getLang = () => 'de', isActive = () => true, tr = null } = {}) {
+    this.tr = tr; // V3-I18N-A: Übersetzung des (deutschen) Funktexts bei Englisch
     this.g = game; this.settings = settings; this.getLang = getLang; this.isActive = isActive;
     this.queue = []; this.speaking = null; this.waitT = 0; this.stats = { spoken: 0, dropped: 0 };
     this.synth = (typeof window !== 'undefined' && !window.__ARTIFACT && window.speechSynthesis && typeof window.SpeechSynthesisUtterance === 'function') ? window.speechSynthesis : null;
@@ -46,7 +48,7 @@ export class RadioVoice {
   enqueue(speaker, text, dur = 5) {
     const g = this.g;
     if (!this.enabled || g.replaying || g.demo || !g.active) return;
-    const msg = speakable(text);
+    const msg = speakable(this.tr ? this.tr(text) : text, this.getLang());
     if (!msg) return;
     const now = g.time || 0;
     if (this.queue.some((q) => q.text === msg) || (this.speaking && this.speaking.text === msg)) return;

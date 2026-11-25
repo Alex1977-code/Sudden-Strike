@@ -12,6 +12,7 @@ import { getAirShow } from './engine/aircraft.js';
 import { HUD } from './game/hud.js';
 import { GamepadControl } from './game/gamepad.js';
 import { CAMPAIGN, DEMO } from './missions/index.js';
+import { refreshMissionLang, deText } from './i18n/runtime.js'; // V3-I18N-B: englische Missions-/Kampagnentexte
 import { isMobile, isTouchDevice, fmtTime } from './engine/util.js';
 import { createOnline } from './net/onlineui.js';
 import { startSkirmish, createSkirmish, normalizeSetup, roleSummary, roleSummaryText, ROLES, DIFFICULTIES, VICTORY, TEAM_NAME, TEAM_COLOR, MAP_PRESETS, MAP_SIZES } from './skirmish/skirmish.js';
@@ -22,7 +23,9 @@ import { createModsUI } from './editor/modsui.js';
 import { initMods, listCustomMaps, getCustomMap } from './editor/mods.js';
 import { compileMission, compileSkirmishGen } from './editor/compile.js';
 import { escapeHtml } from './editor/format.js';
-import { t, applyI18n, setLang, getLang, isLangAvailable } from './i18n.js'; // V3-MENU
+import { t, tr, applyI18n, setLang, getLang, isLangAvailable, onLangChange, setNameSources } from './i18n.js'; // V3-MENU
+import { UNIT_TYPES, W as WEAPONS } from './game/unitTypes.js'; // V3-I18N-A: Namensregister für die Übersetzung
+import { ABILITIES } from './game/abilities.js';
 import { SK_WEATHER, SK_DAYTIME } from './engine/weather.js'; // V3-MENU: Wetter/Tageszeit im Gefecht-Setup und in der Lobby
 import { getCampaigns, getCampaign, findMission, getProgress, isUnlocked, completeMission, resetProgress, setUnlockAll, nextMission, lastPlayed, setLastPlayed, drawMapSketch, campaignArtSVG, DIFFICULTY, ERAS } from './missions/campaigns.js'; // V3-MENU
 // V3-X: Speichern/Laden, Schwierigkeitsgrade, Sichtlinien-Werkzeug, Sprachfunk, Medaillen & Erfolge
@@ -33,6 +36,7 @@ import { LosTool } from './game/lostool.js';
 import { RadioVoice } from './engine/speech.js';
 import { AwardTracker, evaluateMedal, medalBarHTML, awardsOnlyHTML, renderAwardsPage, MEDAL_NAMES } from './game/medals.js';
 import { getCampaignLevel, setCampaignLevel } from './missions/campaigns.js';
+import { createReplayUI } from './game/replayui.js'; // V3-RS: Wiederholungen
 initMods(); // V3-E: aktive Mods (Einheitenwerte) vor dem ersten Spielstart anwenden
 
 const $ = (id) => document.getElementById(id);
@@ -68,11 +72,12 @@ const gamepad = new GamepadControl(game, input, hud); // V3-GP
 const rec = new SimRecorder(game);
 installDifficulty(game);
 const losTool = new LosTool(game, hud, input);
-const voice = new RadioVoice(game, settings, { getLang: () => getLang(), isActive: () => inMission && !current });
+setNameSources({ units: UNIT_TYPES, weapons: WEAPONS, abilities: ABILITIES }); // V3-I18N-A
+const voice = new RadioVoice(game, settings, { getLang: () => getLang(), tr, isActive: () => inMission && !current });
 const awards = new AwardTracker(game, { isActive: () => inMission && !online?.inGame });
 
 // ---------- Bildschirme ----------
-const screens = ['title', 'campaign', 'skirmish', 'online', 'lobby', 'briefing', 'settings', 'help', 'pause', 'end', 'mods', 'saves', 'awards']; // V3-X: saves, awards
+const screens = ['title', 'campaign', 'skirmish', 'online', 'lobby', 'briefing', 'settings', 'help', 'pause', 'end', 'mods', 'saves', 'awards', 'replays']; // V3-X: saves, awards · V3-RS: replays
 let current = 'title', returnTo = 'title';
 function show(name) {
   for (const s of screens) $('screen-' + s).classList.toggle('hidden', s !== name);
@@ -145,6 +150,7 @@ document.querySelector('#screen-help .back').onclick = () => { if (helpFrom === 
 
 // „Fortsetzen“-Karte im Hauptmenü: nächste offene Mission der zuletzt gespielten Kampagne
 function renderTitle() {
+  refreshMissionLang(); // V3-I18N-B
   const box = $('title-continue');
   const id = lastPlayed() || 'ukraine', c = getCampaign(id);
   if (!c || !c.missions.length) { box.classList.add('hidden'); return; }
@@ -174,6 +180,7 @@ function campHead(over, title, sub) {
   $('camp-sub').textContent = sub || ''; $('camp-sub').classList.toggle('hidden', !sub);
 }
 function renderCampaignGrid() {
+  refreshMissionLang(); // V3-I18N-B
   campSel = null;
   campPanel().style.removeProperty('--acc');
   campHead(t('camp.over', 'Kampagnen'), t('camp.title', 'Feldzug wählen'), t('camp.sub', 'Drei Epochen, sechs Perspektiven – und eine Grundausbildung für den Einstieg.'));
@@ -210,6 +217,7 @@ function openCampaign(id, idx) {
   show('campaign');
 }
 function renderCampaignDetail() {
+  refreshMissionLang(); // V3-I18N-B
   const c = campSel, p = getProgress(c.id), n = c.missions.length;
   campPanel().style.setProperty('--acc', c.accent);
   campHead(`${ERAS[c.era]?.label || ''}${c.years ? ' · ' + c.years : ''}${c.faction ? ' · ' + c.faction : ''}`, c.title, c.subtitle ? `${c.subtitle} – ${c.desc}` : c.desc);
@@ -300,6 +308,7 @@ const ABIL_ICONS = [[/aufkl/, 'scan'], [/himars/, 'himars'], [/marschflug|storm/
 const pickIcon = (list, s, fb) => { const l = String(s).toLowerCase(); for (const [re, ic] of list) if (re.test(l)) return ic; return fb; };
 const briefMapCache = {};
 function openBriefing(m) {
+  refreshMissionLang(); // V3-I18N-B
   currentMission = m;
   const fm = findMission(m);
   if (fm) setLastPlayed(fm.campaign.id);
@@ -319,9 +328,9 @@ function openBriefing(m) {
     return `<li class="${opt ? 'opt' : ''}">${icon(opt ? 'obj_open' : 'obj_target', { cls: 'ic-in' })}<span>${opt ? `<em>${esc(t('brief.optional', 'Optional'))}</em> ` : ''}${opt ? o.replace(/^optional:\s*/i, '') : o}</span></li>`;
   }).join('');
   const forces = m.forces || [];
-  const units = forces.filter((f) => !/^fähigkeit/i.test(f)), abil = forces.filter((f) => /^fähigkeit/i.test(f));
-  $('brief-forces').innerHTML = `<div class="force-list">${units.map((f) => `<span class="force">${icon(pickIcon(FORCE_ICONS, f, 'inf'), { cls: 'ic-in' })}<span>${f}</span></span>`).join('')}</div>` +
-    (abil.length ? `<div class="force-sub">${esc(t('brief.abilities', 'Fähigkeiten'))}</div><div class="force-list abil">${abil.map((f) => { const s = f.replace(/^fähigkeit:\s*/i, ''); return `<span class="force">${icon(pickIcon(ABIL_ICONS, s, 'star'), { cls: 'ic-in' })}<span>${s}</span></span>`; }).join('')}</div>` : '');
+  const units = forces.filter((f) => !/^fähigkeit/i.test(deText(f))), abil = forces.filter((f) => /^fähigkeit/i.test(deText(f))); // V3-I18N-B: Typ-/Icon-Erkennung am deutschen Original
+  $('brief-forces').innerHTML = `<div class="force-list">${units.map((f) => `<span class="force">${icon(pickIcon(FORCE_ICONS, deText(f), 'inf'), { cls: 'ic-in' })}<span>${f}</span></span>`).join('')}</div>` +
+    (abil.length ? `<div class="force-sub">${esc(t('brief.abilities', 'Fähigkeiten'))}</div><div class="force-list abil">${abil.map((f) => { const s = f.replace(/^(fähigkeiten?|abilit(y|ies)):\s*/i, ''), sd = deText(f).replace(/^fähigkeiten?:\s*/i, ''); return `<span class="force">${icon(pickIcon(ABIL_ICONS, sd, 'star'), { cls: 'ic-in' })}<span>${s}</span></span>`; }).join('')}</div>` : '');
   renderBriefLevel(); // V3-X
   show('briefing');
   // Lagekarte: sofort als Skizze, dann (falls möglich) als gerendertes Gelände mit denselben Markierungen
@@ -534,9 +543,10 @@ async function startOnlineGame(S) {
   let m = null;
   await loadWithSpinner(`Lade Online-Gefecht (${S.mode}v${S.mode}) …`, () => {
     game.camera.orbit = false;
-    m = createSkirmish(S);
-    game.setupPlayers(m.players);
-    game.load(m);
+    // V3-RS: Host zeichnet über den Seed-Recorder auf (Wiederholung mit den Kommandos aller Spieler); Clients laden normal
+    const { customMap, ...plain } = S;
+    const load = () => { const mm = createSkirmish(S); game.setupPlayers(mm.players); game.load(mm); return mm; };
+    m = online.session?.isHost ? rec.runLoad({ kind: 'online', setup: JSON.parse(JSON.stringify(plain)) }, undefined, load) : load();
   });
   if (!m || !game.active) { online.hostLost('Die Karte konnte nicht geladen werden.'); return; }
   currentMission = m;
@@ -594,6 +604,7 @@ function showSkirmishEnd(won, text) {
 
 // Pause
 hud.onTogglePause = () => {
+  if (game.replayDriver) { replayUI.togglePause(); return; } // V3-RS: Wiedergabe – Esc pausiert
   if (!inMission || game.ended) return;
   if (online.inGame) { // Online: nur lokales Menü, die Simulation läuft weiter
     if (current === 'pause') hideScreens(); else { updatePauseInfo(); show('pause'); }
@@ -652,6 +663,51 @@ const saveUI = createSaveUI({
     uiToast(`Spielstand geladen (${fmtTime(game.time)})`);
   },
 });
+// ================= V3-RS: Wiederholungen =================
+function resolveMissionCtx(c) {
+  const camp = getCampaign(c.cid);
+  let m = camp?.missions[c.idx];
+  if (!m || (c.mid && m.id !== c.mid)) { const f = findMission(c.mid); m = f ? f.campaign.missions[f.index] : null; }
+  return m || null;
+}
+async function loadForReplay(data) {
+  const s = data.save, c = s.ctx;
+  currentSkirmish = null;
+  hideScreens();
+  game.paused = false;
+  game.difficulty = normLevel(s.diff);
+  let m = null;
+  await loadWithSpinner(t('rs.loading', 'Wiederholung wird geladen …'), () => {
+    game.camera.orbit = false;
+    if (c.kind === 'mission') { m = resolveMissionCtx(c); if (m) rec.runLoad(c, s.seed, () => game.load(m)); }
+    else if (c.kind === 'skirmish') m = rec.runLoad(c, s.seed, () => startSkirmish(game, withCustomMap({ ...c.setup })));
+    else if (c.kind === 'online') m = rec.runLoad(c, s.seed, () => { const mm = createSkirmish(c.setup); game.setupPlayers(mm.players); game.load(mm); return mm; });
+    else if (c.kind === 'coop' && window.__coop) m = window.__coop.loadForReplay(c, s.seed, resolveMissionCtx(c));
+  });
+  if (!m || !game.active) return false;
+  currentMission = m;
+  inMission = true;
+  hud.show(true);
+  hud.sayQueue = []; hud.subEl?.classList.add('hidden');
+  game.stats.start = game.time;
+  return true;
+}
+const replayUI = createReplayUI({
+  game, rec, show, hideScreens, toast: uiToast,
+  loadForReplay,
+  volume: () => settings.volume,
+  lobby: () => online.lobby,
+  setLoading: (text) => { if (text) { $('loading-text').textContent = text; $('loading').classList.remove('hidden'); } else $('loading').classList.add('hidden'); },
+  exitWatch: async (to) => { inMission = false; game.paused = false; hud.show(false); await loadDemo(); show(to || 'replays'); },
+  metaFor: (won) => {
+    const sk = game.mission?.skirmish, draw = sk?.result && sk.result.winner === null;
+    const result = draw ? 'draw' : won ? 'win' : 'loss';
+    if (game.coop && online.inGame) { const fm = findMission(currentMission); return { title: currentMission?.title || 'Koop', over: `${t('rs.coop', 'Koop (online)')}${fm ? ' · ' + fm.campaign.title : ''}`, result }; }
+    if (sk) return { title: game.mission.title || 'Gefecht', over: online.inGame ? `${t('end.over.online', 'Online-Gefecht')} ${sk.setup.mode}v${sk.setup.mode}` : `Gefecht ${sk.setup.mode}v${sk.setup.mode} · Seed ${sk.setup.seed}`, result };
+    const fm = findMission(currentMission);
+    return { title: currentMission?.title || 'Einsatz', over: fm ? `${fm.campaign.title} · ${t('common.mission', 'Mission')} ${fm.index + 1}/${fm.campaign.missions.length}` : '', result };
+  },
+});
 $('btn-awards').onclick = () => { awards.checkStatic(); renderAwardsPage($('awards-body')); show('awards'); };
 $('btn-awards-back').onclick = () => show('title');
 $('btn-restart').onclick = () => { game.paused = false; if (currentSkirmish) startSkirmishGame(currentSkirmish); else startMission(currentMission); };
@@ -686,7 +742,7 @@ function statTiles(items) {
 game.on('loaded', () => { const el = $('end-medals'); if (el) { el.innerHTML = ''; el.classList.add('hidden'); } });
 $('btn-end-menu').onclick = async () => { if (online.inGame) { online.leaveGame(); return; } game.paused = false; await loadDemo(); show('title'); };
 game.on('end', (won, text) => {
-  if (!inMission) return;
+  if (!inMission || game.replayDriver) return; // V3-RS: Ende während einer Wiedergabe zählt nicht
   game.paused = true;
   if (online.inGame) online.toggleChat(false);
   if (game.mission?.skirmish) { showSkirmishEnd(won, text); return; }
@@ -783,9 +839,10 @@ $('screen-settings').addEventListener('input', syncSetOutputs);
 if (typeof settings.reduceMotion !== 'boolean') settings.reduceMotion = false;
 document.body.classList.toggle('reduce-motion', settings.reduceMotion);
 $('set-reducemotion').addEventListener('input', () => { settings.reduceMotion = $('set-reducemotion').checked; saveSettings(); document.body.classList.toggle('reduce-motion', settings.reduceMotion); });
-// Sprache: Platzhalter – Englisch folgt (js/i18n.js, isLangAvailable('en'))
+// Sprache (V3-I18N-A): Deutsch/English, sofort wirksam; Browsersprache beim ersten Start (js/i18n.js initLang)
 function renderLang() { $('set-lang').querySelectorAll('button').forEach((b) => { b.classList.toggle('active', b.dataset.v === getLang()); b.disabled = !isLangAvailable(b.dataset.v); }); }
-$('set-lang').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && !b.disabled && setLang(b.dataset.v)) renderLang(); });
+$('set-lang').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && !b.disabled && setLang(b.dataset.v)) { renderLang(); renderSpeechSettings(); } });
+onLangChange(() => { try { if (current === 'title') renderTitle(); else if (current === 'campaign') { const c = $('screen-campaign'); const sel = c.querySelector('.back'); /* Listen werden beim nächsten Öffnen neu gebaut; DOM-Übersetzer deckt sichtbare Texte ab */ void sel; } } catch (e) { /* ignorieren */ } });
 $('btn-reset-all').onclick = (e) => armButton(e.currentTarget, t('common.confirmReset', 'Wirklich zurücksetzen? Nochmal tippen'), () => { resetProgress(); renderTitle(); });
 $('btn-set-help').onclick = () => { helpFrom = 'settings'; show('help'); };
 // V3-X: Sprachfunk und Standard-Schwierigkeitsgrad
@@ -884,6 +941,7 @@ function frame(now) {
   window.__modsUI = modsUI;
   window.__openMods = openMods;
   window.__saves = { rec, ui: saveUI, readSave, awards, voice, losTool, LEVELS }; // V3-X
+  window.__replay = replayUI; // V3-RS
 })();
 
 // Offline-Fähigkeit (PWA)

@@ -9,7 +9,7 @@ let on = false;
 let observer = null;
 const SKIP = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'CANVAS']);
 
-function skipped(el) { return !el || (el.closest && el.closest('[data-notr]')) || SKIP.has(el.nodeName); }
+function skipped(el, attr) { return !el || (el.closest && el.closest('[data-notr]')) || (!attr && SKIP.has(el.nodeName)) || (attr && (el.nodeName === 'SCRIPT' || el.nodeName === 'STYLE')); }
 
 function tx(node) {
   const el = node.parentNode;
@@ -21,7 +21,7 @@ function tx(node) {
   if (en !== cur) { node.__de = cur; node.__en = en; node.data = en; } else { node.__de = undefined; node.__en = undefined; }
 }
 function ta(el) {
-  if (skipped(el)) return;
+  if (skipped(el, true)) return;
   for (const a of ATTRS) {
     if (!el.hasAttribute(a)) continue;
     const cur = el.getAttribute(a);

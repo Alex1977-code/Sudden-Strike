@@ -6,6 +6,8 @@
 //            hold?: Sekunden Pause nach Erfüllung }
 // Helfer in t: t.cmd(typ, pred?) (Kommandos seit Schrittbeginn), t.own(), t.st (Schritt-Scratch), t.camMoved/Zoomed/Rotated, t.minimap.
 
+import { trRuntime as TR } from '../../i18n/runtime.js'; // V3-I18N-B: Hinweisbox bei Sprache 'en' übersetzen
+
 const STYLE = `
 #tut-box{position:fixed;z-index:15;top:calc(8px + env(safe-area-inset-top,0px));left:490px;right:160px;max-width:640px;background:rgba(14,22,16,.94);border:2px solid #8fb573;border-radius:10px;color:#eef3e8;padding:9px 12px 10px;font:14px/1.38 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.55);pointer-events:auto}
 #tut-box.ok{border-color:#ffd84a;background:rgba(40,52,18,.95)}
@@ -98,10 +100,10 @@ export class Tutor {
   render() {
     const s = this.step; if (!s) return;
     const m = this.mode; this.lastMode = m;
-    const tx = typeof s.text === 'string' ? s.text : (s.text[m] ?? s.text.pc);
-    const note = m === 'pad' && s.padNote ? '<div class="tn">Diese Aktion ist am Gamepad nicht belegt – Schritt mit „Überspringen“ abschließen oder Maus/Touch nutzen.</div>' : '';
-    const nw = this.done ? '' : (s.info ? '<button class="go" data-a="next">Weiter</button>' : '');
-    this.box.innerHTML = `<div class="th"><span>${this.done ? '✔ ' : ''}${s.title}</span><small>Schritt ${this.i + 1}/${this.steps.length}</small></div><div class="tt">${tx}</div>${note}<div class="tb"><button class="skip" data-a="skip">Überspringen</button>${nw}</div>`;
+    const tx = TR(typeof s.text === 'string' ? s.text : (s.text[m] ?? s.text.pc));
+    const note = m === 'pad' && s.padNote ? `<div class="tn">${TR('Diese Aktion ist am Gamepad nicht belegt – Schritt mit „Überspringen“ abschließen oder Maus/Touch nutzen.')}</div>` : '';
+    const nw = this.done ? '' : (s.info ? `<button class="go" data-a="next">${TR('Weiter')}</button>` : '');
+    this.box.innerHTML = `<div class="th"><span>${this.done ? '✔ ' : ''}${TR(s.title)}</span><small>${TR(`Schritt ${this.i + 1}/${this.steps.length}`)}</small></div><div class="tt">${tx}</div>${note}<div class="tb"><button class="skip" data-a="skip">${TR('Überspringen')}</button>${nw}</div>`;
   }
   tick(dt) {
     if (this.dead || this.finished) return;

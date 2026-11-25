@@ -43,7 +43,7 @@ function rebuild() {
   }
   const keys = [...glossMap.keys()].filter((k) => k.length > 1).sort((a, b) => b.length - a.length);
   glossRe = keys.length ? new RegExp('(?<![\\p{L}\\d])(?:' + keys.map(esc).join('|') + ')(?![\\p{L}])', 'gu') : null;
-  pats = PATTERNS.map(([re, tpl]) => [new RegExp('^' + re + '$', 'su'), tpl]);
+  pats = PATTERNS.map(([re, tpl]) => [new RegExp('^(?:' + (re.source ?? re) + ')$', 'su'), tpl]);
 }
 
 function applyTpl(tpl, m) {
@@ -69,7 +69,16 @@ function translateCore(s) {
     const parts = s.split(sep), tr = parts.map(translateCore);
     if (tr.some((p, i) => p !== parts[i])) return tr.join(sep);
   }
+  if (s.includes('\n')) {
+    const flat = s.replace(/\s*\n\s*/g, ' ');
+    const rf = exact.get(flat);
+    if (rf !== undefined) return rf;
+  }
   if (s.includes('\n')) { const parts = s.split('\n'); const tr = parts.map(translateCore); if (tr.some((p, i) => p !== parts[i])) return tr.join('\n'); }
+  const ci = s.indexOf(': ');
+  if (ci > 0) { const a = translateCore(s.slice(0, ci)), b = translateCore(s.slice(ci + 2)); if (a !== s.slice(0, ci) || b !== s.slice(ci + 2)) return a + ': ' + b; }
+  const di = s.indexOf(' – ');
+  if (di > 0) { const a = translateCore(s.slice(0, di)), b = translateCore(s.slice(di + 3)); if (a !== s.slice(0, di) || b !== s.slice(di + 3)) return a + ' – ' + b; }
   if (glossRe) return s.replace(glossRe, (w) => glossMap.get(w) ?? w);
   return s;
 }
@@ -81,7 +90,7 @@ export function translateText(s) {
   if (hit !== undefined) return hit;
   const lead = /^\s*/.exec(s)[0], trail = /\s*$/.exec(s)[0];
   const core = s.slice(lead.length, s.length - trail.length);
-  let out = core ? translateCore(core) : core;
+  let out = core ? translateCore(core.replace(/(\d\d:\d\d) Uhr/g, '$1')) : core;
   // Sicherheitsnetz: Muster dürfen mehrere Sätze enthalten; nicht übersetzte Reste per Teilstring versuchen
   out = lead + out + trail;
   if (cache.size > 6000) cache.clear();

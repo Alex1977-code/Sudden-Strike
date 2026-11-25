@@ -117,7 +117,7 @@ export class SimRecorder {
     let ok = false, r;
     try { r = fn(); ok = true; } finally {
       this.pop();
-      const live = ok && g.active && !g.demo && !g.net && r !== null;
+      const live = ok && g.active && !g.demo && (!g.net || g.net.isHost) && r !== null; // V3-RS: Online-Host zeichnet für Wiederholungen auf
       this._reset();
       this.on = !!live;
       this.ctx = live ? ctx : null; this.seedV = seed; this.speedMul = g.speedMul || 1;
@@ -169,12 +169,14 @@ export class SimRecorder {
     }
     return q / Q;
   }
-  onCommand(cmd) {
+  // pid (V3-RS): Spieler-id fremder Kommandos (Online-Host: Kommandos der Mitspieler) – Eintrag [schritt, cmd, pid]
+  onCommand(cmd, pid) {
     if (!this.on || this.replaying || this.inSim || !cmd || typeof cmd !== 'object') return;
     let c; try { c = JSON.parse(JSON.stringify(cmd)); } catch (e) { return; }
-    this.cmds.push([this.steps, c]);
+    if (pid !== undefined && pid !== null && String(pid) !== String(this.game.localPlayerId)) this.cmds.push([this.steps, c, pid]);
+    else this.cmds.push([this.steps, c]);
   }
-  canSave() { const g = this.game; return this.on && !this.replaying && g.active && !g.ended && !g.demo && !g.net; }
+  canSave() { const g = this.game; return this.on && !this.replaying && g.active && !g.ended && !g.demo && !g.net && !g.replayDriver; }
   // ---------- Prüf-Snapshot ----------
   snapshot() {
     const g = this.game, u = [], h = [];
