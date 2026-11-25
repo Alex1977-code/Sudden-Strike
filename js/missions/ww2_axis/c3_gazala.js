@@ -1,7 +1,7 @@
 // C3 – Gazala (Mai/Juni 1942): Wüstenkrieg. Panzergefecht um eine verminte Box-Stellung; Treibstoff und Munition kommen nur mit dem Tross.
 // Logistikmodus (mission.logistics): Fahrzeuge verbrauchen Sprit, Waffen Munition – Versorgungs-Lkw füllen beides im Umkreis auf.
 import { bldg, road, hill, water, field, settlement, landmarksOf } from '../../maps/places/_kit.js';
-import { de, uk, setText, mmss, alive, fort, wave, holdZone, clearByEngineers, reinforce } from './_h.js';
+import { de, uk, setText, mmss, alive, fort, wave, holdZone, clearByEngineers, reinforce, near } from './_h.js';
 
 const BOX = [-92, 8];            // Mittelpunkt der Box
 const BASE = [232, 6];           // Nachschublager im Osten
@@ -44,7 +44,7 @@ export default {
   abilities: [{ id: 'ww2_artillery', charges: 2 }, { id: 'ww2_airstrike_de', charges: 1 }, { id: 'smoke', charges: 3 }, 'ww2_recon_de'],
 
   setup(g) {
-    this.t0 = g.time; this.box = {}; this.trucksLost = 0;
+    this.t0 = g.time; this.box = {}; this.trucksLost = 0; this.counter = false;
     // Eigene Truppen im Osten, Treibstoff bewusst knapp (Fahrzeuge verbrauchen 1 Einheit je Fahrsekunde)
     const tanks = g.spawnGroup([['ww2_pz4', 5], ['ww2_stug3', 2]], 'UA', 196, 4, { spacing: 12, cols: 3, heading: -Math.PI / 2, tags: ['tank'] });
     for (const u of tanks) if (u.maxFuel) u.fuel = START_FUEL;
@@ -94,6 +94,13 @@ export default {
     if (g.ended) return;
     clearByEngineers(g, dt);
     const t = g.time - this.t0;
+    // V3-R (Balance, war zu leicht: Automatik nach 232 s mit allen Nebenzielen): Sobald eigene Truppen die Box erreichen,
+    // wirft der Gegner seine Panzerreserve aus dem Westen hinein
+    if (!this.counter && near(g, 'UA', BOX[0], BOX[1], 70).length >= 3) {
+      this.counter = true;
+      g.alert('⚠ Gegenangriff: Panzerreserve aus Westen!', 4);
+      wave(g, [['ww2_sherman', 3], [uk.rifle, 5], [uk.at, 1]], -250, 20, [[-160, 14], [BOX[0], BOX[1]]], { tags: ['w'] });
+    }
     const laneMines = g.units.filter((u) => u.alive && u.side === 'RU' && u.type.mineKind && Math.hypot(u.pos.x - (BOX[0] + 55), u.pos.z - (BOX[1] + 2)) < 8).length;
     setText(g, 'lanes', laneMines ? `Gasse durch den Minengürtel räumen – noch ${laneMines} Minenfelder` : 'Gasse durch den Minengürtel ist geräumt');
     if (!laneMines && g.objState('lanes') === 'open') g.setObjective('lanes', 'done');
@@ -102,7 +109,7 @@ export default {
     if (g.objState('tross') === 'open' && trucks < 2) g.setObjective('tross', 'failed');
     const tanks = alive(g, 'UA', (u) => u.tags.has('tank'));
     const stuck = tanks.length > 0 && tanks.every((u) => u.maxFuel > 0 && u.fuel <= 0.5);
-    if (holdZone(g, dt, this.box, BOX[0], BOX[1], 26, { need: 3, secs: 8, allow: 1, enemyR: 32 })) {
+    if (holdZone(g, dt, this.box, BOX[0], BOX[1], 26, { need: 4, secs: 20, allow: 1, enemyR: 32 })) {
       g.setObjective('box', 'done');
       if (g.objState('tross') === 'open') g.setObjective('tross', trucks >= 2 ? 'done' : 'failed');
       g.win('Die Box ist gefallen. Gefangene, Verwundete, ausgebrannte Fahrzeuge zwischen den Minenfeldern. Der Vormarsch geht weiter – bis der Sprit wieder ausgeht. Die Männer auf beiden Seiten, die hier liegen, haben mit dem Sinn dieses Krieges nichts mehr zu tun.');

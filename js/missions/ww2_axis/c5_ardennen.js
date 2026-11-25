@@ -7,6 +7,7 @@ const BRIDGE = [36, 0], EXIT = [236, 8];
 const LIMIT = 1150;
 const START_FUEL = 85;      // s Fahrzeit: reicht für den Vorstoß, für den Rückzug kaum
 const CLEAR_AT = 330;       // s – das Wetter klart auf
+const NEED = 14;            // V3-R: 12 → 14 Mann am Sammelpunkt
 
 const feats = [
   river([[26, -270], [30, -120], [18, 0], [34, 120], [30, 270]], 20, { depth: 2.4, bank: 4, name: 'Ourthe' }),
@@ -35,7 +36,7 @@ export default {
     { s: 'Feldwebel Scholz', t: 'Nebel und Schnee, kaum fünfzig Meter Sicht. Das ist unser Verbündeter – solange es hält. Die Brücke liegt hinter dem Dorf. Panzer sparsam fahren, der Sprit reicht für einen Vorstoß und kaum für den Weg zurück. Wer liegen bleibt, wird gesprengt.' },
     { s: 'Gefreiter Brink', t: 'Wenn der Himmel aufreißt, kommen die Jabos, und dann ist die Straße ein Schießstand. Dann wird sofort zurückgegangen, geordnet, Gruppe um Gruppe. Meine Mutter schreibt, dass die Stadt gebombt wird. Ich weiß nicht, wen wir hier eigentlich beschützen.' },
   ],
-  objectivesPreview: ['Die Steinbrücke über die Ourthe nehmen', 'Danach geordneter Rückzug: mindestens 12 Mann (davon 2 Panzer) erreichen den Sammelpunkt im Osten', 'Optional: Den Versorgungs-Lkw retten', 'Zeitlimit: 19 Minuten'],
+  objectivesPreview: ['Die Steinbrücke über die Ourthe nehmen', 'Danach geordneter Rückzug: mindestens 14 Mann (davon 2 Panzer) erreichen den Sammelpunkt im Osten', 'Optional: Den Versorgungs-Lkw retten', 'Zeitlimit: 19 Minuten'],
   forces: ['3× Panther', '2× StuG III', '2× Sd.Kfz. 251', '18× Schützen', '3× MG-42', '2× Panzerschreck', '3× Pioniere', '1× Offizier', '1× Sanitäter', '1× Versorgungs-Lkw', 'Fähigkeiten: Nebelwerfer-Salve, Artillerie, Rauch'],
   map: { size: 540, seed: 1944, season: 'winter', palette: 'winter', terrainStyle: 'hills', relief: 6, baseHeight: 6, seaLevel: 0, scatterTrees: 20, features: feats },
   env: { season: 'winter', sunElev: 9, sunAzim: 190, fogDensity: 0.0055 },
@@ -68,7 +69,7 @@ export default {
     g.spawnGroup([[us.rifle, 6], [us.lmg, 2], [us.at, 2]], 'RU', 70, -26, { spacing: 3.6, cols: 4, ai: { mode: 'guard', radius: 26 } });
     g.spawn('ww2_us_57mm', 'RU', 62, 16, { heading: -Math.PI / 2, ai: { mode: 'hold' } });
     g.addObjective('bridge', 'Die Steinbrücke über die Ourthe nehmen');
-    g.addObjective('retreat', 'Rückzug: 12 Mann (davon 2 Panzer) zum Sammelpunkt im Osten', { hidden: true });
+    g.addObjective('retreat', `Rückzug: ${NEED} Mann (davon 2 Panzer) zum Sammelpunkt im Osten`, { hidden: true });
     g.addObjective('truck', 'Den Versorgungs-Lkw retten', { optional: true });
     g.later(3, () => g.say('Lessing', 'Sprit sparen: Nicht auf der Stelle drehen, Umwege vermeiden. Den Lkw dicht an den Panzern halten – er ist unsere letzte Reserve.', 7));
     g.later(40, () => g.say('Scholz', 'Aus dem Nebel kommen sie nicht auf Sicht heran. Fahrt vorsichtig auf die Brücke zu – die Pak steht am Westende.', 6));
@@ -95,7 +96,9 @@ export default {
       this.exitM.hidden = false;
       g.say('Lessing', 'Der Himmel ist klar, die Jabos kommen. Rückzug! Zurück zum Sammelpunkt, Gruppe um Gruppe. Verwundete und Sprit zuerst.', 7);
       g.alert('Rückzug zum Sammelpunkt im Osten!', 5);
-      this.nextStrike = t + 8;
+      this.nextStrike = t + 4;
+      // V3-R (Balance, Automatik siegte nach 365 s ohne einen Verlust): Panzerspitze der Gegenseite stößt von Norden in den Rückzugsweg
+      g.later(6, () => { if (g.ended) return; g.alert('⚠ Gegnerische Panzer stoßen von Norden in den Rückzugsweg!', 4); wave(g, [['ww2_sherman', 2], [us.rifle, 6], [us.lmg, 1]], 150, -250, [[160, -80], [190, 0], [EXIT[0], EXIT[1]]], { tags: ['w'] }); wave(g, [['ww2_m10', 1], [us.rifle, 4]], -120, 4, [[-20, 0], [60, 0], [140, 4]], { tags: ['w'] }); });
     }
     if (this.phase === 'attack' || this.phase === 'held') for (const u of g.units) if (u.alive && u.side === 'UA' && u.pos.x < 45) this.fwd.add(u.id);
     // Wetter klart auf → alliierte Jagdbomber (Aircraft.js über die Fähigkeiten, Seite RU)
@@ -107,15 +110,15 @@ export default {
         let best = ours[0], bn = -1;
         for (const u of ours) { const n = ours.filter((v) => Math.hypot(v.pos.x - u.pos.x, v.pos.z - u.pos.z) < 14).length + (u.type.vehicle ? 2 : 0); if (n > bn) { bn = n; best = u; } }
         foeStrike(g, 'ww2_airstrike_us', best.pos.x, best.pos.z);
-        this.strikes++; this.nextStrike = t + 32;
+        this.strikes++; this.nextStrike = t + 20; // V3-R: 32 → 20 s
       }
     }
     if (this.phase === 'retreat') {
       const inExit = near(g, 'UA', EXIT[0], EXIT[1], 36).filter((u) => this.fwd.has(u.id));
       const tanksIn = inExit.filter((u) => u.tags.has('tank')).length;
-      setText(g, 'retreat', `Rückzug: ${inExit.length}/12 Mann (davon ${Math.min(tanksIn, 2)}/2 Panzer) am Sammelpunkt im Osten`);
+      setText(g, 'retreat', `Rückzug: ${inExit.length}/${NEED} Mann (davon ${Math.min(tanksIn, 2)}/2 Panzer) am Sammelpunkt im Osten`);
       if (g.objState('truck') === 'open' && !alive(g, 'UA', (u) => u.tags.has('truck')).length) g.setObjective('truck', 'failed');
-      if (inExit.length >= 12 && tanksIn >= 2) {
+      if (inExit.length >= NEED && tanksIn >= 2) {
         g.setObjective('retreat', 'done');
         if (g.objState('truck') === 'open') g.setObjective('truck', inExit.some((u) => u.tags.has('truck')) ? 'done' : 'failed');
         g.win('Die Brücke ist gefallen, doch der Vorstoß ist nach wenigen Tagen zu Ende: Sprit, Wetter und Luftüberlegenheit der Gegenseite entscheiden. Es war die letzte große Offensive im Westen – tausende Tote auf beiden Seiten und in den Dörfern der Ardennen, und danach der unaufhaltsame Rückweg.');
