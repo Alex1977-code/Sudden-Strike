@@ -5,9 +5,9 @@ import { airMission } from '../../engine/aircraft.js';
 import { uk, setText, mmss, alive, fort } from './_h.js';
 
 const PLACE = PLACE_BY_ID.pegasus;
-const HOLD = 840;                         // s bis zur Ablösung (Lord Lovats Kommandos)
-const CANAL = { x: -40, z: 0, name: 'Pegasus', fuse: 230 };   // Kanalbrücke (Bénouville)
-const ORNE = { x: 141, z: 0, name: 'Horsa', fuse: 300 };      // Orne-Brücke (Ranville)
+const HOLD = 720;                         // s bis zur Ablösung (Lord Lovats Kommandos)
+const CANAL = { x: -40, z: 0, name: 'Pegasus', fuse: 300 };   // Kanalbrücke (Bénouville)
+const ORNE = { x: 141, z: 0, name: 'Horsa', fuse: 400 };      // Orne-Brücke (Ranville)
 const LZ = [[-6, -34], [8, -52], [104, -34]];                   // Landepunkte der Lastensegler
 
 const mission = placeMission(PLACE, {
@@ -19,8 +19,8 @@ const mission = placeMission(PLACE, {
     { s: 'Major Howard', t: 'Schnell und leise: Die Posten ausschalten, bevor sie Alarm geben. Die Sapper müssen die Sprengladungen aus den Brückenpfeilern entfernen – dafür brauchen sie einige Sekunden ohne Feind in der Nähe.' },
     { s: 'Captain Wood', t: 'Danach halten wir. Der Gegner schickt Panzer und Infanterie aus Caen. Die PIATs sind unsere einzige Antwort auf den Panzer. Gegen Morgen erreicht uns Lord Lovat mit den Kommandos – bis dahin darf keine der Brücken fallen.' },
   ],
-  objectivesPreview: ['Pegasus-Brücke (Kanal) einnehmen und Sprengladung entfernen', 'Horsa-Brücke (Orne) einnehmen und Sprengladung entfernen', 'Beide Brücken bis zur Ablösung halten (14 Minuten)', 'Optional: Gegnerischen Panzer zerstören', 'Optional: Mindestens 14 Mann am Leben'],
-  forces: ['10× Fallschirmjäger (Sten)', '8× Rifleman', '2× Bren-Gunner', '3× PIAT-Team', '4× Sapper', '2× Offizier', '1× Sanitäter', '1× Mörsertrupp', '1× 6-pdr (Lastensegler)', 'Fähigkeiten: Artillerie, Fallschirmabwurf, Nebel'],
+  objectivesPreview: ['Pegasus-Brücke (Kanal) einnehmen und Sprengladung entfernen', 'Horsa-Brücke (Orne) einnehmen und Sprengladung entfernen', 'Beide Brücken bis zur Ablösung halten (12 Minuten)', 'Optional: Gegnerischen Panzer zerstören', 'Optional: Mindestens 14 Mann am Leben'],
+  forces: ['15× Fallschirmjäger (Sten)', '11× Rifleman', '4× Bren-Gunner', '3× PIAT-Team', '4× Sapper', '2× Offizier', '1× Sanitäter', '1× Mörsertrupp', '1× 6-pdr (Lastensegler)', 'Fähigkeiten: Artillerie, Fallschirmabwurf, Nebel'],
   weather: { type: 'clear' }, time: { start: '00:16', speed: 24 },
   camera: { x: 10, z: -20, dist: 100 },
   abilities: [{ id: 'ww2_artillery', charges: 2 }, { id: 'ww2_paradrop_uk', charges: 1 }, { id: 'smoke', charges: 2 }],
@@ -52,7 +52,7 @@ const mission = placeMission(PLACE, {
     try { airMission(g, p, 0, -40, { model: 'dakota', count: 3, formation: 'vic', radio: 'Howard', heading: Math.PI / 2, onOverTarget() {} }); } catch (e) { /* ohne Flugzeugmodell nur Landung */ }
     land(0, [[uk.smg, 5], [uk.rifle, 3], [uk.at, 2], [uk.officer, 1], [uk.engineer, 2], [uk.medic, 1]], { tags: ['grpA'] });
     land(1, [[uk.smg, 5], [uk.rifle, 3], [uk.lmg, 1], [uk.mortar, 1]], { tags: ['grpA'] });
-    land(2, [[uk.smg, 4], [uk.rifle, 3], [uk.lmg, 1], [uk.at, 1], [uk.officer, 1], [uk.engineer, 2]], { tags: ['grpB'] });
+    land(2, [[uk.smg, 5], [uk.rifle, 5], [uk.lmg, 2], [uk.at, 1], [uk.officer, 1], [uk.engineer, 2]], { tags: ['grpB'] });
     g.later(2.5, () => g.spawn('ww2_6pdr', 'UA', 24, -30, { heading: Math.PI / 2 }));
 
     g.addObjective('canal', 'Pegasus-Brücke (Kanal) einnehmen und Sprengladung entfernen');
@@ -67,18 +67,18 @@ const mission = placeMission(PLACE, {
       g.alert('⚠ Panzer Richtung Pegasus-Brücke!', 4); g.say('Wood', 'Panzer IV von Westen auf der Hauptstraße! PIATs nach vorn!', 5);
       g.spawnGroup([['ww2_pz4', 1], ['ww2_de_rifle', 6], ['ww2_de_mg42', 1]], 'RU', -250, 6, { spacing: 7, cols: 4, ai: { mode: 'attackMove', points: [[-90, 4], [-52, 2]], aggressive: true, after: 'guard' } });
     });
-    g.later(480, () => {
+    g.later(450, () => {
       g.alert('⚠ Infanterie greift von Osten an!', 3);
-      g.spawnGroup([['ww2_de_rifle', 8], ['ww2_de_mg42', 2], ['ww2_de_mp40', 2]], 'RU', 235, 42, { spacing: 4, cols: 5, ai: { mode: 'attackMove', points: [[190, 12], [145, 4]], aggressive: true, after: 'guard' } });
+      g.spawnGroup([['ww2_de_rifle', 6], ['ww2_de_mg42', 1], ['ww2_de_mp40', 1]], 'RU', 235, 42, { spacing: 4, cols: 5, ai: { mode: 'attackMove', points: [[190, 12], [145, 4]], aggressive: true, after: 'guard' } });
     });
-    g.later(560, () => {
+    g.later(430, () => {
       g.say('Howard', 'Verstärkung: Fallschirmjäger springen über dem Kanal ab!', 4);
       const pp = g.playerById(0);
       try { g.support.paraDrop(pp, 30, -10, { unit: 'ww2_uk_para', n: 6 }); } catch (e) { g.spawnGroup([[uk.para, 6]], 'UA', 30, -10, { spacing: 3 }); }
     });
-    g.later(660, () => {
+    g.later(560, () => {
       g.alert('⚠ Starker Gegenangriff aus Bénouville!', 4);
-      g.spawnGroup([['ww2_stug3', 1], ['ww2_pz4', 1], ['ww2_de_rifle', 8], ['ww2_de_mp40', 2]], 'RU', -170, 40, { spacing: 6, cols: 5, ai: { mode: 'attackMove', points: [[-90, 18], [-52, 6]], aggressive: true, after: 'guard' } });
+      g.spawnGroup([['ww2_pz4', 1], ['ww2_de_rifle', 6], ['ww2_de_mp40', 1]], 'RU', -170, 40, { spacing: 6, cols: 5, ai: { mode: 'attackMove', points: [[-90, 18], [-52, 6]], aggressive: true, after: 'guard' } });
     });
     g.later(HOLD - 120, () => g.say('Wood', 'Weit im Westen: Dudelsack! Lord Lovat ist unterwegs. Noch zwei Minuten!', 5));
     g.later(HOLD - 60, () => g.say('Wood', 'Kommandos am Kanal – haltet bis zum Schluss!', 4));

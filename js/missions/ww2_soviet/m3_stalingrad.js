@@ -59,7 +59,7 @@ export default placeMission(PLACE_BY_ID.stalingrad, {
     const inside = h ? (h.occupants || []).filter((u) => u.side === 'UA' && u.alive) : [];
     const near = ours(g, 92, 30, 16);
     if (!this.taken && g.objState('house') === 'open') {
-      const clear = foes(g, 92, 32, 22).length === 0;
+      const clear = foes(g, 92, 32, 40).length === 0;
       if (clear && (inside.length >= 4 || near.length >= 6)) {
         this.taken = true; this.takenT = this.t;
         g.setObjective('house', 'done');

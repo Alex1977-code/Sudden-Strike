@@ -1,6 +1,7 @@
 // A4 – Omaha Beach (6. Juni 1944): Strandlandung. LCVP-Landungsboote (Auf-/Absitzen), Strandhindernisse, Widerstandsnester
 // WN 62/65/72 ausschalten, Ausgänge öffnen; Nebenziel Pointe du Hoc (Rangers).
 import { placeMission, PLACE_BY_ID } from '../../maps/places/index.js';
+import { ABILITIES } from '../../game/abilities.js';
 import { us, setText, mmss, alive, fort, clearByEngineers } from './_h.js';
 
 const PLACE = PLACE_BY_ID.omaha;
@@ -41,11 +42,10 @@ const mission = placeMission(PLACE, {
     for (const x of [-150, -100, 10, 120, 170]) fort(g, 'ww2_mines_ap', 'RU', x, -104, { mines: 8, tags: ['obst'] });
     // Widerstandsnester mit MG-Nestern, Pak und Infanterie in Löchern
     for (const n of NESTS) {
-      fort(g, 'ww2_bunker', 'RU', n.x, n.z + 6, { heading: Math.PI, tags: ['wn', n.id] });
+      const bk = fort(g, 'ww2_bunker', 'RU', n.x, n.z + 6, { heading: Math.PI, tags: ['wn', n.id] }); bk.hp = bk.maxHp = 1100;
       fort(g, 'ww2_mgnest', 'RU', n.x - 14, n.z + 10, { heading: Math.PI, tags: ['wn', n.id] });
       fort(g, 'ww2_mgnest', 'RU', n.x + 14, n.z + 10, { heading: Math.PI, tags: ['wn', n.id] });
-      g.spawn('ww2_pak40', 'RU', n.x + 6, n.z - 6, { heading: Math.PI, ai: { mode: 'hold' }, tags: ['wn', n.id] });
-      g.spawnGroup([['ww2_de_rifle', 4], ['ww2_de_mg42', 1]], 'RU', n.x, n.z + 2, { spacing: 3.4, cols: 3, ai: { mode: 'guard', radius: 22 }, tags: ['wn', n.id] });
+      g.spawnGroup([['ww2_de_rifle', 3], ['ww2_de_mg42', 1]], 'RU', n.x, n.z + 2, { spacing: 3.4, cols: 3, ai: { mode: 'guard', radius: 22 }, tags: ['wn', n.id] });
     }
     // WN 66 (Les Moulins) liefert Flankenfeuer, ist aber kein Pflichtziel
     fort(g, 'ww2_mgnest', 'RU', -62, -68, { heading: Math.PI });
@@ -59,6 +59,10 @@ const mission = placeMission(PLACE, {
     g.addObjective('wn', 'Widerstandsnester ausschalten: WN 72, WN 65, WN 62 (0/3)');
     g.addObjective('exits', `Mindestens zwei Ausgänge öffnen (0/2) – ${mmss(LIMIT)}`);
     g.addObjective('hoc', 'Pointe du Hoc: Haubitzen ausschalten', { optional: true });
+    // Vorbereitungsfeuer der Schiffsartillerie auf die Widerstandsnester (die Boote sind noch auf See)
+    const navy = (n, delay) => g.later(delay, () => { if (!g.ended) try { ABILITIES.ww2_artillery.exec(g, n.x, n.z + 4, g.playerById(0)); } catch (e) { /* ohne Artillerie */ } });
+    for (const n of NESTS) for (const d of [1, 8, 15, 22, 29]) navy(n, d);
+    g.later(1, () => g.say('Mercer', 'Schiffsartillerie eröffnet das Feuer auf die Widerstandsnester!', 5));
     g.later(2, () => g.say('Mercer', 'Boote voraus! Wählt die Boote und steuert sie auf den Strand zu. Dann: absitzen (U) oder Rechtsklick auf den Strand.', 7));
     g.later(14, () => g.say('Reeves', 'Rangers an der Steilküste im Westen – wir steigen dort an Land und holen uns die Haubitzen.', 5));
     g.later(200, () => { // zweite Welle: Panzer und Pioniere auf dem Strand

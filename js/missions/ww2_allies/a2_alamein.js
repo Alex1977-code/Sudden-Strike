@@ -5,7 +5,7 @@ import { uk, setText, mmss, alive, fort, clearByEngineers } from './_h.js';
 
 const BELT1 = 62, BELT2 = -52;            // x der Minengürtel (Ost = Alliierte, West = Achse)
 const Z0 = -138, Z1 = 152;                // Ausdehnung der Gürtel
-const LINE_X = -150;                      // Durchbruchslinie
+const LINE_X = -165;                      // Durchbruchslinie
 const LIMIT = 1020;                       // s Zeitlimit
 const NEED = 4;                           // Panzer, die die Linie überqueren müssen
 
@@ -74,12 +74,12 @@ export default {
     g.later(2, () => g.say('Cole', 'Sapper vor! Sobald die Minen sichtbar werden, stellt uns direkt davor – wir räumen eine Gasse.', 6));
     g.later(14, () => g.say('Hale', 'Artillerie auf die Pak-Stellungen legen und Nebel vor die Gasse, dann erst die Panzer nachziehen.', 6));
     // Gegenangriff der Achse aus dem Westen (Panzer + Infanterie)
-    g.later(330, () => {
-      g.spawnGroup([['ww2_pz4', 2], ['ww2_de_rifle', 5]], 'RU', -170, 0, { spacing: 7, cols: 4, ai: { mode: 'attackMove', points: [[-60, 4], [10, 4]], aggressive: true, after: 'guard' } });
+    g.later(150, () => {
+      g.spawnGroup([['ww2_pz4', 2], ['ww2_de_rifle', 5]], 'RU', -175, 0, { spacing: 7, cols: 4, ai: { mode: 'attackMove', points: [[-60, 4], [10, 4]], aggressive: true, after: 'guard' } });
       g.alert('⚠ Panzer-Gegenangriff von Westen!', 3); g.say('Hale', 'Deutsche Panzer rücken zum Gegenstoß vor. Sherman nach vorn!', 4);
     });
-    g.later(600, () => {
-      g.spawnGroup([['ww2_pz4', 2], ['ww2_stug3', 1], ['ww2_de_rifle', 5], ['ww2_de_mg42', 1]], 'RU', -170, 20, { spacing: 7, cols: 4, ai: { mode: 'attackMove', points: [[-30, 20], [60, 10]], aggressive: true, after: 'guard' } });
+    g.later(420, () => {
+      g.spawnGroup([['ww2_pz4', 2], ['ww2_stug3', 1], ['ww2_de_rifle', 5], ['ww2_de_mg42', 1]], 'RU', -175, 20, { spacing: 7, cols: 4, ai: { mode: 'attackMove', points: [[-30, 20], [60, 10]], aggressive: true, after: 'guard' } });
       g.alert('⚠ Zweiter Gegenstoß!', 3);
     });
     g.later(420, () => { // Verstärkung der Achse? Nein: Nachschub der Briten (Sapper + Schützen)

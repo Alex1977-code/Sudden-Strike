@@ -36,7 +36,7 @@ export default {
   noDefaultDefeat: true,
 
   setup(g) {
-    this.st = {}; this.houseKills = 0; this.wave = 0; this.ended = false;
+    this.st = {}; this.houseKills = 0; this.wave = 0;
     this.markers = [
       { x: HQ[0], z: HQ[1], r: 30, label: 'Gefechtsstand', color: '#5db8ff' },
       { x: AMB[0], z: AMB[1], r: 18, label: 'Hinterhalt', color: '#ffd500' },
@@ -88,14 +88,14 @@ export default {
     let r = ROUTES[key];
     const br = g.bridges.find((b) => b.name === r.bridge);
     if (br && br.state === 'destroyed') r = ROUTES.C; // Nordbrücke gesprengt → Umweg über das Zentrum
-    const list = [['m_storm', 4 + lv], ['e_rpg', 1]];
+    const list = [['m_storm', 5 + lv], ['e_rpg', 1]];
     if (lv >= 2) list.push(['e_mg', 1]);
     wave(g, list, r.from[0], r.from[1], r.pts, { tags: ['wave'] });
     if (lv >= 1 && lv % 2 === 1) g.spawn(lv >= 3 ? 'bmp' : 'btr', 'RU', r.from[0] + 12, r.from[1], { ai: { mode: 'attackMove', points: r.pts, aggressive: true, after: 'guard' } });
-    if (lv >= 4) g.spawn('t72', 'RU', r.from[0] + 20, r.from[1] + 8, { ai: { mode: 'attackMove', points: r.pts.slice(0, 3), aggressive: true, after: 'guard' } });
+    if (lv >= 3) g.spawn('t72', 'RU', r.from[0] + 20, r.from[1] + 8, { ai: { mode: 'attackMove', points: r.pts.slice(0, 3), aggressive: true, after: 'guard' } });
     this.wave++;
     if (this.wave === 1) g.say('Sova', 'Erste Sturmgruppe an der Zentrumsbrücke. Hinterhalt hält still … wartet …', 4);
-    else if (lv >= 4) g.alert('⚠ Panzer im Anmarsch!', 3);
+    else if (lv >= 3) g.alert('⚠ Panzer im Anmarsch!', 3);
     else g.alert(`⚠ Sturmgruppe – ${{ N: 'Nordbrücke', C: 'Zentrumsbrücke', S: 'Südbrücke' }[key === 'N' && r === ROUTES.C ? 'C' : key]}`, 2.5);
   },
   onKill(g, u, killer) {

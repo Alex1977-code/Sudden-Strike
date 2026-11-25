@@ -34,8 +34,8 @@ export default placeMission(PLACE_BY_ID.brest, {
     ];
     this.exitMarker = this.markers[1];
     // Eigene Garnison im Hof und an den Kasematten
-    g.spawnGroup([[S.rifle, 8], [S.dp, 2]], 'UA', -52, -18, { spacing: 3, cols: 5, tags: ['inf'] });
-    g.spawnGroup([[S.rifle, 6], [S.smg, 2], [S.dp, 1]], 'UA', 52, -12, { spacing: 3, cols: 5, tags: ['inf'] });
+    g.spawnGroup([[S.rifle, 9], [S.dp, 2]], 'UA', -52, -18, { spacing: 3, cols: 5, tags: ['inf'] });
+    g.spawnGroup([[S.rifle, 7], [S.smg, 2], [S.dp, 2]], 'UA', 52, -12, { spacing: 3, cols: 5, tags: ['inf'] });
     g.spawnGroup([[S.at, 2], [S.mortar, 2], [S.off, 1]], 'UA', 0, 6, { spacing: 4, cols: 5, tags: ['inf'] });
     g.spawn(S.med, 'UA', -6, -10, { tags: ['med'] }); g.spawn(S.med, 'UA', 8, -4, { tags: ['med'] });
     g.spawn(S.zis3, 'UA', -88, -34, { heading: -Math.PI / 2 }); g.spawn(S.zis3, 'UA', 4, -56, { heading: Math.PI });
@@ -54,7 +54,7 @@ export default placeMission(PLACE_BY_ID.brest, {
     g.later(25, () => wave(g, 'RU', [[E.rifle, 8], [E.mg, 2]], 0, -178, [[0, -96], [0, -38]], { tags: ['w'] }));
     g.later(110, () => { g.alert('Angriff von Westen – Terespoler Tor!', 4); wave(g, 'RU', [[E.rifle, 8], [E.smg, 2], [E.at, 1]], -196, -70, [[-128, -44], [-60, -16]], { tags: ['w'] }); });
     g.later(205, () => { g.say('Wolkow', 'Sturmgeschütze am Brester Tor! Panzerbüchsen nach vorn!', 5); wave(g, 'RU', [[E.stug, 2], [E.rifle, 8], [E.mg, 1]], 6, -190, [[0, -96], [0, -34]], { tags: ['w'] }); });
-    g.later(300, () => { wave(g, 'RU', [[E.rifle, 10], [E.mg, 2], [E.smg, 3]], 190, 40, [[112, 34], [40, 4]], { tags: ['w'] }); wave(g, 'RU', [[E.pz4, 1], [E.rifle, 6]], -190, -90, [[-128, -44], [-50, -14]], { tags: ['w'] }); });
+    g.later(300, () => { wave(g, 'RU', [[E.rifle, 7], [E.mg, 1], [E.smg, 2]], 190, 40, [[112, 34], [40, 4]], { tags: ['w'] }); wave(g, 'RU', [[E.rifle, 6], [E.at, 1]], -190, -90, [[-128, -44], [-50, -14]], { tags: ['w'] }); });
     g.every(45, () => { if (g.ended || this.phase !== 'hold') return false; g.combat.incomingShell(-40 + Math.random() * 80, -40 + Math.random() * 50, { name: 'Granate', dmg: 90, splash: 6, vs: { soft: 1, light: 0.8, heavy: 0.3, air: 0, struct: 0.3 } }, 'RU', 4, null, 1.2, null); }, 60);
   },
 

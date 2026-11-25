@@ -46,7 +46,7 @@ export default {
   forces: ['3× Sturmboot (je 6–7 Mann)', '11× Schützen', '2× MG', '3× Javelin', '1× Scharfschütze', '1× Offizier', '1× Sanitäter', '1× Drohnenpilot', '1× Glasfaser-FPV-Operator', 'Artillerie vom rechten Ufer, FPV, Glasfaser-FPV, Nebel, Aufklärung'],
   map: { size: 420, seed: 1023, season: 'autumn', palette: 'mud', relief: 2, baseHeight: 3, seaLevel: 0, scatterTrees: 30, scarred: true, features: feats },
   env: { season: 'autumn', sunElev: 8, sunAzim: 120, fogDensity: 0.0034 },
-  weather: { type: 'fog', intensity: 0.35, changes: [{ at: 260, type: 'overcast', intensity: 0.4, fade: 80 }] },
+  weather: { type: 'fog', intensity: 0.22, changes: [{ at: 200, type: 'overcast', intensity: 0.4, fade: 80 }] },
   time: { start: '02:20', speed: 6 },
   camera: { x: -5, z: -105, dist: 105, yaw: 0 },
   abilities: ['scan', { id: 'artillery', charges: 5 }, { id: 'fpv', charges: 4 }, { id: 'm_fiberfpv', charges: 4 }, { id: 'smoke', charges: 2 }],

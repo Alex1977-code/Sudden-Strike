@@ -23,23 +23,23 @@ const mission = placeMission(PLACE, {
     { s: 'Sergeant Doyle', t: 'Die Panzer sind unterwegs, aber nicht vor Ablauf einiger Minuten da. Bis dahin: Bazooka in die Obergeschosse, MGs in die Fenster, und niemand verlässt den Platz.' },
   ],
   objectivesPreview: ['Marktplatz, Bahnhof und Hafenviertel einnehmen', 'Stadt halten, bis die Panzerunterstützung eintrifft und den Gegenangriff bricht', 'Optional: Mindestens 2 Sturmgeschütze zerstören', 'Optional: Bahnhof bis zum Ende halten', 'Zeitlimit: 23 Minuten'],
-  forces: ['14× Fallschirmjäger', '8× Rifleman', '4× Thompson-Schütze', '2× BAR-Schütze', '3× Bazooka-Team', '2× Pionier', '1× Offizier', '1× Sanitäter', '1× Mörsertrupp', 'Verstärkung: 4× Sherman, 1× M10', 'Fähigkeiten: Artillerie, Nebel, Jabo-Angriff'],
+  forces: ['16× Fallschirmjäger', '8× Rifleman', '4× Thompson-Schütze', '4× BAR-Schütze', '3× Bazooka-Team', '2× Pionier', '1× Offizier', '1× Sanitäter', '1× Mörsertrupp', 'Verstärkung: 4× Sherman, 1× M10', 'Fähigkeiten: Artillerie, Nebel, Jabo-Angriff'],
   weather: { type: 'overcast', intensity: 0.3 }, time: { start: '07:00', speed: 3 },
   camera: { x: -20, z: -30, dist: 120 },
-  abilities: [{ id: 'ww2_artillery', charges: 3 }, { id: 'smoke', charges: 3 }, { id: 'ww2_airstrike_us', charges: 2 }],
+  abilities: [{ id: 'ww2_artillery', charges: 5 }, { id: 'smoke', charges: 3 }, { id: 'ww2_airstrike_us', charges: 2 }],
 
   setup(g) {
     this.t0 = g.time; this.captured = new Set(); this.capT = {}; this.tCap = null; this.relief = false; this.stugs = 0; this.fell = 0;
     for (const z of ZONES) this.capT[z.id] = 0;
     // Eigene Truppen am Ende des Damms
-    g.spawnGroup([[us.para, 14], [us.smg, 4]], 'UA', -40, -36, { spacing: 3.3, cols: 5, heading: -2.2 });
+    g.spawnGroup([[us.para, 16], [us.smg, 4], [us.lmg, 2]], 'UA', -40, -36, { spacing: 3.3, cols: 5, heading: -2.2 });
     g.spawnGroup([[us.rifle, 8], [us.lmg, 2], [us.at, 3]], 'UA', -22, -22, { spacing: 3.3, cols: 5, heading: -2.2 });
     g.spawnGroup([[us.engineer, 2], [us.officer, 1], [us.medic, 1], [us.mortar, 1]], 'UA', -52, -46, { spacing: 3.6, cols: 3, heading: -2.2 });
     // Verteidiger in den Häusern und Gassen (Fallschirmjäger der Wehrmacht)
-    g.spawnGroup([['ww2_de_fj', 3], ['ww2_de_mg42', 1]], 'RU', 70, 26, { spacing: 3.4, cols: 3, ai: { mode: 'guard', radius: 22 }, tags: ['town', 'markt'] });
-    g.spawnGroup([['ww2_de_fj', 3], ['ww2_de_mp40', 1]], 'RU', 56, 6, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 24 }, tags: ['town', 'markt'] });
-    g.spawnGroup([['ww2_de_fj', 3], ['ww2_de_mg42', 1]], 'RU', 85, 100, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 24 }, tags: ['town', 'bahnhof'] });
-    g.spawnGroup([['ww2_de_fj', 3], ['ww2_de_mp40', 1]], 'RU', 118, -16, { spacing: 3.4, cols: 3, ai: { mode: 'guard', radius: 24 }, tags: ['town', 'hafen'] });
+    g.spawnGroup([['ww2_de_fj', 2], ['ww2_de_rifle', 2], ['ww2_de_mg42', 1]], 'RU', 70, 26, { spacing: 3.4, cols: 3, ai: { mode: 'guard', radius: 22 }, tags: ['town', 'markt'] });
+    g.spawnGroup([['ww2_de_fj', 2], ['ww2_de_rifle', 1], ['ww2_de_mp40', 1]], 'RU', 56, 6, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 24 }, tags: ['town', 'markt'] });
+    g.spawnGroup([['ww2_de_fj', 2], ['ww2_de_rifle', 1], ['ww2_de_mg42', 1]], 'RU', 85, 100, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 24 }, tags: ['town', 'bahnhof'] });
+    g.spawnGroup([['ww2_de_fj', 2], ['ww2_de_rifle', 1], ['ww2_de_mp40', 1]], 'RU', 118, -16, { spacing: 3.4, cols: 3, ai: { mode: 'guard', radius: 24 }, tags: ['town', 'hafen'] });
     fort(g, 'ww2_mgnest', 'RU', 40, 4, { heading: -2.4, tags: ['town', 'markt'] });
     fort(g, 'ww2_foxhole', 'RU', 30, -8, {}); fort(g, 'ww2_foxhole', 'RU', 28, -2, {});
     g.addObjective('town', 'Carentan einnehmen: Marktplatz, Bahnhof, Hafenviertel (0/3)');
@@ -53,13 +53,19 @@ const mission = placeMission(PLACE, {
     this.tCap = g.time;
     g.say('Ewell', 'Wir haben die Stadt! Jetzt kommt der Gegenangriff aus dem Südwesten – Stellungen beziehen!', 6);
     g.setObjective('town', 'done');
+    // Pak und Bazooka-Teams werden herangeführt, Artillerie ist wieder bereit
+    g.later(8, () => {
+      g.spawn('ww2_us_57mm', 'UA', 58, 50, { heading: -2.2 }); g.spawn('ww2_us_57mm', 'UA', 84, 52, { heading: -2.4 });
+      g.spawnGroup([[us.at, 3], [us.rifle, 3]], 'UA', 70, 46, { spacing: 3.4, cols: 3, heading: -2.2 });
+      g.addAbilityCharges('ww2_artillery', 1); g.say('Doyle', 'Zwei 57-mm-Pak und weitere Bazooka-Teams sind eingetroffen. Stellt sie am Platz auf!', 5);
+    });
     const go = (delay, list, from, pts, msg) => g.later(delay, () => {
       if (g.ended) return; g.alert(msg, 4);
       g.spawnGroup(list, 'RU', from[0], from[1], { spacing: 6, cols: 5, ai: { mode: 'attackMove', points: pts, aggressive: true, aggroRadius: 50, after: 'guard' }, tags: ['counter'] });
     });
-    go(40, [['ww2_stug3', 2], ['ww2_de_rifle', 6], ['ww2_de_mg42', 1]], [-60, 250], [[-20, 190], [20, 100], [62, 40]], '⚠ Gegenangriff aus dem Südwesten!');
-    go(140, [['ww2_stug3', 1], ['ww2_pz4', 1], ['ww2_de_rifle', 6], ['ww2_de_mp40', 2]], [-10, 262], [[30, 200], [70, 120], [78, 50]], '⚠ Zweite Welle mit Sturmgeschützen!');
-    go(RELIEF - 20, [['ww2_stug3', 2], ['ww2_de_rifle', 8], ['ww2_de_mg42', 2]], [150, 150], [[120, 120], [100, 60], [75, 34]], '⚠ Angriff von Osten über die Bahnlinie!');
+    go(60, [['ww2_stug3', 1], ['ww2_de_rifle', 5], ['ww2_de_mg42', 1]], [-60, 250], [[-20, 190], [20, 100], [62, 40]], '⚠ Gegenangriff aus dem Südwesten!');
+    go(160, [['ww2_stug3', 1], ['ww2_de_rifle', 5], ['ww2_de_mp40', 1]], [-10, 262], [[30, 200], [70, 120], [78, 50]], '⚠ Zweite Welle mit Sturmgeschützen!');
+    go(RELIEF - 20, [['ww2_stug3', 1], ['ww2_de_rifle', 6], ['ww2_de_mg42', 1]], [150, 150], [[120, 120], [100, 60], [75, 34]], '⚠ Angriff von Osten über die Bahnlinie!');
     g.later(RELIEF, () => {
       this.relief = true;
       g.say('Doyle', 'Panzer! Die Shermans rollen von Westen in die Stadt ein!', 5); g.alert('Panzerunterstützung ist eingetroffen', 4);
@@ -91,9 +97,10 @@ const mission = placeMission(PLACE, {
       const left = RELIEF - (g.time - this.tCap);
       setText(g, 'hold', left > 0 ? `Stadt halten – Panzerunterstützung in ${mmss(left)}` : 'Stadt halten, bis der Gegenangriff gebrochen ist');
       if (held < 2 && (g.time - this.tCap) > 20) { this.lostT = (this.lostT || 0) + dt; if (this.lostT > 12) { g.setObjective('hold', 'failed'); g.lose('Carentan ist wieder verloren – der Gegenangriff hat die Stadt zurückerobert.'); return; } } else this.lostT = 0;
-      if (this.relief && g.time - this.tCap > RELIEF + 40) {
-        const remaining = alive(g, 'RU', (u) => u.tags.has('counter')).length;
-        if (remaining <= 2) {
+      if (this.relief && g.time - this.tCap > RELIEF + 45) {
+        // Gegenangriff gebrochen: kaum noch Angreifer im Umkreis der Stadtmitte (Reste, die sich zurückziehen/halten, zählen nicht)
+        const remaining = alive(g, 'RU', (u) => u.tags.has('counter') && Math.hypot(u.pos.x - 70, u.pos.z - 40) < 70).length;
+        if (remaining <= 2 && held >= 2) {
           g.setObjective('hold', 'done');
           if (g.objState('station') === 'open') g.setObjective('station', this.captured.has('bahnhof') ? 'done' : 'failed');
           g.say('Ewell', 'Der Gegenangriff ist gebrochen. Carentan gehört uns – die beiden Brückenköpfe sind verbunden.', 6);
