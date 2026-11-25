@@ -289,6 +289,8 @@ function makePicker(C, T, era) {
       if (b.w > maxW) continue;
       return b;
     }
+    // Rückfall: Maße stammen vom zufällig gewählten Gebäude (kann klein sein) – die Modelle müssen kleine Maße vertragen
+    // (V3-R: Lagerhalle 3,1×2,6 m bei Seed 2026 → NaN-Geometrie, behoben in models.js; Layout bewusst unverändert).
     return { ...pickBuilding(rnd, set, { urban, modern }), kind: (allow && allow[0]) || 'cottage' };
   };
 }

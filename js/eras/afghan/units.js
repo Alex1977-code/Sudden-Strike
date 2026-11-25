@@ -40,7 +40,7 @@ air('BW', 'af_bw_nh90', { transport: 10, name: 'NH90 (Medevac)', icon: '🚑', m
 air('BW', 'af_bw_tiger', { name: 'Tiger UHT', icon: '🚁', model: 'af_tiger', hp: 540, speed: 14, sight: 46, radius: 4, weapons: ['af_hot3', 'af_ate30'], alt: 18, turnRate: 1.5, turretRate: 2, desc: 'Unterstützungshubschrauber mit HOT-3 und 30-mm-Kanone.' });
 air('BW', 'af_bw_luna', { name: 'LUNA-Drohne', icon: '🛩️', model: 'af_luna', hp: 30, speed: 12, sight: 62, radius: 1.5, weapons: [], alt: 28, conceal: 0.5, desc: 'Aufklärungsdrohne. Unbewaffnet.' });
 air('BW', 'af_bw_heron', { name: 'Heron-Drohne', icon: '🛩️', model: 'af_heron', hp: 60, speed: 11, sight: 80, radius: 2.5, weapons: [], alt: 40, conceal: 0.45, desc: 'Große Aufklärungsdrohne mit Langzeit-Sensor. Unbewaffnet.' });
-air('BW', 'af_bw_jet', { name: 'Jet (Luftnahunterstützung)', icon: '✈️', model: 'af_jet', hp: 260, speed: 42, sight: 40, radius: 4, weapons: [], alt: 26, turnRate: 1.4, desc: 'Wird von der Fähigkeit „Luftnahunterstützung" gerufen.' });
+air('BW', 'af_bw_jet', { hidden: true, name: 'Jet (Luftnahunterstützung)', icon: '✈️', model: 'af_jet', hp: 260, speed: 42, sight: 40, radius: 4, weapons: [], alt: 26, turnRate: 1.4, desc: 'Wird von der Fähigkeit „Luftnahunterstützung" gerufen.' });
 // Feldlager (Qalat-Elemente): Strukturen, keine Pionierbauwerke
 str('BW', 'af_camp_sandbag', { name: 'Sandsackstellung', icon: '🟫', model: 'af_camp_sandbag', hp: 380, sight: 32, radius: 2.6, weapons: ['af_mg4'], turretRate: 2.5, desc: 'MG-Stellung hinter Sandsäcken.' });
 str('BW', 'af_camp_tower', { name: 'Wachturm', icon: '🗼', model: 'af_camp_tower', hp: 700, sight: 46, radius: 2.4, weapons: ['af_mg3'], turretRate: 2.5, desc: 'Erhöhter MG-Posten mit großer Sichtweite.' });
@@ -87,7 +87,7 @@ veh('SA', 'af_sa_ural', { tow: true, transport: 12, name: 'Ural-Versorgung', ico
 veh('SA', 'af_sa_uaz', { tow: true, transport: 4, name: 'UAZ-469', icon: '🚙', model: 'af_uaz', hp: 200, speed: 13, sight: 36, radius: 2.2, weapons: ['af_pk', 'af_ags17'], turnRate: 2.8, turretRate: 3, desc: 'Leichter Geländewagen mit PK und AGS-17.' });
 air('SA', 'af_sa_hind', { transport: 8, name: 'Mi-24 Hind', icon: '🚁', model: 'af_hind', hp: 520, speed: 14, sight: 46, radius: 4.5, weapons: ['af_yakb', 'af_s8', 'af_shturm'], alt: 18, turnRate: 1.3, turretRate: 2, desc: 'Kampfhubschrauber. Stark gegen Boden, verwundbar für Stinger und DShK.' });
 air('SA', 'af_sa_mi8', { transport: 16, name: 'Mi-8 (Transport)', icon: '🚁', model: 'af_mi8', hp: 380, speed: 12, sight: 40, radius: 4.8, weapons: [], alt: 18, turnRate: 1.2, desc: 'Transporthubschrauber, unbewaffnet.' });
-air('SA', 'af_sa_su25', { name: 'Su-25 Gratsch', icon: '✈️', model: 'af_su25', hp: 300, speed: 42, sight: 40, radius: 4, weapons: [], alt: 26, turnRate: 1.4, desc: 'Wird von der Fähigkeit „Su-25-Angriff" gerufen.' });
+air('SA', 'af_sa_su25', { hidden: true, name: 'Su-25 Gratsch', icon: '✈️', model: 'af_su25', hp: 300, speed: 42, sight: 40, radius: 4, weapons: [], alt: 26, turnRate: 1.4, desc: 'Wird von der Fähigkeit „Su-25-Angriff" gerufen.' });
 
 // ======================= Mudschaheddin (MUJ) =======================
 inf('MUJ', 'af_muj_rifle', { name: 'Kämpfer (Lee-Enfield)', icon: '🪖', weaponModel: 'enfield', hp: 62, speed: 4.3, sight: 32, weapons: ['af_enfield', 'af_rgd5'], conceal: 0.45, desc: 'Ortskundige Kämpfer mit Repetiergewehr: genau, aber langsam feuernd.' });
@@ -131,12 +131,13 @@ export function placeIED(game, team, x, z, opts = {}) {
   return game.spawn('af_ied', team, x, z, { noBlock: true, build: { progress: 1, time: 1, kind: 'af_ied' }, mines: opts.mines ?? 1, ...opts });
 }
 
+// V3-R: af_bw_jet/af_sa_su25 (hidden) sind nur Darsteller der Luftschlag-Fähigkeiten (AirShow) – nicht im Editor/Roster
 const k = (fac, ...keys) => keys.filter((x) => T[x] && (T[x].faction === fac || T[x].faction === 'ALL'));
 export const ROSTERS = {
   BW: {
     infantry: k('BW', 'af_bw_rifle', 'af_bw_mg', 'af_bw_sniper', 'af_bw_at', 'af_bw_milan', 'af_bw_engineer', 'af_bw_medic', 'af_bw_jtac', 'af_bw_para'),
     armor: k('BW', 'af_bw_dingo', 'af_bw_eagle', 'af_bw_fennek', 'af_bw_wiesel_mk', 'af_bw_wiesel_tow', 'af_bw_marder', 'af_bw_mungo', 'af_bw_wolf'),
-    support: k('BW', 'af_bw_pzh2000', 'af_bw_tiger', 'af_bw_luna', 'af_bw_heron', 'af_bw_jet', 'af_bw_ch53', 'af_bw_nh90', 'af_camp_sandbag', 'af_hesco', 'af_concertina', 'af_trench', 'af_foxhole', 'af_camp_tower', 'af_camp_tent', 'af_camp_medtent'),
+    support: k('BW', 'af_bw_pzh2000', 'af_bw_tiger', 'af_bw_luna', 'af_bw_heron', 'af_bw_ch53', 'af_bw_nh90', 'af_camp_sandbag', 'af_hesco', 'af_concertina', 'af_trench', 'af_foxhole', 'af_camp_tower', 'af_camp_tent', 'af_camp_medtent'),
     logistics: k('BW', 'af_bw_truck', 'af_bw_buffel'),
   },
   TAL: {
@@ -148,7 +149,7 @@ export const ROSTERS = {
   SA: {
     infantry: k('SA', 'af_sa_rifle', 'af_sa_pk', 'af_sa_rpg', 'af_sa_spg9', 'af_sa_sniper', 'af_sa_vdv', 'af_sa_engineer', 'af_sa_medic', 'af_sa_officer'),
     armor: k('SA', 'af_sa_bmp1', 'af_sa_bmp2', 'af_sa_btr70', 'af_sa_btr80', 'af_sa_bmd1', 'af_sa_t55', 'af_sa_t62', 'af_sa_uaz'),
-    support: k('SA', 'af_trench', 'af_foxhole', 'af_sa_shilka', 'af_sa_bm21', 'af_sa_2s1', 'af_sa_hind', 'af_sa_mi8', 'af_sa_su25'),
+    support: k('SA', 'af_trench', 'af_foxhole', 'af_sa_shilka', 'af_sa_bm21', 'af_sa_2s1', 'af_sa_hind', 'af_sa_mi8'), // V3-R: Jets nur noch Optik (Fähigkeit), keine Einheit
     logistics: k('SA', 'af_sa_ural'),
   },
   MUJ: {

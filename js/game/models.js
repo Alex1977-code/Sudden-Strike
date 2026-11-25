@@ -1634,7 +1634,8 @@ KINDS.warehouse = (c) => {
     fput(c, comp(`rd`, (B) => { B(3.5, 3.7, 0.12, 0, 1.85, 0.06); for (let i = 1; i < 9; i++) B(3.5, 0.04, 0.04, 0, i * 0.4, 0.14); B(3.9, 0.2, 0.2, 0, 3.8, 0.1); B(0.2, 3.7, 0.2, -1.85, 1.85, 0.1); B(0.2, 3.7, 0.2, 1.85, 1.85, 0.1); }), pm(pick([0x6e7f74, 0x7a6a55, 0x55657a], s + k), 0.6, 0.3), 0, u, 0.15);
     fput(c, boxG(4.6, 0.5, 0.6), M.concreteDark, 0, u, 0.25, 0.32); // Rampe/Prellbock
   }
-  for (const fi of [0, 1, 2, 3]) { const len = fi < 2 ? w : d; fput(c, planeG(len - 3, 0.9), M.window, fi, 0, H - 1.5, 0.04); fput(c, comp(`rb${len}`, (B) => { B(len - 2.8, 0.06, 0.1, 0, 0.47, 0.05); B(len - 2.8, 0.06, 0.1, 0, -0.47, 0.05); for (let k = 0; k <= Math.round((len - 3) / 3); k++) B(0.06, 0.9, 0.1, -(len - 3) / 2 + k * (len - 3) / Math.round((len - 3) / 3), 0, 0.05); }), trim, fi, 0, H - 1.5); }
+  // V3-R: Fensterband nur ab 5 m Wandlänge; Pfostenzahl ≥ 1 (sonst Division durch 0 → NaN-Geometrie bei kleinen Hallen)
+  for (const fi of [0, 1, 2, 3]) { const len = fi < 2 ? w : d; if (len < 5) continue; const np = Math.max(1, Math.round((len - 3) / 3)); fput(c, planeG(len - 3, 0.9), M.window, fi, 0, H - 1.5, 0.04); fput(c, comp(`rb${len}`, (B) => { B(len - 2.8, 0.06, 0.1, 0, 0.47, 0.05); B(len - 2.8, 0.06, 0.1, 0, -0.47, 0.05); for (let k = 0; k <= np; k++) B(0.06, 0.9, 0.1, -(len - 3) / 2 + k * (len - 3) / np, 0, 0.05); }), trim, fi, 0, H - 1.5); }
   for (const fi of [0, 1]) fput(c, boxG(0.3, 0.2, 0.3), pm(0xfff1c0, 0.3, 0, c.lit ? 0xffd890 : 0, 1.5), fi, -w * 0.4, H - 0.4, 0.2);
   cyl(c.g, 0.1, 0.1, H - 1.4, pm(0x7a8084, 0.5, 0.6), w / 2 + 0.2, (H - 1.4) / 2 + 0.7, -d * 0.3, 0, 0, 0, 6);
   if (s % 2) { cyl(c.g, 1.0, 1.0, 4.2, pm(0xa6abaf, 0.5, 0.6), -w / 2 - 0.9, 2.1, -d * 0.2, 0, 0, 0, 12); cyl(c.g, 1.0, 0.1, 0.5, pm(0xa6abaf, 0.5, 0.6), -w / 2 - 0.9, 4.45, -d * 0.2, 0, 0, 0, 12); }

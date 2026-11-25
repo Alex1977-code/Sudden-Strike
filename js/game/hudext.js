@@ -35,7 +35,7 @@ export class HudExt {
     const g = this.g, self = this;
     const baseOrderAt = inp.orderAt.bind(inp);
     inp.orderAt = function (own, x, y, u, attackMove = false) {
-      const queue = inp.keys.has('Shift');
+      const queue = inp.keys.has('Shift') || !!inp.queueMode; // V3-R: Touch-Umschalter „Kette“
       if (self.specialOrder(own, u, queue)) return;
       if (!queue) return baseOrderAt(own, x, y, u, attackMove);
       // Befehlskette: dieselbe Auswertung, jedes Kommando mit queue:true

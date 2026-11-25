@@ -26,7 +26,8 @@ const feats = [
   grove(-205, -112, 34, 'deciduous', 0.03),
   bldg('church_west', -212, 86, 10, 20, 0, 2, 'Alte Kirche Oosterbeek'),
   road([[-235, -42], [-238, 70]], 6),
-  { type: 'causeway', pts: [[-262, 96], [-262, 150]], width: 7, name: 'Fähre Heveadorp' },
+  // V3-R: Fähre als kurzer Ponton-Fährsteg am Nordufer (vorher Steinbogen-Stummel bis Flussmitte); keine Querung
+  { type: 'causeway', pts: [[-262, 98], [-262, 132]], width: 6, name: 'Fähre Heveadorp', style: 'pontoon' },
   road([[-238, 70], [-262, 96]], 6, false),
   forest([[-290, -290], [-120, -290], [-140, -200], [-290, -190]], 'mixed', 0.055),
   forest([[120, -290], [290, -290], [290, -200], [140, -210]], 'deciduous', 0.05),

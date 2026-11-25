@@ -112,7 +112,7 @@ const mission = placeMission(PLACE, {
     setText(g, 'hold', this.rel ? 'Bastogne halten – die Panzerspitze bricht den Ring' : `Bastogne halten, bis der Entsatz eintrifft (${mmss(RELIEF - t)})`);
     if (this.rel && g.time - this.tRel > FINISH) {
       const rem = alive(g, 'RU', (u) => u.tags.has('wave') && Math.hypot(u.pos.x, u.pos.z) < 90).length;
-      if ((rem <= 3 || foesC <= 6) && mine.length > 0) {
+      if ((rem <= 3 || foesC <= 4) && mine.length > 0) { // V3-R: 6 → 4 (Mitte muss weitgehend frei sein)
         g.setObjective('hold', 'done'); if (g.objState('square') === 'open') g.setObjective('square', 'done');
         if (g.objState('armor') === 'open') g.setObjective('armor', 'failed'); if (g.objState('supply') === 'open') g.setObjective('supply', 'failed');
         g.say('Haines', 'Die Spitze ist da. Der Ring ist gebrochen – Bastogne ist frei.', 5);
@@ -120,6 +120,8 @@ const mission = placeMission(PLACE, {
       }
     }
     if (mine.length === 0 && alive(g, 'UA').length === 0) { g.setObjective('hold', 'failed'); g.lose('Die Verteidiger sind aufgerieben – Bastogne ist gefallen.'); }
+    // V3-R: ohne eigenes Zutun hält der Gegner die Mitte bis über den Entsatz hinaus – dann ist die Stadt verloren (vorher: Partie ohne Ende)
+    if (this.rel && g.time - this.tRel > FINISH + 240 && !g.ended) { g.setObjective('hold', 'failed'); g.lose('Der Entsatz bleibt vor der Stadt liegen – die Mitte ist in der Hand des Gegners, Bastogne ist gefallen.'); }
   },
   victory: 'Bastogne hielt. Der Straßenknoten blieb in alliierter Hand und nahm der deutschen Ardennenoffensive ihr wichtigstes Ziel – gegen Schnee, Kälte und den Mangel an allem.',
 });

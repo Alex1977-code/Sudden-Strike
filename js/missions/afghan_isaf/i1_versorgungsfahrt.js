@@ -100,6 +100,7 @@ export default {
   update(g, dt) {
     if (g.ended) return;
     this._t = (this._t || 0) + dt;
+    if (this._t > 1500 && this.t2 === null) { settle(g, 'convoy', 'failed'); g.lose('Die Kolonne hat den Außenposten bis zum Nachmittag nicht erreicht. Die Fahrt wird abgebrochen.'); return; }
     clearByEngineers(g, dt, 'UA');
     for (const b of BLOCKS) if (!this.cleared.has(b.id) && g.countTag(b.id) === 0) {
       this.cleared.add(b.id);

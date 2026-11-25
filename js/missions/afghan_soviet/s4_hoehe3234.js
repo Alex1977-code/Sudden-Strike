@@ -72,14 +72,14 @@ export default {
     T(190, () => { atk('NE', [['af_muj_ak', 4], ['af_muj_rifle', 2], ['af_muj_rpg', 1]], 'Angriff von Nordosten!'); atk('N', [['af_muj_rifle', 3]], null); });
     T(290, () => atk('W', [['af_muj_ak', 5], ['af_muj_commander', 1]], 'Sie kommen über den Westsattel!'));
     T(380, () => { atk('E', [['af_muj_ak', 4], ['af_muj_rpg', 1]], 'Angriff von Osten!'); atk('NW', [['af_muj_rifle', 3]], null); });
-    T(430, () => {
+    T(380, () => {
       g.spawnGroup([['af_sa_vdv', 5], ['af_sa_pk', 1]], 'UA', 0, 140, { spacing: 2.6, cols: 3, heading: Math.PI, tags: ['relief'], order: [2, 16] });
       g.say('Orlow', 'Aufklärungszug kommt den Pfad herauf – mit Munition!', 5);
     });
     T(500, () => { atk('N', [['af_muj_ak', 5], ['af_muj_rpg', 1]], 'Großangriff von Norden!'); atk('NE', [['af_muj_ak', 3]], null); });
-    T(600, () => { atk('NW', [['af_muj_ak', 5], ['af_muj_rifle', 2], ['af_muj_commander', 1]], 'Neue Welle aus Nordwesten!'); atk('W', [['af_muj_ak', 3]], null); });
-    T(690, () => { atk('N', [['af_muj_ak', 6], ['af_muj_rpg', 2]], 'Sie greifen auf ganzer Breite an!'); atk('E', [['af_muj_ak', 3], ['af_muj_rifle', 2]], null); });
-    T(770, () => atk('NE', [['af_muj_ak', 5], ['af_muj_rpg', 1]], 'Letzte Welle!'));
+    T(600, () => { atk('NW', [['af_muj_ak', 4], ['af_muj_rifle', 1], ['af_muj_commander', 1]], 'Neue Welle aus Nordwesten!'); atk('W', [['af_muj_ak', 2]], null); });
+    T(690, () => { atk('N', [['af_muj_ak', 5], ['af_muj_rpg', 1]], 'Sie greifen auf ganzer Breite an!'); atk('E', [['af_muj_ak', 2], ['af_muj_rifle', 1]], null); });
+    T(770, () => atk('NE', [['af_muj_ak', 4], ['af_muj_rpg', 1]], 'Letzte Welle!'));
   },
   onKill(g, u) { if (u.side === 'UA' && u.type.infantry) { this.lost++; if (this.lost > 8) settle(g, 'losses', 'failed'); } },
   update(g, dt) {

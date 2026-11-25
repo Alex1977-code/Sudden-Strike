@@ -139,10 +139,11 @@ export class Garrison {
     const list = h.occupants;
     if (!list?.length) return;
     const soft = w.vs?.soft ?? 0.3;
-    if (w.kind === 'bullet') {
-      const u = list[Math.floor(Math.random() * list.length)];
-      this.hurt(u, dmg * soft * 0.12, src);
-    } else for (const u of [...list]) this.hurt(u, dmg * Math.max(0.3, soft) * 0.3, src);
+    // V3-R: Insassen stehen rechnerisch alle in der Hausmitte – Splash trifft sie deshalb NICHT einzeln (game.splashDamage
+    // überspringt sie), sondern nur über das Haus: je Treffer höchstens ein Insasse (Kugel durchs Fenster bzw. Splitter/Einsturz).
+    const u = list[Math.floor(Math.random() * list.length)];
+    if (w.kind === 'bullet') this.hurt(u, dmg * soft * 0.12, src);
+    else this.hurt(u, dmg * Math.max(0.3, soft) * 0.3, src);
   }
   hurt(u, amount, src) {
     if (!u.alive) return;

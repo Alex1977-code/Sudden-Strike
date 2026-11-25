@@ -76,9 +76,9 @@ inf('RU', 'm_storm', { name: 'Sturminfanterie', icon: '🪖', model: 'm_storm', 
 inf('RU', 'm_rubikon', { name: 'Drohnenregiment-Pilot', icon: '🎮', model: 'm_fibreop', role: 'infantry', hp: 55, speed: 3.9, sight: 32, weapons: ['rifleRU'], conceal: 0.5, desc: 'Spezialisierter Drohnenpilot: Glasfaser-FPV „KVN“ und Molniya-Schwärme (Fähigkeiten).' });
 inf('RU', 'm_dronehunter_ru', { name: 'Drohnenabwehr-Trupp', icon: '📡', model: 'm_dronehunter', role: 'infantry', hp: 65, speed: 4, sight: 32, weapons: ['m_ewrifle', 'm_shotgun'], conceal: 0.35, airSight: 46, desc: 'Schrotflinte und EloKa-Gewehr gegen Drohnen. Der EloKa-Strahl wirkt nicht gegen Glasfaser-Drohnen.' });
 // Fahrzeug-Flugzeuge (Katalog / Luftunterstützung; Fähigkeiten spawnen sie temporär)
-air('UA', 'm_f16', { name: 'F-16', icon: '✈️', model: 'm_jet_f16', role: 'drones', hp: 260, speed: 40, sight: 40, radius: 4, weapons: [], alt: 28, turnRate: 1.4, desc: 'Kampfflugzeug – wird von der Fähigkeit „F-16-Luftnahunterstützung“ gerufen.' });
-air('UA', 'm_mirage', { name: 'Mirage 2000', icon: '✈️', model: 'm_jet_mirage', role: 'drones', hp: 240, speed: 42, sight: 40, radius: 4, weapons: [], alt: 28, turnRate: 1.5, desc: 'Kampfflugzeug – Fähigkeit „Mirage-Schlag (SCALP/Hammer)“.' });
-air('RU', 'm_su34', { name: 'Su-34', icon: '✈️', model: 'm_jet_su34', role: 'drones', hp: 320, speed: 38, sight: 40, radius: 4.5, weapons: [], alt: 30, turnRate: 1.3, desc: 'Jagdbomber – Fähigkeit „Gleitbomben-Schlag (KAB/UMPK)“.' });
+air('UA', 'm_f16', { hidden: true, name: 'F-16', icon: '✈️', model: 'm_jet_f16', role: 'drones', hp: 260, speed: 40, sight: 40, radius: 4, weapons: [], alt: 28, turnRate: 1.4, desc: 'Kampfflugzeug – wird von der Fähigkeit „F-16-Luftnahunterstützung“ gerufen.' });
+air('UA', 'm_mirage', { hidden: true, name: 'Mirage 2000', icon: '✈️', model: 'm_jet_mirage', role: 'drones', hp: 240, speed: 42, sight: 40, radius: 4, weapons: [], alt: 28, turnRate: 1.5, desc: 'Kampfflugzeug – Fähigkeit „Mirage-Schlag (SCALP/Hammer)“.' });
+air('RU', 'm_su34', { hidden: true, name: 'Su-34', icon: '✈️', model: 'm_jet_su34', role: 'drones', hp: 320, speed: 38, sight: 40, radius: 4.5, weapons: [], alt: 30, turnRate: 1.3, desc: 'Jagdbomber – Fähigkeit „Gleitbomben-Schlag (KAB/UMPK)“.' });
 
 // ======================= V3-M2: gezogene Geschütze, Gegenbatterie-Radar, Transporthubschrauber, Eisenbahn =======================
 // towable: Geschütz kann von Zugfahrzeugen (tow: true – Lkw, MT-LB, Ural/KrAZ) angehängt werden; Mannschaft schiebt langsam.

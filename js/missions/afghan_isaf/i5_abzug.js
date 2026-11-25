@@ -34,7 +34,7 @@ export default {
     { s: 'Stabsfeldwebel Uwe Jansen (Nachhut)', t: 'Die Gegenseite weiß, dass wir gehen. Sie werden es uns nicht leicht machen. Wir gehen geordnet – und alle zusammen.' },
   ],
   objectivesPreview: ['Material verladen (4 Minuten), solange das Lager gehalten wird', 'Gemeldete Sperre auf der Straße räumen', 'Mindestens 3 von 4 Lkw zum Sammelpunkt im Süden bringen', 'Nachhut: das Tor halten, dann zum Sammelpunkt nachziehen', 'Optional: Alle vier Lkw', 'Optional: Nachhut verliert höchstens 3 Mann'],
-  forces: ['Kolonne: 4× MAN-Lkw, 1× Bergepanzer Büffel', 'Begleitschutz: 2× Dingo, 1× Eagle IV, 1× Mungo (3 Pioniere)', 'Nachhut: 1× Marder, 1× Wiesel MK20, 6× Schützentrupp, 2× MG4, 1× MILAN, 1× Scharfschütze, 1× Sanitäter', '2× Sandsackstellung am Tor', 'Fähigkeiten: Luftnahunterstützung (2×), Drohnenaufklärung, Nebel (3×)'],
+  forces: ['Kolonne: 4× MAN-Lkw, 1× Bergepanzer Büffel', 'Begleitschutz: 2× Dingo, 1× Eagle IV, 1× Mungo (3 Pioniere)', 'Nachhut: 1× Marder, 1× Wiesel MK20, 6× Schützentrupp, 2× MG4, 1× MILAN, 1× Scharfschütze, 1× Sanitäter', '4× Sandsackstellung (Tor, Ost- und Westzaun)', 'Fähigkeiten: Luftnahunterstützung (2×), Drohnenaufklärung, Nebel (3×)'],
   map: { size: 400, seed: 2013, terrainStyle: 'hills', palette: 'afghan', relief: 6, baseHeight: 4, seaLevel: 0, scatterTrees: 14, features: feats },
   env: { season: 'autumn', sunElev: 14, sunAzim: 110, fogDensity: 0.0026 },
   weather: { type: 'overcast', intensity: 0.4 }, time: { start: '06:10', speed: 8 },
@@ -58,7 +58,7 @@ export default {
     g.spawn('af_bw_wiesel_mk', 'UA', 50, -132, { heading: Math.PI, tags: ['rear'] });
     g.spawnGroup([['af_bw_rifle', 3], ['af_bw_mg', 1], ['af_bw_sniper', 1]], 'UA', 0, -146, { spacing: 3, cols: 5, heading: Math.PI, tags: ['rear'] });
     g.spawnGroup([['af_bw_rifle', 3], ['af_bw_mg', 1], ['af_bw_milan', 1], ['af_bw_medic', 1]], 'UA', 40, -142, { spacing: 3, cols: 6, heading: Math.PI, tags: ['rear'] });
-    for (const [x, z, h] of [[-12, -40, 0], [12, -40, 0]]) g.spawn('af_camp_sandbag', 'UA', x, z, { heading: h });
+    for (const [x, z, h] of [[-12, -40, 0], [12, -40, 0], [-64, -104, -Math.PI / 2], [64, -104, Math.PI / 2]]) g.spawn('af_camp_sandbag', 'UA', x, z, { heading: h });
     for (let i = -3; i <= 3; i++) if (i) { fort(g, 'af_hesco', 'UA', i * 18, -158, { rot: 0 }); fort(g, 'af_hesco', 'UA', i * 18 + (i > 0 ? 6 : -6), -40, { rot: 0 }); }
     for (const z of [-140, -120, -100, -80, -60]) { fort(g, 'af_hesco', 'UA', -72, z, { rot: Math.PI / 2 }); fort(g, 'af_hesco', 'UA', 72, z, { rot: Math.PI / 2 }); }
     // Sperre auf der Straße
@@ -117,6 +117,7 @@ export default {
     if (!own.length && !g.units.some((u) => u.alive && u.side === 'UA' && u.cargo?.length) && this.phase !== 'withdraw') { g.lose('Die eigenen Kräfte sind zerschlagen.'); return; }
     clearByEngineers(g, dt, 'UA');
     if (g.countTag('blk') === 0 && g.objState('block') === 'open') { settle(g, 'block', 'done'); g.say('Pioniere', 'Sperre geräumt – Straße frei!', 4); }
+    if (this.trucks.filter((v) => v.alive || this.out.has(v)).length < 3) { settle(g, 'convoy', 'failed'); g.lose('Zu viele Lkw sind verloren – Waffen und Munition bleiben zurück.'); return; }
     if (this.phase === 'load') {
       const foes = near(g, CAMP[0], CAMP[1], 62, 'RU').length;
       if (!foes) this.load += dt;

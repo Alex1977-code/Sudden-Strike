@@ -69,6 +69,7 @@ export default {
   },
   update(g, dt) {
     if (g.ended) return;
+    if (g.time > 1500 && this.tPortal === undefined) { settle(g, 'convoy', 'failed'); g.lose('Schneesturm: Der Pass wird gesperrt, bevor die Kolonne den Tunnel erreicht.'); return; }
     for (const G of GATES) if (!this.cleared.has(G.tag) && !g.countTag(G.tag)) {
       this.cleared.add(G.tag);
       if (G.tag === 'amb') g.say('Lebedew', 'Untere Kehren frei. Kolonne fährt an.', 4);

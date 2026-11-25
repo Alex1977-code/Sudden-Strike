@@ -30,7 +30,8 @@ export default placeMission(PLACE_BY_ID.stalingrad, {
   setup(g) {
     this.t = 0; this.taken = false; this.takenT = 0; this.lostT = 0; this.ferryBad = 0; this.ferryOk = true; this.millDone = false; this.ferries = 0;
     this.house = g.units.find((u) => u.type.key === 'house' && u.houseDef?.kind === 'pawlow_haus') || null;
-    if (this.house) { this.house.maxHp = this.house.hp = 3200; } // das Eckhaus ist massiv gebaut: hält mehrere Panzertreffer aus
+    // V3-R: Sonder-HP (3200) entfernt – die Standardformel ergibt für das 34×12-m-Haus mit 4 Geschossen ≈ 10 300 HP (massiv);
+    // Insassen sterben seit V3-R nicht mehr gesammelt durch Splash (Schaden läuft über das Haus, s. garrison.js).
     this.markers = [
       { x: 92, z: 30, r: 20, label: 'Eckhaus', color: '#5db8ff' },
       { x: FERRY[0], z: FERRY[1], r: 18, label: 'Fähranleger', color: '#7be07b' },

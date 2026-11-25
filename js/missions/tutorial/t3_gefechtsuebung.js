@@ -75,8 +75,8 @@ export default {
         text: T('Ein Spähtrupp der Roten Partei kommt aus Osten. Wählen Sie die Schützen und machen Sie <b>Rechtsklick auf das markierte Haus</b>: Besetzen.', 'Schützen wählen und das <b>Haus antippen</b>.', 'Schützen wählen, Cursor auf das Haus, <b>B</b>.'),
         mark: () => [HOUSE[0], HOUSE[1], 8], check: (g) => g.units.some((h) => h.type.key === 'house' && h.occupants?.filter((o) => g.isOwn(o)).length >= 3) },
       { id: 'ambush', title: 'Hinterhalt legen', enter(g) { g.select(inf()); },
-        text: T('Besatzung gewählt: <kbd>J</kbd> (oder Knopf <b>Hinterhalt</b>) – die Einheiten schießen erst, wenn der Feind nah ist, und bleiben unentdeckt. So überrascht man den Gegner auf kurze Distanz.', 'Besatzung wählen (Haus antippen), in der Befehlsleiste <b>Hinterhalt</b> tippen.', 'Hinterhalt ist am Gamepad nicht belegt (LB + Y: Feuer halten als Ersatz).'),
-        padNote: true, check: (g) => g.units.some((u) => u.alive && g.isOwn(u) && u.ambush?.on) },
+        text: T('Besatzung gewählt: <kbd>J</kbd> (oder Knopf <b>Hinterhalt</b>) – die Einheiten schießen erst, wenn der Feind nah ist, und bleiben unentdeckt. So überrascht man den Gegner auf kurze Distanz.', 'Besatzung wählen (Haus antippen), in der Befehlsleiste <b>Hinterhalt</b> tippen.', 'Besatzung wählen, dann <b>LB + RB</b> öffnet den Befehlsring (alle Knöpfe der Befehlsleiste): <b>Hinterhalt</b> wählen und mit <b>A</b> ausführen.'),
+        check: (g) => g.units.some((u) => u.alive && g.isOwn(u) && u.ambush?.on) },
       { id: 'wait', title: 'Warten und zuschlagen', enter(g, t) {
           const pts = [[-40, 60]];
           const pat = g.spawnGroup([['e_rifle', 3], ['e_mg', 1]], 'RU', 118, 58, { spacing: 3, cols: 4, tags: ['patrol'], heading: Math.PI / 2, ai: { mode: 'attackMove', points: pts, aggressive: true } });
@@ -88,26 +88,26 @@ export default {
         check: () => patrolDead(), hold: 2.2 },
       { id: 'mines', title: 'Minen räumen', enter(g, t) { g.select(M.eng.filter((u) => u.alive)); g.camera.focus(MINES[0], MINES[1] + 24); },
         say: ['Ausbilder', 'Vor der Brücke liegt eine Minensperre. Nur Pioniere können sie räumen – Infanterie und Fahrzeuge würden Verluste erleiden.', 8],
-        text: T('Wählen Sie die <b>Pioniere</b>, dann in der Befehlsleiste <b>Räumen</b> und klicken Sie auf das Minenfeld (Markierung). Halten Sie die übrigen Einheiten zurück!', 'Pioniere antippen, unten <b>Räumen</b> tippen, dann das Minenfeld antippen.', 'Pioniere wählen; Räumen ist am Gamepad nicht belegt – „Überspringen“.'),
-        padNote: true, mark: () => [MINES[0], MINES[1], 8], check: (g, t) => t.cmd('clearmines') && !this.mine.alive,
+        text: T('Wählen Sie die <b>Pioniere</b>, dann in der Befehlsleiste <b>Räumen</b> und klicken Sie auf das Minenfeld (Markierung). Halten Sie die übrigen Einheiten zurück!', 'Pioniere antippen, unten <b>Räumen</b> tippen, dann das Minenfeld antippen.', 'Pioniere wählen, <b>LB + RB</b> öffnet den Befehlsring (alle Knöpfe der Befehlsleiste): <b>Räumen</b> wählen (<b>A</b>), dann Cursor auf das Minenfeld und <b>A</b>.'),
+        mark: () => [MINES[0], MINES[1], 8], check: (g, t) => t.cmd('clearmines') && !this.mine.alive,
         onSkip: () => { if (this.mine.alive) g.logi?.removeBuilding?.(this.mine); } },
       { id: 'bridge', title: 'Brücke bauen', skipIf: () => !this.bridge || this.bridge.state !== 'destroyed',
         enter(g) { g.select(M.eng.filter((u) => u.alive)); g.camera.focus(0, -12); },
         say: ['Ausbilder', 'Die Übungsbrücke ist zerstört. Pioniere bauen sie wieder auf.', 6],
-        text: T('Pioniere gewählt: in der Befehlsleiste <b>Brücke bauen</b>, dann die zerstörte Brücke anklicken (Markierung). Die Pioniere reparieren sie.', 'Pioniere wählen, unten <b>Brücke bauen</b>, dann die Brücke antippen.', 'Brückenbau ist am Gamepad nicht belegt – „Überspringen“.'),
-        padNote: true, mark: () => [0, -30, 9], check: () => this.bridge.state !== 'destroyed',
+        text: T('Pioniere gewählt: in der Befehlsleiste <b>Brücke bauen</b>, dann die zerstörte Brücke anklicken (Markierung). Die Pioniere reparieren sie.', 'Pioniere wählen, unten <b>Brücke bauen</b>, dann die Brücke antippen.', 'Pioniere wählen, <b>LB + RB</b> öffnet den Befehlsring (alle Knöpfe der Befehlsleiste): <b>Brücke bauen</b> wählen (<b>A</b>), dann Cursor auf die Brücke und <b>A</b>.'),
+        mark: () => [0, -30, 9], check: () => this.bridge.state !== 'destroyed',
         onSkip: () => { try { g.mapobj.br.repair(this.bridge); } catch (e) { /* ignorieren */ } } },
       { id: 'stance', title: 'Stellung halten', enter(g) { g.select(inf()); g.camera.focus(0, 10); },
-        text: T('Gruppe gewählt: <kbd>L</kbd> schaltet die Bewegungshaltung: <b>Stellung halten</b> (nicht verfolgen), dann <b>Verfolgen</b>. Wählen Sie „Stellung halten“, damit die Gruppe nicht dem Feind nachläuft.', 'Befehlsleiste: Knopf <b>Bew. frei / Stellung</b> tippen.', 'Haltung ist am Gamepad nicht belegt – „Überspringen“.'),
-        padNote: true, check: (g, t) => t.cmd('stance', (c) => c.move === 'hold') || own().some((u) => u.moveMode === 'hold') },
+        text: T('Gruppe gewählt: <kbd>L</kbd> schaltet die Bewegungshaltung: <b>Stellung halten</b> (nicht verfolgen), dann <b>Verfolgen</b>. Wählen Sie „Stellung halten“, damit die Gruppe nicht dem Feind nachläuft.', 'Befehlsleiste: Knopf <b>Bew. frei / Stellung</b> tippen.', '<b>LB + RB</b> öffnet den Befehlsring (alle Knöpfe der Befehlsleiste): Knopf <b>Bew. frei / Stellung</b> wählen und mit <b>A</b> umschalten.'),
+        check: (g, t) => t.cmd('stance', (c) => c.move === 'hold') || own().some((u) => u.moveMode === 'hold') },
       { id: 'retreat', title: 'Rückzug', enter(g, t) {
           g.select(own()); g.camera.focus(0, 40);
           const r = g.spawnGroup([['e_rifle', 3]], 'RU', 0, -10, { spacing: 3, cols: 3, tags: ['counter'], ai: { mode: 'attackMove', points: [[0, 60], [0, 100]], aggressive: true } });
           for (const u of r) u.name = 'Übungsgegner (Rote Partei)';
         },
         say: ['Ausbilder', 'Die Rote Partei greift von Norden an! Zeit für den Rückzug zum Sammelpunkt.', 7],
-        text: T('Roter Gegenangriff von Norden! Alle Einheiten wählen und <kbd>X</kbd> (Knopf <b>Rückzug</b>): Sie ziehen sich zum Sammelpunkt im Süden zurück.', 'Alle wählen, in der Befehlsleiste <b>Rückzug</b> tippen.', 'Rückzug ist am Gamepad nicht belegt – „Überspringen“.'),
-        padNote: true, mark: () => [RALLY[0], RALLY[1], 10], check: (g, t) => t.cmd('retreat') },
+        text: T('Roter Gegenangriff von Norden! Alle Einheiten wählen und <kbd>X</kbd> (Knopf <b>Rückzug</b>): Sie ziehen sich zum Sammelpunkt im Süden zurück.', 'Alle wählen, in der Befehlsleiste <b>Rückzug</b> tippen.', 'Alle wählen (<b>Back</b>), dann <b>LB + RB</b> öffnet den Befehlsring (alle Knöpfe der Befehlsleiste): <b>Rückzug</b> wählen und mit <b>A</b> ausführen.'),
+        mark: () => [RALLY[0], RALLY[1], 10], check: (g, t) => t.cmd('retreat') },
       { id: 'fight', title: 'Gegenangriff abwehren', enter(g) { g.select(own()); },
         text: T('Am Sammelpunkt gesammelt: Schlagen Sie den roten Gegenangriff zurück – <b>Angriffsbewegung</b> (<kbd>Strg</kbd>+Rechtsklick) oder Rechtsklick auf Gegner.', 'Schlagen Sie den Gegenangriff zurück: Gegner antippen.', 'Schlagen Sie den Gegenangriff zurück: <b>X</b> Angriffsbewegung, <b>B</b> Angriff.'),
         check: (g) => g.byTag('counter').length === 0, hold: 1.5 },

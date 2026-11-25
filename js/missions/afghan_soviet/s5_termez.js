@@ -2,6 +2,7 @@
 // Freundschaftsbrücke über den Amudarja nach Termez; die Nachhut hält den Brückenkopf und geht als Letzte hinüber.
 import { alive, setText, objCount, settle, wave, post, Convoy, overrun } from '../afghan_isaf/_h.js';
 
+const BRIDGE_WAIT = 150; // s bis zur Freigabe der Brücke (Grenzabfertigung)
 const HEAD = [-20, -104], NORTH = [-20, -228];
 const ROUTE = [[-10, 226], [10, 150], [-14, 84], [-20, 40], [-20, -20], [-20, -70], [-20, -120], [-20, -170], [-20, -216], [-20, -230]];
 
@@ -32,7 +33,7 @@ export default {
     { s: 'Hauptmann Pawel Lebedew', t: 'Die Kolonne fährt von selbst, sobald die Furt durch das Wadi frei ist. Nicht alle da draußen wollen uns einfach gehen lassen. Die Schützenpanzer und die Fallschirmjäger bilden die Nachhut am Brückenkopf.' },
     { s: 'Wolkow', t: 'Niemand soll am letzten Tag fallen. Kein Feuer in die Stadt, keine unnötigen Gefechte. Wenn der letzte Lkw drüben ist, setzt sich die Nachhut ab – als Letzte über die Brücke.' },
   ],
-  objectivesPreview: ['Die Furt durch das Wadi freimachen', 'Mindestens 3 von 4 Lkw über die Brücke nach Termez bringen', 'Brückenkopf halten, bis die Kolonne drüben ist, dann als Letzte übersetzen', 'Optional: Höchstens 2 Gefallene', 'Optional: Mörser im Osten ausschalten'],
+  objectivesPreview: ['Die Furt durch das Wadi und die Straße vor Hairatan freimachen', 'Mindestens 3 von 4 Lkw über die Brücke nach Termez bringen', 'Brückenkopf halten, bis die Kolonne drüben ist, dann als Letzte übersetzen', 'Optional: Höchstens 2 Gefallene', 'Optional: Mörser im Osten ausschalten'],
   forces: ['Kolonne: 4× Ural, 1× UAZ-469, 1× T-62', 'Nachhut: 2× BTR-80, 2× BMP-2', '8× Fallschirmjäger (WDW), 2× PK, 1× RPG, 1× Scharfschütze, 1× Offizier, 1× Sanitäter', 'Fähigkeiten: Mi-24-Unterstützung (1×), Artilleriefeuer 122 mm (2×), Nebel (2×)'],
   map: { size: 480, seed: 1989, terrainStyle: 'plains', palette: 'afghan', relief: 3, baseHeight: 4, seaLevel: 0, scatterTrees: 10, features: feats },
   env: { season: 'autumn', sunElev: 16, sunAzim: 150, fogDensity: 0.003 },
@@ -46,7 +47,7 @@ export default {
     this.st = {}; this.lost = 0; this.phase = 'drive';
     const col = [['af_sa_uaz', 0], ['af_sa_ural', 1], ['af_sa_ural', 1], ['af_sa_t62', 0], ['af_sa_ural', 1], ['af_sa_ural', 1]];
     this.col = col.map(([k, tr], i) => g.spawn(k, 'UA', -8 + (i % 2) * 5, 190 + i * 8, { heading: Math.PI, tags: tr ? ['column', 'truck'] : ['column'] }));
-    this.convoy = new Convoy(g, this.col, ROUTE, { allowed: () => (g.countTag('wadi') ? 1 : Infinity), gap: 13 });
+    this.convoy = new Convoy(g, this.col, ROUTE, { allowed: () => (g.countTag('wadi') ? 1 : g.countTag('out') ? 3 : this.tBridge === undefined || g.time - this.tBridge < BRIDGE_WAIT ? 6 : Infinity), gap: 13 });
     g.spawn('af_sa_btr80', 'UA', -24, 176, { heading: Math.PI, cargo: [['af_sa_vdv', 4], ['af_sa_pk', 1]] });
     g.spawn('af_sa_btr80', 'UA', 10, 178, { heading: Math.PI, cargo: [['af_sa_vdv', 4], ['af_sa_rpg', 1]] });
     g.spawn('af_sa_bmp2', 'UA', -16, 160, { heading: Math.PI, cargo: [['af_sa_officer', 1], ['af_sa_medic', 1], ['af_sa_sniper', 1], ['af_sa_pk', 1]] });
@@ -55,8 +56,10 @@ export default {
     post(g, [['af_muj_ak', 3], ['af_muj_rpg', 1]], 34, 74, { r: 30, tags: ['wadi'] });
     post(g, [['af_muj_rifle', 2]], -50, 70, { r: 24, tags: ['wadi'] });
     post(g, [['af_muj_mortar', 1], ['af_muj_rifle', 1]], 168, 30, { r: 18, tags: ['mortar'] });
+    post(g, [['af_muj_ak', 3], ['af_muj_rifle', 2], ['af_muj_rpg', 1]], 40, -14, { r: 30, tags: ['out'] });
+    post(g, [['af_muj_ak', 2], ['af_muj_rifle', 1]], -76, -6, { r: 26, tags: ['out'] });
 
-    g.addObjective('wadi', 'Die Furt durch das Wadi freimachen');
+    g.addObjective('wadi', 'Die Furt durch das Wadi und die Straße vor Hairatan freimachen');
     g.addObjective('convoy', 'Lkw über die Brücke nach Termez bringen (0/3)');
     g.addObjective('rear', 'Brückenkopf halten, dann als Letzte übersetzen', { hidden: true });
     g.addObjective('losses', 'Höchstens 2 Gefallene', { optional: true });
@@ -83,19 +86,27 @@ export default {
     const T = (s, fn) => g.later(s, () => { if (!g.ended) fn(); });
     T(20, () => { wave(g, [['af_muj_ak', 4], ['af_muj_rpg', 1]], [160, -100], [[70, -60], HEAD]); g.alert('⚠ Feuer aus dem Stadtrand – Brückenkopf!', 4); });
     T(80, () => wave(g, [['af_muj_ak', 3], ['af_muj_rifle', 2]], [-200, -60], [[-90, -80], HEAD]));
+    T(150, () => { wave(g, [['af_muj_ak', 4], ['af_muj_rpg', 1], ['af_muj_commander', 1]], [170, -120], [[80, -110], HEAD]); g.alert('⚠ Angriff aus dem Hafengelände!', 4); });
   },
   update(g, dt) {
     if (g.ended) return;
+    if (g.time > 1500 && this.tBridge === undefined) { settle(g, 'convoy', 'failed'); g.lose('Die Kolonne hat die Brücke nicht rechtzeitig erreicht – der Abzugsplan ist durcheinander.'); return; }
     if (!g.countTag('mortar')) settle(g, 'mortar', 'done');
-    if (!g.countTag('wadi') && g.objState('wadi') === 'open') { settle(g, 'wadi', 'done'); g.say('Lebedew', 'Furt frei. Kolonne fährt.', 4); }
+    if (!g.countTag('wadi') && !g.countTag('out') && g.objState('wadi') === 'open') { settle(g, 'wadi', 'done'); g.say('Lebedew', 'Furt frei. Kolonne fährt.', 4); }
     this._t = (this._t || 0) + dt;
     if (this._t % 0.5 < dt) this.convoy.step();
     const trucks = this.col.filter((v) => v.tags.has('truck'));
     const over = trucks.filter((v) => v.alive && v.pos.z < -200).length, alive4 = trucks.filter((v) => v.alive).length;
-    objCount(g, 'convoy', 'Lkw über die Brücke nach Termez bringen', over, 3);
+    if (this.tBridge === undefined || g.time - this.tBridge >= BRIDGE_WAIT) objCount(g, 'convoy', 'Lkw über die Brücke nach Termez bringen', over, 3);
     if (alive4 < 3) { settle(g, 'convoy', 'failed'); g.lose('Die Kolonne hat zu viele Fahrzeuge verloren – am letzten Tag.'); return; }
     if (!alive(g, 'UA').length) { g.lose('Die Einheit ist aufgerieben.'); return; }
     if (this.phase === 'drive' && this.col.some((v) => v.alive && v.pos.z < -60)) this.startRear(g);
+    if (this.tBridge === undefined && this.col.some((v) => v.alive && Math.hypot(v.pos.x + 20, v.pos.z + 120) < 22)) {
+      this.tBridge = g.time;
+      g.say('Grenzposten Termez', 'Brücke ist noch belegt – Abfertigung läuft. Kolonne wartet am Südufer, Freigabe in gut zwei Minuten.', 6);
+    }
+    if (this.tBridge !== undefined && g.time - this.tBridge < BRIDGE_WAIT) setText(g, 'convoy', `Lkw über die Brücke nach Termez bringen – Freigabe in ${Math.ceil(BRIDGE_WAIT - (g.time - this.tBridge))} s`);
+    else if (this.tBridge !== undefined && !this._open) { this._open = true; g.say('Grenzposten Termez', 'Brücke frei. Kommt nach Hause.', 4); }
     const colDone = this.col.every((v) => !v.alive || v.arrivedConvoy);
     if (colDone && over >= 3) settle(g, 'convoy', 'done');
     if (this.phase === 'rear') {

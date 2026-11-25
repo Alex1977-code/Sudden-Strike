@@ -13,11 +13,12 @@ export const GAMEPAD_BINDINGS = [
   ['Rechter Stick', 'links/rechts Kamera drehen, hoch/runter zoomen'],
   ['LT / RT (L2 / R2)', 'Zoom raus / rein'],
   ['A (Kreuz)', 'Auswählen · gedrückt halten + Cursor bewegen = Auswahlrahmen · 2x = gleicher Typ'],
-  ['B (Kreis)', 'Befehl (Bewegen/Angreifen/Besetzen) · Abbrechen im Zielmodus'],
-  ['X (Quadrat)', 'Angriffsbewegung zum Cursor'],
+  ['B (Kreis)', 'Befehl (Bewegen/Angreifen/Besetzen) · Abbrechen im Zielmodus · LB+B = an die Befehlskette anhängen'],
+  ['X (Quadrat)', 'Angriffsbewegung zum Cursor · LB+X = Angriffsbewegung an die Befehlskette'],
   ['Y (Dreieck)', 'Halt · LB+Y = Feuer halten umschalten'],
   ['LB (L1) + A', 'Zur Auswahl hinzufügen / Rahmen ergänzend'],
   ['RB (R1)', 'Fähigkeitenmenü: Stick/Steuerkreuz wählen, A bestätigt, B bricht ab, dann A auf das Ziel'],
+  ['LB + RB', 'Befehlsring: alle Knöpfe der Befehlsleiste (Kriechen, Absitzen, Formation, Nebel, Hinterhalt, Minen räumen, Brücke, Haltungen, Rückzug …) – Stick wählt, A führt aus'],
   ['Steuerkreuz', 'Gruppen 1–4 wählen (2x = Kamera hin) · LB + Steuerkreuz = Gruppe speichern'],
   ['Start (Options)', 'Pausemenü'],
   ['Back (Share)', 'Kurz: alle auswählen · Lang halten: diese Hilfe'],
@@ -174,9 +175,10 @@ export class GamepadControl {
         this.aDown = null;
       }
     }
-    // B: Befehl / Abbrechen, X: Angriffsbewegung
-    if (s.edge(BTN.B)) inp.commandAt(this.cx, this.cy, { attackMove: false });
-    if (s.edge(BTN.X) && !inp.pendingAbility && !inp.pendingBuild) inp.commandAt(this.cx, this.cy, { attackMove: true });
+    // B: Befehl / Abbrechen, X: Angriffsbewegung; mit LB an die Befehlskette anhängen (wie Shift+Rechtsklick, V3-R)
+    const queued = (fn) => { if (!LB || inp.pendingAbility || inp.pendingBuild) return fn(); const had = inp.keys.has('Shift'); inp.keys.add('Shift'); try { fn(); } finally { if (!had) inp.keys.delete('Shift'); } };
+    if (s.edge(BTN.B)) queued(() => inp.commandAt(this.cx, this.cy, { attackMove: false }));
+    if (s.edge(BTN.X) && !inp.pendingAbility && !inp.pendingBuild) queued(() => inp.commandAt(this.cx, this.cy, { attackMove: true }));
     // Y: Halt (LB+Y: Feuer halten umschalten)
     if (s.edge(BTN.Y)) {
       const own = inp.ownSelected();
@@ -189,8 +191,8 @@ export class GamepadControl {
     for (const [i, k] of [[BTN.UP, '1'], [BTN.RIGHT, '2'], [BTN.DOWN, '3'], [BTN.LEFT, '4']]) {
       if (s.edge(i)) { if (LB) inp.storeGroup(k); else inp.selectGroup(k); }
     }
-    // RB: Fähigkeitenmenü bzw. Ziel abbrechen
-    if (s.edge(BTN.RB)) { if (inp.pendingAbility) inp.cancelAbility(); else this._radial(true); }
+    // RB: Fähigkeitenmenü bzw. Ziel abbrechen; LB+RB: Befehlsring (Befehlsleiste)
+    if (s.edge(BTN.RB)) { if (inp.pendingAbility) inp.cancelAbility(); else if (inp.pendingBuild && LB) inp.cancelBuild(); else if (LB) this._radial(true, 'cmd'); else this._radial(true); }
     // Start: Pause
     if (s.edge(BTN.START)) this.hud.togglePause();
     // Stick-Klicks
@@ -211,13 +213,35 @@ export class GamepadControl {
   }
 
   // ---------- Radiales Fähigkeitenmenü ----------
-  _radial(on) {
+  // V3-R: zweiter Ring (LB+RB) = sichtbare Knöpfe der Befehlsleiste (#buildbar, #orders) – deckt alle Befehle ab, die die
+  // Leiste für die aktuelle Auswahl anbietet (Kriechen, Absitzen, Formation, Nebel, Hinterhalt, Minen, Brücke, Haltungen …)
+  _cmdButtons() {
+    const vis = (e) => e.getClientRects().length && !e.closest('.hidden') && !e.disabled;
+    const bb = [...document.querySelectorAll('#buildbar button')].filter(vis);
+    const ob = [...document.querySelectorAll('#orders button')].filter((e) => vis(e) && !['box', 'all'].includes(e.dataset.order));
+    return [...bb, ...ob];
+  }
+  _radial(on, kind = 'abil') {
     const g = this.game;
     if (!on) { this.radial = null; this.radialEl.classList.add('hidden'); return; }
+    if (kind === 'cmd') {
+      const btns = this._cmdButtons();
+      if (!btns.length) { g.alert('Keine Befehle für die Auswahl', 1.5); return; }
+      const n = btns.length, R = Math.min(Math.max(120, n * 15), Math.min(innerWidth, innerHeight) * 0.42 - 30);
+      const name = (e) => (e.title || e.querySelector('span')?.textContent || e.textContent || '').replace(/\s*\(.*?\)\s*$/, '').trim();
+      this.radial = { idx: 0, list: btns.map((e) => ({ el: e, def: { name: name(e) } })), kind };
+      this.radialEl.innerHTML = `<div class="gp-rad-ring gp-rad-cmd">${btns.map((e, i) => {
+        const ang = -Math.PI / 2 + (i * 2 * Math.PI) / n, ic = e.querySelector('svg, i')?.outerHTML || '';
+        return `<div class="gp-rad-item${e.classList.contains('active') || e.classList.contains('on') ? ' on' : ''}" data-i="${i}" style="left:calc(50% + ${Math.cos(ang) * R}px);top:calc(50% + ${Math.sin(ang) * R}px)">${ic}<span>${(e.querySelector('span')?.textContent || name(e)).slice(0, 12)}</span></div>`;
+      }).join('')}<div class="gp-rad-center"></div></div>`;
+      this.radialEl.classList.remove('hidden');
+      this._radialMark();
+      return;
+    }
     const list = g.abilities || [];
     if (!list.length) { g.alert('Keine Fähigkeiten verfügbar', 1.5); return; }
     const n = list.length;
-    this.radial = { idx: Math.max(0, list.findIndex((a) => g.abilityAvailable(a))), list };
+    this.radial = { idx: Math.max(0, list.findIndex((a) => g.abilityAvailable(a))), list, kind };
     this.radialEl.innerHTML = `<div class="gp-rad-ring">${list.map((a, i) => {
       const ang = -Math.PI / 2 + (i * 2 * Math.PI) / n;
       return `<div class="gp-rad-item" data-i="${i}" style="left:calc(50% + ${Math.cos(ang) * 120}px);top:calc(50% + ${Math.sin(ang) * 120}px)">${icon(a.id)}<span>${a.def.name.split(/[ -]/)[0]}</span></div>`;
@@ -229,7 +253,7 @@ export class GamepadControl {
     const r = this.radial; if (!r) return;
     this.radialEl.querySelectorAll('.gp-rad-item').forEach((e, i) => {
       e.classList.toggle('sel', i === r.idx);
-      e.classList.toggle('off', !this.game.abilityAvailable(r.list[i]));
+      e.classList.toggle('off', r.kind === 'cmd' ? !!r.list[i].el.disabled : !this.game.abilityAvailable(r.list[i]));
     });
     this.radialEl.querySelector('.gp-rad-center').textContent = r.list[r.idx].def.name;
   }
@@ -242,7 +266,13 @@ export class GamepadControl {
     }
     if (s.edge(BTN.LEFT) || s.edge(BTN.UP)) { r.idx = (r.idx + n - 1) % n; this._radialMark(); }
     if (s.edge(BTN.RIGHT) || s.edge(BTN.DOWN)) { r.idx = (r.idx + 1) % n; this._radialMark(); }
-    if (s.edge(BTN.A) || s.edge(BTN.RB)) { const a = r.list[r.idx]; this._radial(false); this.input.startAbility(a); }
+    if (s.edge(BTN.A) || s.edge(BTN.RB)) {
+      const a = r.list[r.idx]; this._radial(false);
+      if (r.kind === 'cmd') {
+        const d = a.el.dataset, el = a.el.isConnected ? a.el : this._cmdButtons().find((e) => e.dataset.act === d.act && e.dataset.order === d.order && e.dataset.kind === d.kind);
+        if (el) { el.click(); this.toast(a.def.name, 1.4); }
+      } else this.input.startAbility(a);
+    }
     else if (s.edge(BTN.B) || s.edge(BTN.START)) this._radial(false);
   }
 

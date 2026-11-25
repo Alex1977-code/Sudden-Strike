@@ -63,7 +63,7 @@ export class Input {
     this.pendingAbility = null;
     this.pendingBuild = null; // { mode: 'build'|'clearmines'|'demolish', kind } – Platzieren per Klick/Antippen
     this.buildRot = null;
-    this.boxMode = false;
+    this.boxMode = false; this.amoveMode = false; this.queueMode = false;
     this.lastTap = { t: 0, unit: null };
     this.selbox = document.getElementById('selbox');
     this.preview = null;
@@ -239,7 +239,7 @@ export class Input {
       g.audio.ui('click');
       return;
     }
-    if (own.length) this.orderAt(own, x, y, u);
+    if (own.length) { const am = !!this.amoveMode; this.orderAt(own, x, y, u, am); if (am) this.setAmoveMode(false); }
     else if (u && this._selectOccupants(u)) { /* Besatzung gewählt */ }
     else if (u) g.select([u]);
   }
@@ -284,6 +284,9 @@ export class Input {
   }
   hideBox() { this.selbox.classList.add('hidden'); }
   setBoxMode(v) { this.boxMode = v; document.getElementById('btn-box')?.classList.toggle('active', v); }
+  // V3-R (Touch): Angriffsbewegung gilt für das nächste Antippen; Befehlskette bleibt an, bis sie ausgeschaltet wird
+  setAmoveMode(v) { this.amoveMode = !!v; document.getElementById('btn-amove')?.classList.toggle('active', !!v); }
+  setQueueMode(v) { this.queueMode = !!v; document.getElementById('btn-queue')?.classList.toggle('active', !!v); }
 
   // ---------- Fähigkeiten ----------
   startAbility(a) {

@@ -109,7 +109,10 @@ export default {
       for (let i = 0; i < 2; i++) g.spawn('lancet', 'RU', -60 + i * 120, -250, { ai: { mode: 'hunt', huntRadius: 420, points: [[0, 60]] } });
       g.alert('⚠ Lancet-Drohnen auf unsere Fahrzeuge – Störsender (EloKa) einsetzen!', 3);
     }, 120);
-    T(200, () => { g.spawn('ka52', 'RU', 200, -240, { ai: { mode: 'attackMove', points: [[60, -40], [20, 60], [-40, 20]], after: 'guard', aggressive: true } }); g.alert('⚠ Ka-52!', 3); g.say('Sova', 'Ka-52 von Nordosten – Marder und CV90 können ihn mit der Kanone treffen.', 5); });
+    T(200, () => { const h = g.spawn('ka52', 'RU', 200, -240, { ai: { mode: 'attackMove', points: [[60, -40], [20, 60], [-40, 20]], after: 'guard', aggressive: true } });
+      // V3-R: Ka-52 entschärft (zu stark gegen die Kolonne): nur 4 Vikhr an Bord, 420 statt 520 HP
+      if (h) { h.maxHp = h.hp = 420; for (const w of h.weapons) if (w.def.kind === 'atgm') w.stock = w.stockMax = 4; }
+      g.alert('⚠ Ka-52!', 3); g.say('Sova', 'Ka-52 von Nordosten – Marder und CV90 können ihn mit der Kanone treffen.', 5); });
     T(360, () => { wave(g, [['m_storm', 6], ['e_rpg', 1]], 0, -255, [[20, -170], [TOWN[0], TOWN[1] - 10]]); g.spawn('bmp', 'RU', 20, -260, { ai: { mode: 'attackMove', points: [[25, -160], [TOWN[0], TOWN[1]]], aggressive: true, after: 'guard' } }); g.alert('⚠ Gegenangriff aus der Stadt!', 3); });
     T(520, () => wave(g, [['m_storm', 6], ['e_mg', 1]], 120, -255, [[140, -190], [GMS[0], GMS[1]]]));
   },

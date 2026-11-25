@@ -73,6 +73,8 @@ export class HUD {
       else if (o === 'hold') { if (ids.length) { game.issueCommand({ t: 'hold', ids, value: !own.every((u) => u.holdFire) }); this.refreshSelection(); } }
       else if (o === 'all') game.select(game.playerUnits().filter((u) => !u.type.kamikaze || true));
       else if (o === 'box') this.input.setBoxMode(!this.input.boxMode);
+      else if (o === 'amove') this.input.setAmoveMode(!this.input.amoveMode); // V3-R: Touch-Umschalter
+      else if (o === 'queue') this.input.setQueueMode(!this.input.queueMode);
       game.audio.ui('click');
     });
     this.buildEl.addEventListener('click', (e) => {

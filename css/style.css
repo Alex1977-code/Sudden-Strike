@@ -535,6 +535,8 @@ body.editor-on #groups, body.editor-on #hud { display: none; }
 .gp-rad-item .ic { width: 26px; height: 26px; }
 .gp-rad-item.sel { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(255, 213, 0, .3); transform: translate(-50%, -50%) scale(1.15); }
 .gp-rad-item.off { opacity: .45; }
+.gp-rad-cmd .gp-rad-item { width: 66px; height: 66px; font-size: 10px; }
+.gp-rad-item.on { border-color: #6fd08c; }
 .gp-rad-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); min-width: 110px; text-align: center; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; color: var(--accent); }
 #gp-help { position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, .6); display: flex; align-items: center; justify-content: center; }
 .gp-help-box { background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px; padding: 16px 20px; max-width: min(720px, 94vw); max-height: 90vh; overflow: auto; }

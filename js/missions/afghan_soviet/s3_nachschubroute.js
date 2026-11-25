@@ -4,7 +4,8 @@ import { near, alive, setText, settle, wave, post, fort, vanish } from '../afgha
 
 const START = [-40, 160], LZ = [-46, 150], BLOCK = [-36, 8], EAST = [178, 4], WEST = [-178, 12];
 const PATH = [EAST, [120, 16], [60, 22], [10, 10], BLOCK, [-90, 6], WEST];
-const N = 4; // Karawanen
+const N = 5; // Karawanen
+const LIMIT = 1260; // s bis zur Morgendämmerung (Abholung spätestens)
 
 const feats = [
   { type: 'valley', pts: [[-185, 12], [-60, 6], [40, 18], [185, 2]], depth: 3, width: 70, flat: 0.5 },
@@ -27,7 +28,7 @@ export default {
     { s: 'Sergeant Ruslan Achmetow', t: 'In der Hütte am Pfad wohnt im Sommer ein Hirte. Jetzt ist sie leer. Hoffe ich.' },
     { s: 'Kasakow', t: 'Leuchtraketen sparsam. Wir haben keine Nachtsichtgeräte für alle – nur die Zielfernrohre der Scharfschützen. Um halb fünf ist der Hubschrauber am Abholpunkt, mit oder ohne uns.' },
   ],
-  objectivesPreview: ['Stellung an der Einmündung beziehen', 'Den Saumpfad sperren (Pionier)', 'Karawanen aufhalten – höchstens eine darf durchkommen', 'Zum Abholpunkt zurückkehren', 'Optional: Mindestens zwei Karawanen sichern statt zerstören', 'Optional: Höchstens 2 Gefallene'],
+  objectivesPreview: ['Stellung an der Einmündung beziehen', 'Den Saumpfad sperren (Pionier)', 'Fünf Karawanen aufhalten – höchstens eine darf durchkommen', 'Vor dem Morgengrauen (ca. 21 Minuten) zum Abholpunkt zurückkehren', 'Optional: Mindestens zwei Karawanen sichern statt zerstören', 'Optional: Höchstens 2 Gefallene'],
   forces: ['8× Fallschirmjäger (WDW), 1× PK-Schütze, 1× RPG-Trupp, 2× Scharfschütze (Nachtzielgerät), 2× Pionier, 1× Offizier, 1× Sanitäter', 'Fähigkeiten: Leuchtrakete, Artilleriefeuer 122 mm nach Karte (2×)'],
   map: { size: 360, seed: 1985, terrainStyle: 'mountains', palette: 'afghan', relief: 16, baseHeight: 6, seaLevel: 0, scatterTrees: 6, features: feats },
   env: { season: 'autumn', sunElev: 20, sunAzim: 220, fogDensity: 0.0026, night: true },
@@ -63,9 +64,10 @@ export default {
     const car = g.spawn('af_c2_caravan', 'RU', x, z + (i % 2) * 4, { tags: ['car'], ai: { mode: 'convoy', points: PATH.slice(1).map((p) => [...p]), after: 'guard' } });
     car.name = 'Packtier-Karawane';
     this.cars.push(car);
-    const esc = [['af_muj_ak', 2], ['af_muj_rifle', 1]];
+    const esc = [['af_muj_ak', 3], ['af_muj_rifle', 2]];
     if (i >= 1) esc.push(['af_muj_rpg', 1]);
     if (i >= 2) esc.push(['af_muj_ak', 1]);
+    if (i === 3) esc.push(['af_muj_commander', 1]);
     wave(g, esc, [x + 10, z + 6], PATH.slice(1, 5), { tags: ['esc'], aggro: 34, spacing: 3 });
     g.alert(`⚠ Karawane ${i + 1} kommt den Pfad herunter!`, 4);
     this.sent++;
@@ -78,6 +80,8 @@ export default {
     if (g.ended) return;
     const us = alive(g, 'UA');
     if (!us.length) { g.lose('Die Patrouille ist verloren.'); return; }
+    if (g.time > LIMIT && !this.heli) { settle(g, 'exfil', 'failed'); g.lose('Der Morgen graut. Der Hubschrauber konnte nicht länger warten – die Patrouille muss sich zu Fuß durchschlagen.'); return; }
+    if (g.time > LIMIT - 120 && !this._warn) { this._warn = true; g.alert('⚠ In zwei Minuten wird es hell – zum Abholpunkt!', 5); }
     if (this.phase === 'move') {
       if (!g.countTag('picket') || near(g, BLOCK[0], BLOCK[1], 24, 'UA').length >= 3) {
         if (near(g, BLOCK[0], BLOCK[1], 30, 'UA').length >= 2 && !near(g, BLOCK[0], BLOCK[1], 26, 'RU').length) { settle(g, 'pos', 'done'); this.phase = 'block'; g.say('Kasakow', 'Stellung bezogen. Pioniere – Sperre legen!', 4); }
@@ -96,8 +100,9 @@ export default {
         fort(g, 'minefield', 'UA', BLOCK[0] + 20, BLOCK[1] + 4, { mines: 3 });
         const o = g.objectives.find((q) => q.id === 'stop'); o.hidden = false; g.emit('objectives');
         g.say('Kasakow', 'Sperre steht, Minen liegen östlich davor. Verteilen und warten. Feuer erst auf mein Zeichen – und nicht auf die Tiere.', 6);
-        for (let i = 0; i < N; i++) g.later(25 + i * 95, () => this.launch(g, i));
-        g.later(150, () => { if (!g.ended) wave(g, [['af_muj_ak', 3], ['af_muj_rpg', 1]], [-178, 20], [[-90, 10], BLOCK], { tags: ['esc'] }); });
+        for (let i = 0; i < N; i++) g.later(25 + i * 85, () => this.launch(g, i));
+        g.later(150, () => { if (!g.ended) { wave(g, [['af_muj_ak', 3], ['af_muj_rpg', 1]], [-178, 20], [[-90, 10], BLOCK], { tags: ['esc'] }); g.alert('⚠ Gruppe aus dem Westen im Rücken der Sperre!', 4); } });
+        g.later(300, () => { if (!g.ended) { wave(g, [['af_muj_ak', 4], ['af_muj_rifle', 2]], [20, -120], [[0, -40], BLOCK], { tags: ['esc'] }); g.alert('⚠ Gegner kommen über den Nordhang!', 4); } });
       }
       return;
     }

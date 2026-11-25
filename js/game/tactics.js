@@ -314,11 +314,12 @@ export class Tactics {
     for (const u of [...g.units]) {
       if (!u.alive || u.garrison || (u.type.air && u.curAlt > 4)) continue;
       if (u.type.key === 'house') {
-        // Wurf ins Fenster: Haus und alle Insassen (ohne Gebäudedeckung)
+        // Wurf ins Fenster: Haus und die Insassen EINES Raums (V3-R: höchstens 2, nicht die ganze Besatzung)
         if (u !== house) continue; // nur das anvisierte Haus (Wurf durchs Fenster)
         const hm = w.houseMul || 1.4;
-        if (u.occupants?.length) for (const o of [...u.occupants]) {
-          if (o.side === side && o.owner === owner) continue;
+        const room = (u.occupants || []).filter((o) => !(o.side === side && o.owner === owner));
+        while (room.length > 2) room.splice(Math.floor(Math.random() * room.length), 1);
+        for (const o of room) {
           const amt = w.dmg * 0.55 * hm * rand(0.8, 1.2);
           this.addSupp(o, 30, src.pos);
           g.gar.hurt(o, amt, src);

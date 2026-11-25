@@ -424,6 +424,7 @@ export class Game {
     this.mapobj?.onBlast(x, z, r, dmg, w); // V3-M2: Brücken unter Beschuss
     for (const u of [...this.units]) {
       if (!u.alive || u === exclude) continue;
+      if (u.garrison) continue; // V3-R: Insassen nur über das Haus (Garrison.onHouseHit), nicht alle auf einem Punkt
       if (u.side === side && !hitAll) continue;
       if (u.type.air && u.curAlt > 4) continue;
       const d = Math.hypot(u.pos.x - x, u.pos.z - z) - u.radius * 0.7;
