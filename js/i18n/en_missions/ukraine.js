@@ -551,4 +551,7 @@ export default {
   "Kolonne nach Sudscha bringen": "Bring the column to Sudzha",
   "Die Messstation ist wieder verloren.": "The metering station is lost again.",
   "Die Angriffsgruppe ist zerschlagen.": "The assault group has been shattered.",
+  "Nachschubfahrten zum Stützpunkt bringen ({$}/{$})": "Get supply runs to the strongpoint ({$1}/{$2})",
+  "Satellitennetz abgeschaltet! Drohnenführung und Lagebild ohne Netz (ca. {$} s).": "Satellite network shut down! Drone control and situational picture without network (approx. {$1} s).",
+  "⚠ {$}: Panik – Rückzug!": "⚠ {$1}: panic – retreating!",
 };

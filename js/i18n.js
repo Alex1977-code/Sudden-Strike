@@ -49,7 +49,7 @@ export function initLang() {
   if (!l || !available[l]) {
     const nav = (typeof navigator !== 'undefined' && (navigator.language || (navigator.languages && navigator.languages[0]))) || 'de';
     l = String(nav).toLowerCase().startsWith('de') ? 'de' : 'en';
-    try { localStorage.setItem(LANG_KEY, l); } catch (e) { /* ignorieren */ }
+    if (available[l]) { try { localStorage.setItem(LANG_KEY, l); } catch (e) { /* ignorieren */ } }
   }
   lang = available[l] ? l : 'de';
   if (lang === 'en') applyDomMode();
@@ -91,5 +91,7 @@ export function applyI18n(root = document) {
   }
 }
 
-registerStrings('en', EN_UI, { makeAvailable: true });
+// Englisch ist zurückgestellt (TODO, unvollständig): nur zur Vorschau mit ?lang=en freigeschaltet, sonst bleibt das Spiel deutsch.
+const EN_PREVIEW = (() => { try { return new URLSearchParams(location.search).get('lang') === 'en'; } catch (e) { return false; } })();
+registerStrings('en', EN_UI, { makeAvailable: EN_PREVIEW });
 initLang();

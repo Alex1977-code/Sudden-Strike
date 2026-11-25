@@ -92,7 +92,7 @@ export function translateText(s) {
   const core = s.slice(lead.length, s.length - trail.length);
   let out = core ? translateCore(core.replace(/(\d\d:\d\d) Uhr/g, '$1')) : core;
   // Sicherheitsnetz: Muster dürfen mehrere Sätze enthalten; nicht übersetzte Reste per Teilstring versuchen
-  out = lead + out + trail;
+  out = lead + out.replace(/(\d),(\d)/g, '$1.$2') + trail; // Dezimalkomma → Punkt (Englisch)
   if (cache.size > 6000) cache.clear();
   cache.set(s, out);
   return out;

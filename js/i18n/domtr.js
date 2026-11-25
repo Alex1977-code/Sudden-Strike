@@ -16,7 +16,7 @@ function tx(node) {
   if (!el || skipped(el)) return;
   const cur = node.data;
   if (node.__en !== undefined && cur === node.__en) return;            // schon übersetzt, unverändert
-  if (!/[\p{L}]/u.test(cur)) return;
+  if (!/[\p{L}]/u.test(cur) && !/\d,\d/.test(cur)) return;
   const en = translateText(cur);
   if (en !== cur) { node.__de = cur; node.__en = en; node.data = en; } else { node.__de = undefined; node.__en = undefined; }
 }
@@ -36,7 +36,7 @@ function walk(root) {
   if (!root) return;
   if (root.nodeType === 3) return tx(root);
   if (root.nodeType !== 1 && root.nodeType !== 11) return;
-  if (root.nodeType === 1) { if (skipped(root)) return; ta(root); }
+  if (root.nodeType === 1) { ta(root); if (skipped(root)) return; }
   for (let c = root.firstChild; c; c = c.nextSibling) walk(c);
 }
 function restore(root) {

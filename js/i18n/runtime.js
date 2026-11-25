@@ -27,8 +27,10 @@ import ww2_soviet from './en_missions/ww2_soviet.js';
 import ww2_axis from './en_missions/ww2_axis.js';
 import places from './en_missions/places.js';
 import common from './en_missions/common.js';
+import afghan_isaf from './en_missions/afghan_isaf.js';
+import afghan_soviet from './en_missions/afghan_soviet.js';
 
-const TABLES = [ukraine, tutorial, ww2_allies, ww2_soviet, ww2_axis, places, common];
+const TABLES = [ukraine, tutorial, ww2_allies, ww2_soviet, ww2_axis, places, common, afghan_isaf, afghan_soviet];
 const EXTRA = { // Stufen/Epochen (campaigns.js) und Sprecher, die aus Wörterbüchern ohne Missionsbezug kommen
   'Leicht': 'Easy', 'Mittel': 'Medium', 'Schwer': 'Hard', 'Ausbildung': 'Training', 'Gegenwart': 'Present day', 'Zweiter Weltkrieg': 'World War II',
 };

@@ -93,7 +93,7 @@ export function createSaveUI(d) {
     const slots = mode === 'save' ? ['1', '2', '3'] : ['quick', 'auto', '1', '2', '3'];
     $('saves-list').innerHTML = slots.map((s) => {
       const m = idx[s];
-      const info = m ? `<b>${esc(m.title || 'Einsatz')}</b><span>${esc(m.over || '')}</span><span class="muted">${new Date(m.date).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })} · Spielzeit ${fmtTime(m.t || 0)}${m.diff ? ' · ' + esc(levelOf(m.diff).name) : ''}</span>` : '<span class="muted">– leer –</span>';
+      const info = m ? `<b>${esc(m.title || 'Einsatz')}</b><span>${esc(m.over || '')}</span><span class="muted">${new Date(m.date).toLocaleString(document.documentElement.lang === 'en' ? 'en-GB' : 'de-DE', { dateStyle: 'short', timeStyle: 'short' })} · Spielzeit ${fmtTime(m.t || 0)}${m.diff ? ' · ' + esc(levelOf(m.diff).name) : ''}</span>` : '<span class="muted">– leer –</span>';
       const thumb = m?.thumb ? `<img src="${m.thumb}" alt="">` : `<div class="noimg">${icon('save')}</div>`;
       const btns = mode === 'save'
         ? `<button class="sv-do" data-slot="${s}" ${can ? '' : 'disabled'}>${icon('save', { cls: 'ic-in' })}<span>${m ? 'Überschreiben' : 'Speichern'}</span></button>`
