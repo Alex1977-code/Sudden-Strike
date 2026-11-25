@@ -131,13 +131,22 @@ export function completeMission(id, index, result = {}) {
   const p = s[id] || (s[id] = { unlocked: 1, done: {} });
   p.done ||= {};
   const prev = p.done[m.id];
-  const r = { time: Math.round(result.time || 0), kills: result.kills | 0, lost: result.lost | 0, shots: result.shots | 0, ...(result.medal ? { medal: result.medal } : {}) };
-  // Bestwert behalten: schnellere Zeit bzw. bessere Medaille gewinnt
-  if (!prev || !prev.time || (r.time && r.time < prev.time)) p.done[m.id] = { ...prev, ...r };
-  else if (r.medal) p.done[m.id] = { ...prev, medal: r.medal };
+  const r = { time: Math.round(result.time || 0), kills: result.kills | 0, lost: result.lost | 0, shots: result.shots | 0, ...(result.medal ? { medal: result.medal } : {}), ...(result.level ? { level: result.level } : {}) };
+  // Bestwert behalten: schnellere Zeit bzw. bessere Medaille gewinnt (V3-X: die beste Medaille bleibt erhalten)
+  const MR = { bronze: 1, silver: 2, gold: 3 }, best = (a, b) => ((MR[a] || 0) >= (MR[b] || 0) ? a : b);
+  if (!prev || !prev.time || (r.time && r.time < prev.time)) { p.done[m.id] = { ...prev, ...r }; if (prev?.medal) p.done[m.id].medal = best(prev.medal, r.medal); }
+  else if (r.medal) p.done[m.id] = { ...prev, medal: best(prev.medal, r.medal), ...(MR[r.medal] > (MR[prev.medal] || 0) && r.level ? { level: r.level } : {}) };
   p.unlocked = Math.max(p.unlocked || 1, index + 2);
   s._last = id;
   saveStore();
+}
+// V3-X: Schwierigkeitsgrad je Kampagnenfortschritt ('easy'|'normal'|'hard'|'veteran'; ohne Eintrag: Standard aus den Einstellungen)
+export function getCampaignLevel(id, fallback = 'normal') { const p = loadStore()[id]; return (p && p.level) || fallback; }
+export function setCampaignLevel(id, level) {
+  const s = loadStore();
+  const p = s[id] || (s[id] = { unlocked: 1, done: {} });
+  if (p.level === level) return;
+  p.level = level; saveStore();
 }
 export function resetProgress(id) {
   const s = loadStore();

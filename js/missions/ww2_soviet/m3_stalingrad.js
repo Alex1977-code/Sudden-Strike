@@ -5,7 +5,7 @@ import { S, E, wave, foes, ours } from './_common.js';
 const SQ = [92, 58];     // Platz des 9. Januar
 const FERRY = [128, 40]; // Anleger an der Wolga
 const MILL = [116, 86];  // Gerhardt-Mühle
-const HOLD = 430;        // Sekunden Halten nach Besetzung
+const HOLD = 390;        // Sekunden Halten nach Besetzung
 const LIMIT = 1500;
 
 export default placeMission(PLACE_BY_ID.stalingrad, {
@@ -21,15 +21,16 @@ export default placeMission(PLACE_BY_ID.stalingrad, {
     { s: 'Oberleutnant Sorokin', t: 'Munition und Verstärkung kommen nur über die Wolga, auf Booten und Fähren. Der Anleger liegt hinter uns. Wenn der Gegner ihn erreicht, sind wir abgeschnitten. In den Kellern sitzen noch Zivilisten – nicht in Kellerfenster schießen, die nicht feuern.' },
   ],
   objectivesPreview: ['Das Eckhaus am Platz besetzen (mindestens 4 Soldaten darin)', 'Das Haus gegen alle Angriffe halten', 'Optional: Den Fähranleger frei halten', 'Optional: Die Gerhardt-Mühle säubern'],
-  forces: ['13× Schützen', '4× DP-28', '4× PPSch', '2× Panzerbüchse', '2× Granatwerfer', '1× Pionier', '1× Scharfschütze', '1× Offizier', '1× Sanitäter', 'Verstärkung über die Wolga (Fähre)', 'Fähigkeit: Artilleriefeuer (Wolga-Batterien)'],
+  forces: ['13× Schützen', '4× DP-28', '4× PPSch', '3× Panzerbüchse', '2× ZiS-3 (76 mm, am Ufer in Stellung)', '2× Granatwerfer', '1× Pionier', '1× Scharfschütze', '1× Offizier', '1× Sanitäter', 'Verstärkung über die Wolga (Fähre)', 'Fähigkeit: Artilleriefeuer (Wolga-Batterien)'],
   weather: { type: 'overcast', intensity: 0.6, changes: [{ at: 420, type: 'fog', intensity: 0.45, fade: 120 }] },
   time: { start: '07:20', speed: 3 },
   camera: { x: 100, z: 40, dist: 92 },
-  abilities: [{ id: 'ww2_artillery', charges: 4 }],
+  abilities: [{ id: 'ww2_artillery', charges: 6 }],
 
   setup(g) {
     this.t = 0; this.taken = false; this.takenT = 0; this.lostT = 0; this.ferryBad = 0; this.ferryOk = true; this.millDone = false; this.ferries = 0;
     this.house = g.units.find((u) => u.type.key === 'house' && u.houseDef?.kind === 'pawlow_haus') || null;
+    if (this.house) { this.house.maxHp = this.house.hp = 3200; } // das Eckhaus ist massiv gebaut: hält mehrere Panzertreffer aus
     this.markers = [
       { x: 92, z: 30, r: 20, label: 'Eckhaus', color: '#5db8ff' },
       { x: FERRY[0], z: FERRY[1], r: 18, label: 'Fähranleger', color: '#7be07b' },
@@ -37,7 +38,9 @@ export default placeMission(PLACE_BY_ID.stalingrad, {
     ];
     // eigene Gruppe landet am Anleger
     g.spawnGroup([[S.rifle, 13], [S.dp, 4], [S.smg, 4]], 'UA', 132, -14, { spacing: 3, cols: 6, heading: -Math.PI / 2, tags: ['sq'] });
-    g.spawnGroup([[S.at, 2], [S.eng, 1], [S.sniper, 1], [S.off, 1], [S.med, 1], [S.mortar, 2]], 'UA', 134, -2, { spacing: 3, cols: 6, heading: -Math.PI / 2, tags: ['sq'] });
+    g.spawnGroup([[S.at, 3], [S.eng, 1], [S.sniper, 1], [S.off, 1], [S.med, 1], [S.mortar, 2]], 'UA', 134, -2, { spacing: 3, cols: 6, heading: -Math.PI / 2, tags: ['sq'] });
+    // Divisionskanonen vom Wolgaufer aus in Stellung (feuern über den Platz)
+    g.spawn(S.zis3, 'UA', 124, 16, { heading: -Math.PI / 2 }); g.spawn(S.zis3, 'UA', 126, 32, { heading: -Math.PI / 2 });
     // Vorposten im und am Haus
     g.spawnGroup([[E.rifle, 4], [E.mg, 1], [E.sniper, 1]], 'RU', 92, 46, { spacing: 4, cols: 4, ai: { mode: 'guard', radius: 16 }, tags: ['outpost'] });
     g.spawn(E.mgnest, 'RU', 66, 52, { heading: Math.PI / 2 });
@@ -96,15 +99,15 @@ export default placeMission(PLACE_BY_ID.stalingrad, {
     w(95, () => { g.alert('Angriff von Süden – Mühle!', 4); wave(g, 'RU', [[E.rifle, 5], [E.smg, 2]], 110, 130, [[112, 96], [100, 54]], { tags: ['w'] }); });
     w(170, () => { g.say('Bykowa', 'Panzer IV auf dem Platz! Panzerbüchsen – Seitenfenster!', 5); wave(g, 'RU', [[E.pz4, 1], [E.rifle, 4]], -34, 64, [[30, 58], [70, 54]], { tags: ['w'] }); });
     w(240, () => this._ferry(g, 'Zweite Fähre: Verwundete raus, Munition rein.'));
-    w(260, () => wave(g, 'RU', [[E.stug, 1], [E.rifle, 5], [E.mg, 1]], 120, 140, [[114, 100], [100, 56]], { tags: ['w'] }));
-    w(340, () => { g.say('Sorokin', 'Das ist der stärkste Angriff bisher – haltet die Obergeschosse!', 5); wave(g, 'RU', [[E.rifle, 5], [E.smg, 1], [E.at, 1]], -34, 60, [[40, 58], [78, 50]], { tags: ['w'] }); wave(g, 'RU', [[E.rifle, 3], [E.mg, 1]], 118, 140, [[114, 100], [104, 56]], { tags: ['w'] }); });
+    w(260, () => wave(g, 'RU', [[E.rifle, 5], [E.mg, 1], [E.at, 1]], 120, 140, [[114, 100], [100, 56]], { tags: ['w'] }));
+    w(340, () => { g.say('Sorokin', 'Das ist der stärkste Angriff bisher – haltet die Obergeschosse!', 5); wave(g, 'RU', [[E.rifle, 5], [E.smg, 1], [E.at, 1]], -34, 60, [[40, 58], [78, 50]], { tags: ['w'] }); });
     w(400, () => this._ferry(g, 'Dritte Fähre – das ist die letzte vor der Ablösung.'));
   },
   _ferry(g, text) {
     if (!this.ferryOk) return;
     this.ferries++;
     g.say('Sorokin', text, 5);
-    g.spawnGroup([[S.rifle, 5], [S.smg, 2], [S.med, 1]], 'UA', FERRY[0], FERRY[1] + 4, { spacing: 3, cols: 4, heading: -Math.PI / 2 });
+    g.spawnGroup([[S.rifle, 6], [S.smg, 2], [S.at, 1], [S.med, 1]], 'UA', FERRY[0], FERRY[1] + 4, { spacing: 3, cols: 4, heading: -Math.PI / 2 });
     g.markerTo?.('UA', FERRY[0], FERRY[1], 0x5db8ff, 8, 14);
   },
   victory: 'Das Haus ist gehalten. In Stalingrad bedeutet das: einen Tag, vielleicht zwei. Die Stadt, in der Hunderttausende Soldaten und Zivilisten umkamen, wird zum Wendepunkt des Krieges – und zum Mahnmal.',

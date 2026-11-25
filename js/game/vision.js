@@ -46,12 +46,13 @@ export class Vision {
   // Freie Sicht von (ox,oy,oz) nach (tx,ty,tz)? skip = Haus, das nicht blockt (eigenes/Ziel-Gebäude)
   los(ox, oy, oz, tx, ty, tz, skipA = null, skipB = null) {
     this.rays++;
+    this.lastBlock = null; this.lastForest = 0; // V3-X: Grund der Sperre für das Sichtlinien-Werkzeug (lostool.js)
     const t = this.t;
     const dx = tx - ox, dz = tz - oz;
     const dist = Math.hypot(dx, dz);
     if (dist < 4) return true;
     const tac = this.g.tac;
-    if (tac && tac.smokes.length && tac.segBlocked(ox, oz, oy, tx, tz, ty)) return false; // Rauch
+    if (tac && tac.smokes.length && tac.segBlocked(ox, oz, oy, tx, tz, ty)) { this.lastBlock = 'smoke'; return false; } // Rauch
     const n = Math.max(1, Math.floor(dist / VIS.step));
     const gw = t.gw, half = t.half;
     let forest = 0;
@@ -60,14 +61,15 @@ export class Vision {
       const x = ox + dx * f, z = oz + dz * f;
       const h = oy + (ty - oy) * f;
       const g = t.height(x, z);
-      if (g > h + 0.25) return false; // Hügelkamm (kleine Unebenheiten stören nicht)
+      if (g > h + 0.25) { this.lastBlock = 'terrain'; this.lastAt = f; return false; } // Hügelkamm (kleine Unebenheiten stören nicht)
       const ci = Math.floor((x + half) / CELL), cj = Math.floor((z + half) / CELL);
       if (ci < 0 || cj < 0 || ci >= gw || cj >= gw) continue;
       const k = cj * gw + ci;
       const hu = this.houseAt[k];
-      if (hu && hu.alive && hu !== skipA && hu !== skipB && this.houseTop[k] > h) return false;
-      if (t.gForest[k] && h < g + VIS.treeH) { forest += VIS.step / CELL; if (forest > VIS.forestCells) return false; }
+      if (hu && hu.alive && hu !== skipA && hu !== skipB && this.houseTop[k] > h) { this.lastBlock = 'house'; this.lastAt = f; return false; }
+      if (t.gForest[k] && h < g + VIS.treeH) { forest += VIS.step / CELL; if (forest > VIS.forestCells) { this.lastBlock = 'forest'; this.lastAt = f; this.lastForest = forest; return false; } }
     }
+    this.lastForest = forest;
     return true;
   }
   // Einheit -> Einheit (Bodenziel auf Brusthöhe, Luftziel auf Flughöhe)

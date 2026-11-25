@@ -1,0 +1,115 @@
+// Grundausbildung 1 – Grundlagen: Kamera, Auswahl, Befehle, Gruppen, Minikarte, Deckung (Truppenübungsplatz, keine reale Konfliktpartei)
+import { dummy, alive, inCircle, runTutor, tickTutor, AREA } from './_common.js';
+
+const FOREST = [52, 22, 15];
+const HOUSE = [-50, 26];
+
+export default {
+  id: 'tut1',
+  title: 'Grundlagen',
+  place: AREA,
+  date: 'Übung',
+  era: 'modern',
+  difficulty: 1,
+  fictional: true,
+  summary: 'Kamera, Auswahl, Bewegen, Angriff, Halt, Schnellwahlgruppen, Minikarte, Deckung in Wald und Haus – Schritt für Schritt.',
+  briefing: [
+    { s: 'Ausbilder', t: 'Willkommen auf dem Truppenübungsplatz. Hier lernen Sie in kurzen Schritten, wie Sie Ihre Einheiten führen. Hier fällt kein Schuss auf Menschen – die Ziele sind Übungsscheiben.' },
+    { s: 'Ausbilder', t: 'Jede Lektion wartet auf Ihre Aktion. Die Hinweisbox oben zeigt, welche Taste, Geste oder Gamepad-Taste gebraucht wird. Mit „Überspringen“ gehen Sie jederzeit weiter.' },
+  ],
+  objectivesPreview: ['Kamera bewegen, zoomen, drehen', 'Einheiten auswählen und befehligen', 'Gruppen, Minikarte, Deckung'],
+  forces: ['4× Schützen', '1× MG', '1× Javelin-Team', 'Übungsziele (schießen nicht)'],
+  map: {
+    size: 200, seed: 7, season: 'summer', relief: 2, baseHeight: 2, scatterTrees: 20, noFog: true,
+    features: [
+      { type: 'road', pts: [[0, -100], [2, -30], [0, 40], [2, 100]], width: 6 },
+      { type: 'road', pts: [[2, 40], [-40, 30], [-100, 34]], width: 4, paved: false },
+      { type: 'forest', x: FOREST[0], z: FOREST[1], r: 22, kind: 'mixed', density: 0.08 },
+      { type: 'forest', x: -70, z: -60, r: 20, kind: 'pine', density: 0.06 },
+      { type: 'house', x: -50, z: 26, rot: 0.1, w: 8, d: 7, floors: 2, style: 1, modern: true },
+      { type: 'house', x: -64, z: 32, rot: 0.4, w: 7, d: 6, floors: 1, style: 2, modern: true },
+      { type: 'house', x: -46, z: 44, rot: -0.2, w: 7, d: 7, floors: 2, style: 0, modern: true },
+      { type: 'field', poly: [[10, 60], [70, 62], [72, 100], [8, 98]], crop: 'wheat', angle: 0.3 },
+    ],
+  },
+  env: { season: 'summer', sunElev: 40, sunAzim: 210, fogDensity: 0.0015 },
+  weather: { type: 'clear', intensity: 0 }, time: { start: '10:00', speed: 0 },
+  camera: { x: 0, z: 60, dist: 70 },
+  abilities: [],
+  markers: [],
+
+  setup(g) {
+    g.spawnGroup([['rifle', 4], ['mg', 1], ['javelin', 1]], 'UA', 0, 62, { spacing: 3.2, cols: 3 });
+    g.spawnGroup([['e_rifle', 3], ['e_mg', 1]], 'RU', 0, -6, { spacing: 4, cols: 4, tags: ['tA'] });
+    g.spawnGroup([['e_rifle', 3]], 'RU', -45, -38, { spacing: 4, cols: 3, tags: ['tB'] });
+    for (const u of g.units) if (u.side === 'RU' && !u.type.structure) { u.name = 'Übungsziel'; u.holdFire = true; u.fireMode = 'hold'; }
+    const sq = () => g.units.filter((u) => u.alive && g.isOwn(u) && !u.type.structure);
+    const T = (pc, touch, pad) => ({ pc, touch, pad });
+    const steps = [
+      { id: 'welcome', title: 'Willkommen', info: true, say: ['Ausbilder', 'Willkommen zur Grundausbildung. Wir gehen alles Schritt für Schritt durch.', 6],
+        text: T('Willkommen auf dem Übungsplatz! Sie lernen jetzt die Steuerung. Ihre Gruppe steht unten im Bild, die Übungsziele weiter nördlich. Die Anleitung zeigt immer die passende Bedienung für Ihr Gerät.',
+          'Willkommen auf dem Übungsplatz! Sie lernen jetzt die Touch-Steuerung (Tippen, Ziehen, Zwei-Finger-Gesten). Ihre Gruppe steht unten im Bild, die Ziele weiter nördlich.',
+          'Willkommen auf dem Übungsplatz! Sie lernen jetzt die Gamepad-Steuerung. Ihre Gruppe steht unten im Bild, die Ziele weiter nördlich.') },
+      { id: 'pan', title: 'Kamera bewegen', text: T('<b>W A S D</b> oder die <b>Pfeiltasten</b> (oder die Maus an den Bildschirmrand) verschieben die Kamera. Schieben Sie die Ansicht ein Stück.',
+        'Ziehen Sie mit <b>einem Finger</b> über die Karte, um die Kamera zu verschieben.', 'Bewegen Sie den <b>linken Stick</b> an den Bildschirmrand: Die Kamera scrollt.'),
+        check: (g, t) => t.camMoved(20) },
+      { id: 'zoom', title: 'Zoomen', text: T('Das <b>Mausrad</b> zoomt (alternativ <kbd>+</kbd> und <kbd>-</kbd>). Zoomen Sie näher heran oder weiter heraus.',
+        'Ziehen Sie <b>zwei Finger</b> auseinander (näher) oder zusammen (weiter weg).', '<b>LT</b> / <b>RT</b> oder der <b>rechte Stick</b> nach oben/unten zoomt.'),
+        check: (g, t) => t.camZoomed(0.14) },
+      { id: 'rotate', title: 'Kamera drehen', text: T('<kbd>Q</kbd> und <kbd>E</kbd> drehen die Ansicht – ebenso die <b>mittlere Maustaste</b> gedrückt halten und ziehen.',
+        'Drehen Sie <b>zwei Finger</b> gegeneinander, um die Ansicht zu drehen.', 'Der <b>rechte Stick</b> nach links/rechts dreht die Kamera.'),
+        check: (g, t) => t.camRotated(0.4) },
+      { id: 'select', title: 'Einheit auswählen', say: ['Ausbilder', 'Wählen Sie einen Schützen aus – er bekommt einen grünen Ring.', 5],
+        enter(g, t) { g.camera.focus(0, 56); g.select([]); },
+        text: T('<b>Linksklick</b> auf einen Soldaten wählt ihn aus (grüner Ring, Infos unten links).', '<b>Tippen</b> Sie auf einen Soldaten, um ihn auszuwählen.', 'Cursor mit dem linken Stick über einen Soldaten, dann <b>A</b>.'),
+        mark: () => { const u = sq()[0]; return u ? [u.pos.x, u.pos.z, 5] : null; },
+        check: (g, t) => t.sel().length >= 1 },
+      { id: 'box', title: 'Rahmenauswahl', enter(g) { g.select([]); },
+        text: T('Ziehen Sie mit gedrückter <b>linker Maustaste</b> einen Rahmen um die ganze Gruppe. (Doppelklick wählt alle Einheiten gleichen Typs.)',
+          'Tippen Sie unten auf <b>„Rahmen“</b> und ziehen Sie dann einen Rahmen um die Gruppe. (Doppeltippen wählt gleiche Typen, „Alle“ wählt alles.)',
+          '<b>A gedrückt halten</b> und den Cursor bewegen: Auswahlrahmen. Loslassen wählt aus. (Back/Share = alle auswählen.)'),
+        mark: () => [0, 62, 9], check: (g, t) => t.sel().length >= 5 },
+      { id: 'move', title: 'Bewegen', enter(g) { g.camera.focus(0, 46); },
+        text: T('Mit der Gruppe gewählt: <b>Rechtsklick</b> auf den markierten Punkt – die Einheiten laufen dorthin.', 'Gruppe gewählt? <b>Tippen</b> Sie auf den markierten Punkt – die Einheiten laufen dorthin.', 'Mit der Gruppe gewählt: Cursor auf den Punkt, <b>B</b> (Kontextbefehl).'),
+        mark: () => [0, 28, 6], check: (g, t) => t.cmd('move') && t.sel().length && sq().filter((u) => inCircle(u, 0, 28, 10)).length >= 4 },
+      { id: 'attack', title: 'Angreifen', enter(g) { g.camera.focus(0, 12); },
+        text: T('Die Gruppe sieht Übungsziele im Norden. <b>Rechtsklick</b> auf ein Ziel – die Einheiten greifen an, bis es fällt.', '<b>Tippen</b> Sie auf ein Übungsziel im Norden – die Gruppe greift an.', 'Cursor auf ein Ziel, <b>B</b>: Angriff.'),
+        mark: (g) => { const u = g.byTag('tA')[0]; return u ? [u.pos.x, u.pos.z, 5] : null; },
+        check: (g, t) => { if (t.st.n0 === undefined) t.st.n0 = alive(g, 'tA'); return t.cmd('attack') && alive(g, 'tA') < t.st.n0; } },
+      { id: 'amove', title: 'Angriffsbewegung', enter(g) { g.camera.focus(-20, 0); },
+        text: T('Mit <b>Strg + Rechtsklick</b> geht die Gruppe zum Ziel und bekämpft unterwegs alles, was sie sieht. Räumen Sie so die Ziele im Nordwesten (Markierung).',
+          'Am Handy gibt es für die Angriffsbewegung keine eigene Geste. Schicken Sie die Gruppe per Tippen zum markierten Bereich – oder überspringen Sie den Schritt.',
+          '<b>X</b> = Angriffsbewegung zum Cursor. Schicken Sie die Gruppe in den Nordwesten (Markierung).'),
+        mark: () => [-45, -30, 14], check: (g, t) => t.cmd('move', (c) => c.attackMove) && alive(g, 'tB') === 0 },
+      { id: 'stop', title: 'Halt', enter(g, t) { g.select(sq()); g.camera.focus(-30, 0); },
+        text: T('Befiehlt man eine Bewegung und will sie abbrechen: <kbd>S</kbd> (oder Knopf <b>Halt</b>) stoppt die Gruppe. Schicken Sie sie per Rechtsklick irgendwohin und drücken Sie dann <b>Halt</b>.',
+          'Schicken Sie die Gruppe per Tippen irgendwohin und tippen Sie dann unten auf <b>Halt</b>.', 'Gruppe losschicken (<b>B</b>), dann <b>Y</b> = Halt.'),
+        check: (g, t) => t.cmd('move') && t.cmd('stop') },
+      { id: 'grpsave', title: 'Schnellwahlgruppe speichern', enter(g) { g.select(sq()); g.camera.focus(...[sq()[0]?.pos.x || 0, sq()[0]?.pos.z || 20]); },
+        text: T('Gruppe gewählt halten und <b>Strg + 1</b> drücken: Die Auswahl wird als Gruppe 1 gespeichert.', 'Tippen Sie in der Gruppenleiste auf das <b>+</b>-Symbol (Auswahl speichern) – die Gruppe erhält die nächste freie Zahl.', 'Gruppe gewählt halten: <b>LB + Steuerkreuz hoch</b> speichert Gruppe 1.'),
+        check: (g) => Object.keys(g.groups).length > 0 },
+      { id: 'grpdesel', title: 'Abwählen', text: T('Klicken Sie ins <b>leere Gelände</b>, um die Auswahl aufzuheben.', 'Tippen Sie auf leeres Gelände, um abzuwählen.', 'Cursor auf leeres Gelände, <b>A</b>.'),
+        enter(g) { g.select(sq()); }, check: (g, t) => t.sel().length === 0 },
+      { id: 'grprecall', title: 'Gruppe abrufen', text: T('Drücken Sie <b>1</b>: Die Gruppe ist sofort wieder gewählt. Zweimal schnell <b>1</b> springt mit der Kamera hin.', 'Tippen Sie in der Gruppenleiste auf die <b>Gruppenzahl</b> – doppeltippen springt mit der Kamera hin.', '<b>Steuerkreuz hoch</b> ruft Gruppe 1 ab (zweimal = Kamera hin).'),
+        check: (g, t) => t.sel().length >= 3 },
+      { id: 'minimap', title: 'Minikarte', say: ['Ausbilder', 'Die Minikarte unten rechts zeigt das ganze Gelände.', 5],
+        text: T('Klicken Sie auf die <b>Minikarte</b> (unten rechts): Die Kamera springt dorthin. Rechtsklick auf die Minikarte schickt die gewählte Gruppe.', 'Tippen Sie auf die <b>Minikarte</b> (unten rechts): Die Kamera springt dorthin.', 'Die Minikarte wird am Gamepad nicht direkt bedient: <b>L3</b> springt mit der Kamera auf die Auswahl.'),
+        check: (g, t) => t.minimap || (t.mode === 'pad' && t.camMoved(30)) },
+      { id: 'forest', title: 'Deckung: Wald', enter(g, t) { g.select(sq()); g.camera.focus(FOREST[0] - 10, FOREST[1] + 10); },
+        say: ['Ausbilder', 'In Wald und Häusern sind Einheiten schwerer zu entdecken und erleiden weniger Schaden.', 7],
+        text: T('Führen Sie die Gruppe in den <b>Wald</b> (Markierung). Einheiten in Deckung sind schwerer zu entdecken und erleiden weniger Schaden.', 'Tippen Sie in den <b>Wald</b> (Markierung), um die gewählte Gruppe dorthin zu schicken.', 'Gruppe wählen, Cursor in den Wald, <b>B</b>.'),
+        mark: () => [FOREST[0], FOREST[1], FOREST[2]], check: (g) => sq().filter((u) => inCircle(u, FOREST[0], FOREST[1], FOREST[2] + 3)).length >= 4 },
+      { id: 'house', title: 'Haus besetzen', enter(g) { g.select(sq()); g.camera.focus(HOUSE[0] + 8, HOUSE[1] + 12); },
+        text: T('Wählen Sie die Gruppe und machen Sie <b>Rechtsklick auf das markierte Haus</b>: Die Infanterie besetzt es. Im Haus ist sie gut geschützt.', 'Gruppe wählen und das <b>Haus antippen</b> (oder unten „Besetzen“): Die Infanterie bezieht das Gebäude.', 'Gruppe wählen, Cursor auf das Haus, <b>B</b>.'),
+        mark: () => [HOUSE[0], HOUSE[1], 8], check: (g) => g.units.some((h) => h.type.key === 'house' && h.occupants?.some((o) => g.isOwn(o))) },
+      { id: 'prone', title: 'Kriechen', enter(g) { g.select(sq().filter((u) => !u.garrison).length ? sq().filter((u) => !u.garrison) : sq()); },
+        text: T('Drücken Sie <kbd>C</kbd> (oder das Symbol <b>Kriechen</b> in der Befehlsleiste): Liegende Infanterie ist schwerer zu treffen und zu entdecken, aber langsamer.', 'Tippen Sie in der Befehlsleiste auf <b>Kriechen</b>: Liegende Infanterie ist schwerer zu treffen, aber langsamer.', 'Auf dem Gamepad ist Kriechen nicht belegt.'),
+        padNote: true, check: (g, t) => t.cmd('stance', (c) => c.pose === 'prone') || sq().some((u) => u.prone) },
+      { id: 'done', title: 'Geschafft', info: true, say: ['Ausbilder', 'Grundlagen bestanden. Weiter geht es mit Fahrzeugen und Unterstützung.', 6],
+        text: T('Lektion bestanden! Sie können Kamera und Einheiten führen, Gruppen bilden und Deckung nutzen. Weiter mit „Fahrzeuge und Unterstützung“.', 'Lektion bestanden! Weiter mit „Fahrzeuge und Unterstützung“.', 'Lektion bestanden! Weiter mit „Fahrzeuge und Unterstützung“.') },
+    ];
+    runTutor(this, g, steps, { onFinish: (gg) => { gg.setObjective('tut', 'done'); gg.win('Grundausbildung 1 bestanden: Sie beherrschen Kamera, Auswahl, Befehle, Gruppen und Deckung.'); } });
+  },
+  update(g, dt) { tickTutor(this, g, dt); },
+  victory: 'Grundlagen bestanden. Als Nächstes: Fahrzeuge und Unterstützung.',
+};

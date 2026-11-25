@@ -48,6 +48,7 @@
         <button data-order="hold" title="Feuer halten (H)"><i data-icon="holdfire"></i><span>Feuer</span></button>
         <button data-order="all" title="Alle wählen (Strg+A)"><i data-icon="selectall"></i><span>Alle</span></button>
         <button data-order="box" id="btn-box" class="touch-only" title="Auswahlrahmen"><i data-icon="box"></i><span>Rahmen</span></button>
+        <button data-order="los" id="btn-los" title="Sichtlinie (Alt halten)"><i data-icon="los"></i><span>Sicht</span></button>
       </div>
       <div id="abilities"></div>
     </div>
@@ -81,6 +82,8 @@
           <button id="btn-settings" class="mm-small" title="Einstellungen"><i data-icon="gear"></i><span data-i18n="menu.settings">Einstellungen</span></button>
           <button id="btn-help" class="mm-small" title="Hilfe und Steuerung"><i data-icon="help"></i><span data-i18n="menu.help">Steuerung</span></button>
           <button id="btn-fullscreen" class="mm-small" title="Vollbild"><i data-icon="fullscreen"></i><span data-i18n="menu.fullscreen">Vollbild</span></button>
+          <button id="btn-title-load" class="mm-small" title="Spielstand laden"><i data-icon="load"></i><span data-i18n="menu.load">Laden</span></button>
+          <button id="btn-awards" class="mm-small" title="Auszeichnungen und Erfolge"><i data-icon="trophy"></i><span data-i18n="menu.awards">Auszeichnungen</span></button>
         </div>
       </nav>
       <aside id="title-continue" class="title-continue hidden" aria-label="Kampagne fortsetzen">
@@ -296,7 +299,7 @@
           </div>
         </div>
       </div>
-      <footer class="scr-foot"><button class="back-campaign"><i data-icon="back"></i><span data-i18n="common.back">Zurück</span></button><span class="grow"></span><button id="btn-start-mission" class="big"><span data-i18n="brief.start">Einsatz beginnen</span> <i data-icon="play"></i></button></footer>
+      <footer class="scr-foot"><button class="back-campaign"><i data-icon="back"></i><span data-i18n="common.back">Zurück</span></button><span class="grow"></span><div class="brief-level" title="Schwierigkeitsgrad (gilt für die ganze Kampagne)"><span class="bl-lbl"><i data-icon="difficulty"></i><span data-i18n="brief.level">Schwierigkeit</span></span><div class="seg" id="brief-level"><button data-v="easy">Leicht</button><button data-v="normal">Normal</button><button data-v="hard">Schwer</button><button data-v="veteran">Veteran</button></div></div><button id="btn-start-mission" class="big"><span data-i18n="brief.start">Einsatz beginnen</span> <i data-icon="play"></i></button></footer>
     </div>
   </div>
 
@@ -352,6 +355,9 @@
           <label class="set-row"><span class="set-l"><b data-i18n="set.volume">Effektlautstärke</b><small data-i18n="set.volume.d">Waffen, Funk, Oberfläche</small></span><span class="range"><input id="set-volume" type="range" min="0" max="1" step="0.05"><output for="set-volume"></output></span></label>
           <label class="set-row"><span class="set-l"><b data-i18n="set.music">Musik</b><small data-i18n="set.music.d">Thema passend zur Epoche, steigert sich im Gefecht</small></span><input id="set-music" type="checkbox" class="switch"></label>
           <label class="set-row"><span class="set-l"><b data-i18n="set.musicvol">Musiklautstärke</b></span><span class="range"><input id="set-musicvol" type="range" min="0" max="1" step="0.05"><output for="set-musicvol"></output></span></label>
+          <label class="set-row"><span class="set-l"><b data-i18n="set.speech">Sprachfunk</b><small id="set-speech-d" data-i18n="set.speech.d">Funksprüche vorlesen (Sprachausgabe des Browsers)</small></span><input id="set-speech" type="checkbox" class="switch"></label>
+          <label class="set-row"><span class="set-l"><b data-i18n="set.speechvol">Lautstärke Sprachfunk</b></span><span class="range"><input id="set-speechvol" type="range" min="0" max="1" step="0.05"><output for="set-speechvol"></output></span></label>
+          <label class="set-row"><span class="set-l"><b data-i18n="set.speechrate">Sprechtempo</b></span><span class="range"><input id="set-speechrate" type="range" min="0.7" max="1.5" step="0.05"><output for="set-speechrate"></output></span></label>
         </section>
         <section class="tab-pane hidden" data-pane="controls" role="tabpanel">
           <div class="ctl-grid">
@@ -368,6 +374,8 @@
         <section class="tab-pane hidden" data-pane="game" role="tabpanel">
           <div class="set-row"><span class="set-l"><b data-i18n="set.lang">Sprache</b><small data-i18n="set.lang.d">Englische Fassung folgt</small></span>
             <div class="seg" id="set-lang"><button data-v="de" class="active">Deutsch</button><button data-v="en" disabled title="folgt">English <small>(folgt)</small></button></div></div>
+          <div class="set-row"><span class="set-l"><b data-i18n="set.level">Schwierigkeitsgrad (Kampagne)</b><small data-i18n="set.level.d">Standard für neue Kampagnen – im Briefing je Kampagne änderbar</small></span>
+            <div class="seg" id="set-level"><button data-v="easy">Leicht</button><button data-v="normal">Normal</button><button data-v="hard">Schwer</button><button data-v="veteran">Veteran</button></div></div>
           <label class="set-row"><span class="set-l"><b data-i18n="set.motion">Menü-Animationen reduzieren</b><small data-i18n="set.motion.d">Übergänge und Bewegungen im Menü abschalten</small></span><input id="set-reducemotion" type="checkbox" class="switch"></label>
           <div class="set-row"><span class="set-l"><b data-i18n="set.reset">Kampagnenfortschritt</b><small data-i18n="set.reset.d">Freigeschaltete Missionen und Bestzeiten aller Kampagnen</small></span><button id="btn-reset-all" class="ghost danger" data-i18n="set.reset.btn">Alles zurücksetzen</button></div>
           <p class="note" data-i18n="set.about">Steppensturm ist ein Fan-Projekt im Stil klassischer Echtzeit-Taktikspiele. Kartendaten realer Orte: © OpenStreetMap-Mitwirkende (ODbL). Handlung und Personen sind fiktiv.</p>
@@ -446,6 +454,8 @@
       <div class="scr-body">
         <div class="menu pause-menu">
           <button id="btn-resume" class="pm-item big"><i data-icon="play"></i><span class="lbl">Weiter</span></button>
+          <button id="btn-pause-save" class="pm-item"><i data-icon="save"></i><span class="lbl" data-i18n="pause.save">Speichern</span></button>
+          <button id="btn-pause-load" class="pm-item"><i data-icon="load"></i><span class="lbl" data-i18n="pause.load">Laden</span></button>
           <button id="btn-pause-settings" class="pm-item"><i data-icon="gear"></i><span class="lbl" data-i18n="pause.settings">Einstellungen</span></button>
           <button id="btn-pause-help" class="pm-item"><i data-icon="help"></i><span class="lbl" data-i18n="pause.help">Hilfe &amp; Steuerung</span></button>
           <button id="btn-restart" class="pm-item"><i data-icon="retry"></i><span class="lbl">Mission neu starten</span></button>
@@ -469,6 +479,29 @@
         <div id="end-text"></div>
       </div>
       <footer class="scr-foot"><button id="btn-end-menu"><i data-icon="home"></i><span data-i18n="end.menu">Hauptmenü</span></button><span class="grow"></span><button id="btn-end-retry">Erneut versuchen</button><button id="btn-end-next" class="big">Weiter</button></footer>
+    </div>
+  </div>
+
+  <div id="screen-saves" class="screen hidden">
+    <div class="panel mpanel saves-panel">
+      <header class="scr-head">
+        <div class="scr-over" id="saves-over">Spielstände</div>
+        <h2 id="saves-title">Spielstand laden</h2>
+        <p id="saves-note" class="note"></p>
+      </header>
+      <div class="scr-body"><div id="saves-list" class="saves-list"></div></div>
+      <footer class="scr-foot"><button id="btn-saves-back"><i data-icon="back"></i><span data-i18n="common.back">Zurück</span></button><span class="grow"></span></footer>
+    </div>
+  </div>
+
+  <div id="screen-awards" class="screen hidden">
+    <div class="panel mpanel wide awards-panel">
+      <header class="scr-head">
+        <div class="scr-over" data-i18n="awards.over">Ehrenliste</div>
+        <h2 data-i18n="awards.title">Auszeichnungen</h2>
+      </header>
+      <div class="scr-body"><div id="awards-body"></div></div>
+      <footer class="scr-foot"><button id="btn-awards-back"><i data-icon="back"></i><span data-i18n="common.back">Zurück</span></button><span class="grow"></span></footer>
     </div>
   </div>
 

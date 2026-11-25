@@ -9,7 +9,9 @@ import m4 from './m4_zaporizhzhia.js';
 import m5 from './m5_crimea.js';
 import './ww2_soviet/index.js';
 import './ww2_allies/index.js';
+import './ww2_axis/index.js';
 import './ukraine/index.js';
+import './tutorial/index.js';
 
 // Ukraine-Missionen: Epoche, Schwierigkeit und Kurztext für die Missionsliste (Missionsdateien bleiben unverändert)
 const UA_META = {

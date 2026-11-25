@@ -28,7 +28,7 @@ export const ROLES = {
   support: { name: 'Artillerie & Flugabwehr', iconKey: 'role_support', desc: 'Raketen-/Rohrartillerie, Flugabwehr gegen Drohnen, Beobachter und elektronische Kampfführung.' },
   logistics: { name: 'Logistik & Pioniere', iconKey: 'role_logistics', desc: 'Versorgungs-Lkw (Munition/Treibstoff), Bergepanzer, Pioniere mit Sperren und Minen, Sanitäter.' },
 };
-export const DIFFICULTIES = { easy: 'Leicht', normal: 'Normal', hard: 'Schwer' };
+export const DIFFICULTIES = { easy: 'Leicht', normal: 'Normal', hard: 'Schwer', veteran: 'Veteran' }; // V3-X: Stufen wie js/game/difficulty.js
 export const VICTORY = { annihilation: 'Vernichtung', points: 'Punkte-Limit', time30: 'Zeitlimit 30 min', time60: 'Zeitlimit 60 min', time90: 'Zeitlimit 90 min' };
 export const CP_ICON = { zeppelin: 'Z', aerostat: 'B', airfield: 'F', depot: 'D', radio: 'T', railway: 'H', village: 'O' };
 export const CAPTURE_TIME = 6; // Sekunden bis zum Besitzerwechsel
@@ -550,7 +550,8 @@ function deliverReinforcements(g, sk) {
     if (!p) { sk.log.push({ t: g.time, type: 'reinforceSkipped', cp: cp.id, team }); continue; }
     const room = sk.popCap - unitCount(g, p) - queued(p);
     const base = reinforceSize(cp);
-    const n = Math.min(base + (base >= 3 ? REINF_BONUS[team] : 0), room);
+    const dk = p.ai && team !== g.localSide ? (g.diff?.mul?.n ?? 1) : 1; // V3-X: Schwierigkeitsgrad – Nachschubmenge der gegnerischen KI
+    const n = Math.min(Math.round((base + (base >= 3 ? REINF_BONUS[team] : 0)) * dk), room);
     const types = nextTypes(sk, p, n);
     enqueue(p, types);
     let para = 0;

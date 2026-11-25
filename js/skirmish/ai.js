@@ -19,6 +19,7 @@ export const AI_LEVELS = {
   easy: { courage: 2.2, interval: 4.0, steals: 0, window: 0, abilityChance: 0.35, err: 14, clusterMin: 5, retreatHp: 0, reissue: 14 },
   normal: { courage: 1.6, interval: 3.0, steals: 1, window: 45, abilityChance: 0.7, err: 7, clusterMin: 4, retreatHp: 0.22, reissue: 10 },
   hard: { courage: 1.35, interval: 2.0, steals: 2, window: 55, abilityChance: 1.0, err: 2.5, clusterMin: 3, retreatHp: 0.3, reissue: 8 },
+  veteran: { courage: 1.2, interval: 1.6, steals: 3, window: 60, abilityChance: 1.0, err: 1.5, clusterMin: 3, retreatHp: 0.35, reissue: 6 }, // V3-X
 };
 const other = (t) => (t === 'UA' ? 'RU' : 'UA');
 const weightOf = (u) => (u.type.armor === 'heavy' ? 4 : u.type.vehicle ? 2 : 1);

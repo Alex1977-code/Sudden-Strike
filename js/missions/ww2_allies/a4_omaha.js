@@ -25,8 +25,8 @@ const mission = placeMission(PLACE, {
   ],
   objectivesPreview: ['Widerstandsnester WN 72, WN 65 und WN 62 ausschalten', 'Mindestens zwei Ausgänge öffnen (D-1, E-1, E-3)', 'Optional: Haubitzen an der Pointe du Hoc ausschalten', 'Zeitlimit: 18 Minuten'],
   forces: ['4× LCVP-Landungsboot mit je 12 Mann', '1× LCVP der Rangers', '4× Pionier', '2× Bazooka', '2× BAR', '1× Offizier', '1× Sanitäter', 'Verstärkung: Sherman auf dem Strand', 'Fähigkeiten: Artillerie (Zerstörer), Jabo-Angriff, Nebel'],
-  weather: { type: 'overcast', intensity: 0.4 }, time: { start: '06:30', speed: 3 },
-  camera: { x: 0, z: -190, dist: 150 },
+  weather: { type: 'overcast', intensity: 0.25 }, time: { start: '07:00', speed: 3 },
+  camera: { x: -20, z: -228, dist: 120 },
   abilities: [{ id: 'ww2_artillery', charges: 5 }, { id: 'ww2_airstrike_us', charges: 3 }, { id: 'smoke', charges: 4 }],
 
   setup(g) {

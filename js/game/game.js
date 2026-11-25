@@ -159,6 +159,7 @@ export class Game {
 
   // ================== Laden ==================
   load(mission, { demo = false, players = null } = {}) {
+    this.emit('beginLoad', mission, demo); // V3-X: Aufzeichnung (savegame.js) beenden, falls nicht über runLoad geladen
     this.dispose();
     this.mission = mission;
     this.demo = demo;
@@ -234,6 +235,7 @@ export class Game {
     if (map.railways) for (const r of map.railways) this.addRailway(r.pts || r, r.pts ? r : {});
     if (demo) { mission.demo ? mission.demo(this) : null; }
     else {
+      this.emit('preSetup', mission); // V3-X: Seed-RNG neu setzen (savegame.js), Schwierigkeitsgrad (difficulty.js)
       mission.setup(this);
       if (mission.abilities) this.setAbilities(mission.abilities);
     }
@@ -245,6 +247,7 @@ export class Game {
     this.fow.upload(1);
     this.mapobj.applyAmbience();
     this.emit('loaded');
+    this.emit('postLoad'); // V3-X: nach allen 'loaded'-Listenern (Seed-RNG für die Simulation, Medaillen-Basiswerte)
   }
   // ---- V3-M2: Missions-API Welt (Gleise, Züge, Brücken) ----
   addRailway(points, o = {}) { return this.rail.addRailway(points, o); }
@@ -483,7 +486,10 @@ export class Game {
   // Einstieg für Input/HUD: Client schickt an den Host, sonst direkt ausführen
   issueCommand(cmd) {
     if (this.net?.isClient) return this.net.sendCommand(cmd);
-    return this.command(this._localPlayerId, cmd);
+    const R = this.recorder?.on ? this.recorder : null; // V3-X: Spielerkommandos für Speichern/Laden protokollieren
+    if (!R) return this.command(this._localPlayerId, cmd);
+    R.onCommand(cmd);
+    return R.sim(() => this.command(this._localPlayerId, cmd));
   }
   // Validiert und führt ein serialisierbares Kommando eines Spielers aus
   command(playerId, cmd) {
@@ -891,16 +897,25 @@ export class Game {
   update(dt) {
     if (!this.active) return;
     this.frame = (this.frame || 0) + 1;
+    // V3-X: bei aktiver Aufzeichnung (Speichern/Laden) dt quantisiert und Simulation im Seed-RNG (savegame.js)
+    const R = this.recorder?.on && !this.recorder.replaying && !this.net ? this.recorder : null;
+    let edt = Math.min(dt, 0.05);
     if (!this.paused) {
-      const sdt = Math.min(dt, 0.05) * (this.speedMul || 1);
-      this.time += sdt;
-      this.weather?.update(sdt);
-      this.stepSim(sdt);
+      if (R) edt = R.quantize(edt);
+      const sdt = edt * (this.speedMul || 1);
+      if (sdt > 0) {
+        if (R) R.enter();
+        try {
+          this.time += sdt;
+          this.weather?.update(sdt);
+          this.stepSim(sdt);
+        } finally { if (R) R.exit(); }
+      }
     }
     fowUniforms.uTime.value = performance.now() / 1000;
     this.camera.update(dt);
     this.effects.setScale(this.gr.intH || 800);
-    if (!this.paused) this.effects.update(Math.min(dt, 0.05));
+    if (!this.paused && edt > 0) this.effects.update(edt);
     this.updateRings();
     this.updateCones();
     this.orders?.updateVisual(); // V3-M2: Wegpunktlinie der gewählten eigenen Einheiten

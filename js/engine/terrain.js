@@ -1711,6 +1711,7 @@ export class Terrain {
       uWaterSize: { value: this.size },
       uWaterN: { value: n },
       uWaterOuter: { value: this.def.outerSea ? 1 : 0 },
+      uWNight: { value: night ? 1 : 0 },
       uShallow: { value: lin(night ? [0.07, 0.14, 0.16] : this.season === 'winter' ? [0.30, 0.42, 0.44] : [0.22, 0.42, 0.38]) },
       uDeep: { value: lin(night ? [0.02, 0.06, 0.10] : [0.05, 0.17, 0.25]) },
       uFoam: { value: lin(night ? [0.35, 0.40, 0.45] : [0.88, 0.92, 0.93]) },
@@ -1728,7 +1729,7 @@ export class Terrain {
         .replace('#include <common>', `#include <common>
           varying vec3 vW; uniform float uTime; uniform sampler2D uFowTex; uniform float uFowSize; uniform float uFowEnabled;
           uniform sampler2D uWaterDepth; uniform float uWaterSize; uniform float uWaterN; uniform float uWaterOuter;
-          uniform vec3 uShallow; uniform vec3 uDeep; uniform vec3 uFoam;
+          uniform vec3 uShallow; uniform vec3 uDeep; uniform vec3 uFoam; uniform float uWNight;
           ${FOW_NOISE_GLSL}`)
         .replace('#include <map_fragment>', `#include <map_fragment>
           float wFoam = 0.0;
@@ -1761,7 +1762,10 @@ export class Terrain {
             wFoam *= fv;
           }`)
         .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-          roughnessFactor = mix(roughnessFactor, 0.75, wFoam);`)
+          roughnessFactor = mix(roughnessFactor, 0.75, wFoam);
+          roughnessFactor = mix(roughnessFactor, 0.6, uWNight); // Nacht: Mond-/Effektlicht nicht als weisser Fleck spiegeln`)
+        .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
+          material.clearcoat *= 1.0 - 0.92 * uWNight;`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
           {
             vec2 p = vW.xz;
@@ -1775,7 +1779,8 @@ export class Terrain {
             normal = normalize((viewMatrix * vec4(wn, 0.0)).xyz);
           }`);
     };
-    mat.customProgramCacheKey = () => 'water2';
+    mat.customProgramCacheKey = () => 'water3';
+    this.waterNightU = wu.uWNight;
     const water = new THREE.Mesh(geo, mat);
     water.position.y = this.seaLevel;
     water.receiveShadow = true;

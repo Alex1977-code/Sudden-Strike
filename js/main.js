@@ -25,6 +25,14 @@ import { escapeHtml } from './editor/format.js';
 import { t, applyI18n, setLang, getLang, isLangAvailable } from './i18n.js'; // V3-MENU
 import { SK_WEATHER, SK_DAYTIME } from './engine/weather.js'; // V3-MENU: Wetter/Tageszeit im Gefecht-Setup und in der Lobby
 import { getCampaigns, getCampaign, findMission, getProgress, isUnlocked, completeMission, resetProgress, setUnlockAll, nextMission, lastPlayed, setLastPlayed, drawMapSketch, campaignArtSVG, DIFFICULTY, ERAS } from './missions/campaigns.js'; // V3-MENU
+// V3-X: Speichern/Laden, Schwierigkeitsgrade, Sichtlinien-Werkzeug, Sprachfunk, Medaillen & Erfolge
+import { SimRecorder, readSave } from './game/savegame.js';
+import { createSaveUI } from './game/saveui.js';
+import { installDifficulty, LEVELS, levelOf, normLevel } from './game/difficulty.js';
+import { LosTool } from './game/lostool.js';
+import { RadioVoice } from './engine/speech.js';
+import { AwardTracker, evaluateMedal, medalBarHTML, awardsOnlyHTML, renderAwardsPage, MEDAL_NAMES } from './game/medals.js';
+import { getCampaignLevel, setCampaignLevel } from './missions/campaigns.js';
 initMods(); // V3-E: aktive Mods (Einheitenwerte) vor dem ersten Spielstart anwenden
 
 const $ = (id) => document.getElementById(id);
@@ -56,9 +64,15 @@ const hud = new HUD(game, settings);
 const input = new Input(game, canvas, hud);
 hud.input = input;
 const gamepad = new GamepadControl(game, input, hud); // V3-GP
+// V3-X: Aufzeichnung für Spielstände (Seed-RNG + Kommandoprotokoll), Schwierigkeitsgrade, Sichtlinie, Sprachfunk, Erfolge
+const rec = new SimRecorder(game);
+installDifficulty(game);
+const losTool = new LosTool(game, hud, input);
+const voice = new RadioVoice(game, settings, { getLang: () => getLang(), isActive: () => inMission && !current });
+const awards = new AwardTracker(game, { isActive: () => inMission && !online?.inGame });
 
 // ---------- Bildschirme ----------
-const screens = ['title', 'campaign', 'skirmish', 'online', 'lobby', 'briefing', 'settings', 'help', 'pause', 'end', 'mods'];
+const screens = ['title', 'campaign', 'skirmish', 'online', 'lobby', 'briefing', 'settings', 'help', 'pause', 'end', 'mods', 'saves', 'awards']; // V3-X: saves, awards
 let current = 'title', returnTo = 'title';
 function show(name) {
   for (const s of screens) $('screen-' + s).classList.toggle('hidden', s !== name);
@@ -308,6 +322,7 @@ function openBriefing(m) {
   const units = forces.filter((f) => !/^fähigkeit/i.test(f)), abil = forces.filter((f) => /^fähigkeit/i.test(f));
   $('brief-forces').innerHTML = `<div class="force-list">${units.map((f) => `<span class="force">${icon(pickIcon(FORCE_ICONS, f, 'inf'), { cls: 'ic-in' })}<span>${f}</span></span>`).join('')}</div>` +
     (abil.length ? `<div class="force-sub">${esc(t('brief.abilities', 'Fähigkeiten'))}</div><div class="force-list abil">${abil.map((f) => { const s = f.replace(/^fähigkeit:\s*/i, ''); return `<span class="force">${icon(pickIcon(ABIL_ICONS, s, 'star'), { cls: 'ic-in' })}<span>${s}</span></span>`; }).join('')}</div>` : '');
+  renderBriefLevel(); // V3-X
   show('briefing');
   // Lagekarte: sofort als Skizze, dann (falls möglich) als gerendertes Gelände mit denselben Markierungen
   const c = $('brief-map'), ctx = c.getContext('2d');
@@ -322,19 +337,36 @@ function openBriefing(m) {
   }, 320); // erst nach dem Einblenden – der Geländeaufbau blockiert kurz den Hauptthread
 }
 $('btn-start-mission').onclick = () => startMission(currentMission);
+// V3-X: Schwierigkeitsgrad je Kampagnenfortschritt (Standard aus den Einstellungen)
+if (!LEVELS[settings.level]) settings.level = 'normal';
+const campLevel = (m) => { const fm = findMission(m); return fm ? normLevel(getCampaignLevel(fm.campaign.id, settings.level)) : settings.level; };
+function renderBriefLevel() {
+  const lv = campLevel(currentMission);
+  $('brief-level').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.v === lv));
+}
+$('brief-level').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-v]'); if (!b) return;
+  const fm = findMission(currentMission);
+  if (fm) setCampaignLevel(fm.campaign.id, b.dataset.v); else settings.level = b.dataset.v;
+  renderBriefLevel();
+});
 
-async function startMission(m) {
+async function startMission(m, opts = {}) {
   currentMission = m;
   currentSkirmish = null;
   hideScreens();
+  const fm = findMission(m);
+  game.difficulty = opts.save ? normLevel(opts.save.diff) : (m.custom ? 'normal' : campLevel(m)); // V3-X
+  const ctx = fm ? { kind: 'mission', cid: fm.campaign.id, idx: fm.index, mid: m.id } : null;
   await loadWithSpinner(`Lade „${m.title}" …`, () => {
     game.camera.orbit = false;
-    game.load(m);
+    rec.runLoad(ctx, opts.save?.seed, () => game.load(m)); // V3-X: Seed-RNG + Aufzeichnung (Speichern/Laden)
   });
   inMission = true;
   hud.show(true);
   game.stats.start = game.time;
   updatePauseInfo();
+  if (!opts.save && ctx) saveUI.save('auto', { silent: true }); // V3-X: Autosave beim Missionsstart
 }
 
 // ================= Gefecht (Skirmish) =================
@@ -446,13 +478,16 @@ function withCustomMap(setup) {
   return { ...setup, customMap: compileSkirmishGen(doc) };
 }
 
-async function startSkirmishGame(setup) {
+async function startSkirmishGame(setup, opts = {}) {
   currentSkirmish = setup;
   hideScreens();
   let m = null;
+  game.difficulty = normLevel(setup.difficulty); // V3-X: Gefecht – KI-Stufe = Schwierigkeitsgrad
+  const { customMap, ...plain } = setup;
+  const ctx = { kind: 'skirmish', setup: JSON.parse(JSON.stringify(plain)) };
   await loadWithSpinner('Lade Gefechtskarte …', () => {
     game.camera.orbit = false;
-    m = startSkirmish(game, setup);
+    m = rec.runLoad(ctx, opts.save?.seed, () => startSkirmish(game, setup)); // V3-X
   });
   if (!m) { show('skirmish'); return null; }
   currentMission = m;
@@ -460,6 +495,7 @@ async function startSkirmishGame(setup) {
   hud.show(true);
   game.stats.start = game.time;
   updatePauseInfo();
+  if (!opts.save) saveUI.save('auto', { silent: true }); // V3-X: Autosave beim Gefechtsstart
   return m;
 }
 // ================= Online-Gefecht (MP-T5) =================
@@ -494,6 +530,7 @@ $('ls-satoutage').addEventListener('change', () => online.setSetting({ satOutage
 async function startOnlineGame(S) {
   currentSkirmish = null;
   hideScreens();
+  game.difficulty = 'normal'; // V3-X: Online ohne Schwierigkeitsmodifikatoren
   let m = null;
   await loadWithSpinner(`Lade Online-Gefecht (${S.mode}v${S.mode}) …`, () => {
     game.camera.orbit = false;
@@ -515,6 +552,7 @@ function updatePauseInfo() {
   const on = online.inGame;
   $('btn-restart').classList.toggle('hidden', on);
   $('btn-surrender').classList.toggle('hidden', on); // V3-MENU
+  $('btn-pause-save').classList.toggle('hidden', on); $('btn-pause-load').classList.toggle('hidden', on); // V3-X
   const lbl = (id, s) => { const e = $(id).querySelector('.lbl'); if (e) e.textContent = s; else $(id).textContent = s; };
   lbl('btn-quit', on ? 'Online-Spiel verlassen' : sk ? 'Zum Gefechtsmenü' : currentMission?.custom ? (currentMission.fromEditor ? 'Zurück zum Editor' : 'Zu eigenen Karten') : 'Zur Kampagne');
   lbl('btn-resume', on ? 'Zurück zum Spiel' : 'Weiter');
@@ -548,6 +586,7 @@ function showSkirmishEnd(won, text) {
   }
   next.textContent = 'Gefechtsmenü';
   next.onclick = async () => { await loadDemo(); openSkirmish(); };
+  { const fresh = won && !draw ? awards.onWin({ kind: 'skirmish', mode: sk.setup.mode, level: normLevel(sk.setup.difficulty) }) : (awards.flush(), []); const mb = $('end-medals'); if (fresh.length) { mb.innerHTML = awardsOnlyHTML(fresh); mb.classList.remove('hidden'); } } // V3-X
   $('btn-end-retry').textContent = 'Revanche';
   $('btn-end-retry').onclick = () => { game.paused = false; startSkirmishGame(currentSkirmish); };
   show('end');
@@ -566,6 +605,12 @@ hud.onTogglePause = () => {
 $('btn-menu').onclick = () => hud.togglePause();
 $('btn-resume').onclick = () => { if (!online.inGame) game.paused = false; hideScreens(); };
 $('btn-pause-settings').onclick = () => { returnTo = 'pause'; openSettings(); };
+// V3-X: Spielstände
+$('btn-pause-save').onclick = () => saveUI.open('save', 'pause');
+$('btn-pause-load').onclick = () => saveUI.open('load', 'pause');
+$('btn-title-load').onclick = () => saveUI.open('load', 'title');
+$('btn-awards').onclick = () => { awards.checkStatic(); renderAwardsPage($('awards-body')); show('awards'); };
+$('btn-awards-back').onclick = () => show('title');
 $('btn-restart').onclick = () => { game.paused = false; if (currentSkirmish) startSkirmishGame(currentSkirmish); else startMission(currentMission); };
 $('btn-quit').onclick = async () => {
   if (online.inGame) { online.leaveGame(); return; }
@@ -612,7 +657,14 @@ game.on('end', (won, text) => {
   $('end-text').innerHTML = `<p>${text}</p>${won && m.victory ? `<p class="victory-text">${m.victory}</p>` : ''}`;
   const tm = game.time;
   $('end-stats').innerHTML = statTiles([['attack', t('end.stat.kills', 'Abschüsse'), game.stats.kills], ['close', t('end.stat.lost', 'Verluste'), game.stats.lost], ['clock', t('end.stat.time', 'Einsatzzeit'), fmtTime(tm)], ['ammo', t('end.stat.shots', 'Schüsse'), game.stats.shots], ...(game.stats.intercepts ? [['obj_protect', t('end.stat.intercepts', 'Abgefangen'), game.stats.intercepts]] : [])]);
-  if (won && camp) completeMission(camp.id, idx, { time: tm, kills: game.stats.kills, lost: game.stats.lost, shots: game.stats.shots });
+  // V3-X: Medaille (Bronze/Silber/Gold) und Erfolge
+  const lvl = normLevel(game.difficulty);
+  const md = won ? evaluateMedal(game, m, lvl) : null;
+  const fresh = won ? awards.onWin({ kind: 'mission', medal: md.medal, level: lvl }) : (awards.flush(), []);
+  const mb = $('end-medals');
+  if (md) { mb.innerHTML = medalBarHTML(md, fresh); mb.classList.remove('hidden'); mb.dataset.medal = md.medal; }
+  if (won && camp) completeMission(camp.id, idx, { time: tm, kills: game.stats.kills, lost: game.stats.lost, shots: game.stats.shots, medal: md?.medal, level: lvl });
+  if (won && camp) { awards.checkStatic(); const more = awards.fresh.filter((a) => !fresh.includes(a)); if (more.length) mb.innerHTML = medalBarHTML(md, [...fresh, ...more]); }
   const next = $('btn-end-next');
   const hasNext = camp && idx + 1 < camp.missions.length;
   if (won) {
@@ -748,7 +800,9 @@ function frame(now) {
   online.frameDone();
   if (inMission) hud.update(dt);
   if (editor.active) editor.update(dt);
-  gr.render(dt);
+  voice.update(dt); // V3-X: Sprachfunk
+  if (inMission) saveUI.tick(); // V3-X: Autosave alle 5 min Spielzeit
+  if (!rec.replaying) gr.render(dt); // V3-X: beim Vorspulen eines Spielstands nicht rendern
   requestAnimationFrame(frame);
 }
 
@@ -771,6 +825,7 @@ function frame(now) {
   window.__editor = editor;
   window.__modsUI = modsUI;
   window.__openMods = openMods;
+  window.__saves = { rec, ui: saveUI, readSave, awards, voice, losTool, LEVELS }; // V3-X
 })();
 
 // Offline-Fähigkeit (PWA)

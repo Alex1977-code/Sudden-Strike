@@ -611,6 +611,7 @@ export class Weather {
     // Effekte nachts heller
     const fx = this.g.effects; if (fx) fx.flashMul = 1 + 0.5 * nightF; // gedämpft: sonst überstrahlen Explosionen nachts (v. a. über Wasser)
     // Scheinwerfer/Kennzeichen
+    if (this.g.terrain?.waterNightU) this.g.terrain.waterNightU.value = nightF;
     this._night(nightF);
   }
   _night(nf) {
