@@ -23,7 +23,7 @@ const feats = [
   bldg('colonial_white', 120, -160, 18, 8, Math.PI, 1, 'Bahnhalt El Alamein'),
   bldg('water_tower', 140, -160, 4, 4, 0, 2),
 ];
-feats.push(settlement('desert_village', 150, -125, 40, 1942, { mainRoadAngle: 0, density: 0.4, square: false }));
+feats.push(settlement('desert_village', 150, -125, 40, 1942, { buildingSet: 'north_africa', mainRoadAngle: 0, density: 0.4, square: false }));
 
 const STRUCT = [];
 for (let z = -150; z <= 260; z += 30) STRUCT.push({ kind: 'minefield', x: -16, z }, { kind: 'minefield', x: 45, z: z + 15 });

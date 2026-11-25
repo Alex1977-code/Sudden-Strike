@@ -40,10 +40,10 @@ const feats = [
   grove(-120, 200, 30, 'deciduous', 0.06),
 ];
 feats.push(
-  settlement('german_city', 200, 10, 95, 4511, { mainRoadAngle: 0, density: 0.8, cemetery: false, fields: false, keepOut: [{ x: 112, z: 112, r: 22 }] }),
-  settlement('german_city', 60, -200, 70, 4512, { mainRoadAngle: 0.15, density: 0.75, cemetery: false, fields: false, square: false }),
-  settlement('german_city', -235, -235, 55, 4513, { mainRoadAngle: -0.1, density: 0.75, cemetery: false, fields: false, square: false }),
-  settlement('german_city', 200, 210, 75, 4514, { mainRoadAngle: 0, density: 0.75, cemetery: false, fields: false }),
+  settlement('german_city', 200, 10, 95, 4511, { buildingSet: 'berlin_1945', mainRoadAngle: 0, density: 0.8, cemetery: false, fields: false, keepOut: [{ x: 112, z: 112, r: 22 }] }),
+  settlement('german_city', 60, -200, 70, 4512, { buildingSet: 'berlin_1945', mainRoadAngle: 0.15, density: 0.75, cemetery: false, fields: false, square: false }),
+  settlement('german_city', -235, -235, 55, 4513, { buildingSet: 'berlin_1945', mainRoadAngle: -0.1, density: 0.75, cemetery: false, fields: false, square: false }),
+  settlement('german_city', 200, 210, 75, 4514, { buildingSet: 'berlin_1945', mainRoadAngle: 0, density: 0.75, cemetery: false, fields: false }),
 );
 
 export default {

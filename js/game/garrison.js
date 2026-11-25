@@ -10,6 +10,9 @@ export const GAR = {
   fleeHp: 0.5,         // Anteil Lebenspunkte der Flüchtenden
 };
 
+// Denkmäler/Anlagen ohne begehbares Inneres (V3-LM): nicht besetzbar
+export const NO_GARRISON = new Set(['siegessaeule', 'obelisk', 'mig17_monument', 'barmaley_fountain', 'factory_chimney', 'chimney_modern', 'cooling_tower', 'water_tanks', 'water_tower', 'headframe', 'panzerkuppel', 'avalanche_gallery', 'tunnel_portal', 'salang_portal', 'brandenburger_tor', 'brandenburger_tor_s']);
+export const canGarrison = (h) => !NO_GARRISON.has(h?.houseDef?.kind || h?.houseKind || '');
 export const houseCap = (h) => Math.max(4, Math.min(12, Math.round(h.w * h.d * h.floors / 14) + 2));
 export const floorsOf = (house) => house.houseDef?.floors || 1;
 // Ist die Feindbesatzung eines Hauses für `team` aufgeklärt? (feuert gerade / wurde am Haus entdeckt) – MP-T7
@@ -22,7 +25,7 @@ export class Garrison {
     const g = this.g;
     if (cmd.t === 'garrison') {
       const h = g.unitById(cmd.target);
-      if (!h || !h.alive || h.type.key !== 'house') return false;
+      if (!h || !h.alive || h.type.key !== 'house' || !canGarrison(h)) return false;
       const inf = units.filter((u) => u.type.infantry && !u.type.kamikaze && !u.abandoned);
       if (!inf.length) return false;
       // MP-T7 (Anti-Info-Leck): Eine nicht aufgeklärte Feindbesatzung wird wie ein leeres Haus behandelt – der Befehl wird

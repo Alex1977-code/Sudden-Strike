@@ -51,7 +51,7 @@ const feats = [
 ];
 // Bebauung (WK2: Ziegel-/Wohnblöcke statt Plattenbauten)
 feats.push(
-  settlement('german_city', 30, 70, 118, 4211, { era: 'ww2', mainRoadAngle: Math.PI / 2, density: 0.75, square: false, connectTo: [[40, -95], [30, 140]], keepOut: [{ x: PAVLOV_SQ[0], z: PAVLOV_SQ[1], r: 20 }, { x: -50, z: 60, r: 14 }, { x: 4, z: 104, r: 14 }], cemetery: false, fields: false }),
+  settlement('german_city', 30, 70, 118, 4211, { buildingSet: 'stalingrad_1942', era: 'ww2', mainRoadAngle: Math.PI / 2, density: 0.75, square: false, connectTo: [[40, -95], [30, 140]], keepOut: [{ x: PAVLOV_SQ[0], z: PAVLOV_SQ[1], r: 20 }, { x: -50, z: 60, r: 14 }, { x: 4, z: 104, r: 14 }], cemetery: false, fields: false }),
   settlement('ukr_town', -210, -190, 80, 4212, { era: 'ww2', mainRoadAngle: 0.2, density: 0.7, connectTo: [[-110, -40]] }),
   settlement('ukr_village', -150, 245, 70, 4213, { era: 'ww2', mainRoadAngle: 0.1, connectTo: [[-106, 230]] }),
   settlement('ukr_village', 70, -150, 55, 4214, { era: 'ww2', mainRoadAngle: Math.PI / 2, cemetery: false, fields: false }),

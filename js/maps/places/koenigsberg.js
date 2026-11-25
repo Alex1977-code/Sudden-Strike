@@ -47,10 +47,10 @@ const feats = [
 // Ring-Durchlässe für die Ausfallstraßen (Brücken über den Wallgraben)
 for (const [x, z] of [[15, -192], [-150, -110], [228, -78]]) feats.push({ type: 'causeway', pts: [[x - 8, z - 2], [x + 8, z + 2]], width: 14, style: 'stone_arch' }, { type: 'causeway', pts: [[x, z - 10], [x, z + 10]], width: 14, style: 'stone_arch' });
 feats.push(
-  settlement('german_city', -50, -150, 90, 1945, { mainRoadAngle: 0.25, density: 0.8, fields: false, square: false, cemetery: false }),
-  settlement('german_city', 140, -150, 70, 1946, { mainRoadAngle: Math.PI / 2, density: 0.75, fields: false, cemetery: false }),
-  settlement('german_city', 60, 190, 95, 1947, { mainRoadAngle: 0, density: 0.75, fields: false }),
-  settlement('german_city', 30, 50, 40, 1948, { mainRoadAngle: 0, density: 0.9, fields: false, square: false, cemetery: false, industry: false }),
+  settlement('german_city', -50, -150, 90, 1945, { buildingSet: 'berlin_1945', mainRoadAngle: 0.25, density: 0.8, fields: false, square: false, cemetery: false }),
+  settlement('german_city', 140, -150, 70, 1946, { buildingSet: 'berlin_1945', mainRoadAngle: Math.PI / 2, density: 0.75, fields: false, cemetery: false }),
+  settlement('german_city', 60, 190, 95, 1947, { buildingSet: 'berlin_1945', mainRoadAngle: 0, density: 0.75, fields: false }),
+  settlement('german_city', 30, 50, 40, 1948, { buildingSet: 'berlin_1945', mainRoadAngle: 0, density: 0.9, fields: false, square: false, cemetery: false, industry: false }),
 );
 
 export default {

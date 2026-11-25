@@ -32,9 +32,9 @@ const feats = [
   forest([[-280, -10], [-200, 0], [-190, 80], [-280, 90]], 'mixed', 0.05),
 ];
 feats.push(
-  settlement('normandy_village', 0, 0, 112, 1944, { density: 0.8, square: false, mainRoadAngle: Math.PI / 2, keepOut: [{ x: 0, z: 0, r: 24 }] }),
-  settlement('normandy_village', 6, -238, 38, 1945, { density: 0.5, mainRoadAngle: Math.PI / 2, cemetery: false }),
-  settlement('normandy_village', 205, 160, 36, 1946, { density: 0.5, mainRoadAngle: 0.6, cemetery: false }),
+  settlement('normandy_village', 0, 0, 112, 1944, { buildingSet: 'ardennes', density: 0.8, square: false, mainRoadAngle: Math.PI / 2, keepOut: [{ x: 0, z: 0, r: 24 }] }),
+  settlement('normandy_village', 6, -238, 38, 1945, { buildingSet: 'ardennes', density: 0.5, mainRoadAngle: Math.PI / 2, cemetery: false }),
+  settlement('normandy_village', 205, 160, 36, 1946, { buildingSet: 'ardennes', density: 0.5, mainRoadAngle: 0.6, cemetery: false }),
 );
 
 export default {

@@ -30,8 +30,8 @@ const feats = [
 ];
 POSTS.forEach(([x, z], i) => feats.push(bldg('casemate', x * 0.94, 10 + (z - 10) * 0.94, 5, 5, 0, 1, i % 2 ? undefined : `Stützpunkt R${30 + i * 3}`)));
 feats.push(
-  settlement('desert_village', 10, -170, 80, 1941, { mainRoadAngle: 0.1, density: 0.85, connectTo: [[0, -150]], keepOut: [{ x: 40, z: -196, r: 18 }] }),
-  settlement('desert_village', -150, -150, 45, 1942, { mainRoadAngle: 0.2, density: 0.5 }),
+  settlement('desert_village', 10, -170, 80, 1941, { buildingSet: 'north_africa', mainRoadAngle: 0.1, density: 0.85, connectTo: [[0, -150]], keepOut: [{ x: 40, z: -196, r: 18 }] }),
+  settlement('desert_village', -150, -150, 45, 1942, { buildingSet: 'north_africa', mainRoadAngle: 0.2, density: 0.5 }),
 );
 
 export default {
