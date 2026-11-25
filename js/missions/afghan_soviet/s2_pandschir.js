@@ -1,7 +1,7 @@
 // Sowjetkrieg 2 – „Pandschir“ (Mai 1982): Luftlandung auf den Höhen des Tals, Höhen halten, bis die Kolonne durch ist.
 // Ort: Pandschir-Tal (Ortsvorlage js/maps/places/pandschir.js, ohne spätere Bauten).
 import { PLACE_BY_ID } from '../../maps/places/index.js';
-import { near, alive, objCount, settle, wave, post, fort, Convoy, vanish, villageWatch, heliInsert, overrun } from '../afghan_isaf/_h.js';
+import { near, alive, setText, objCount, settle, wave, post, fort, Convoy, vanish, villageWatch, heliInsert, overrun } from '../afghan_isaf/_h.js';
 
 const P = PLACE_BY_ID.pandschir;
 const H = [{ id: 'h1', at: [-104, -34], name: 'Höhe Nord-West' }, { id: 'h2', at: [70, -104], name: 'Höhe Nord' }, { id: 'h3', at: [112, 96], name: 'Höhe Süd' }];
@@ -17,7 +17,7 @@ export default {
     { s: 'Leutnant Wiktor Gromadin (Luftlandezug)', t: 'Auf der Nordhöhe soll ein Flak-MG stehen. Das zuerst, sonst bekommen die Hubschrauber nichts mehr nach oben.' },
     { s: 'Sorokin', t: 'In den Dörfern Bazarak und Rokha sind kaum noch Menschen. Die, die geblieben sind, haben schon zu viele Operationen gesehen. Kein Feuer auf die Häuser.' },
   ],
-  objectivesPreview: ['Drei Höhen über dem Tal besetzen', 'Höhen halten, bis die Kolonne das Tal durchquert hat (mindestens 5 von 7 Fahrzeugen)', 'Optional: Keine Schäden an den Dörfern Bazarak und Rokha', 'Optional: Flak-Stellung auf der Nordhöhe ausschalten'],
+  objectivesPreview: ['Drei Höhen über dem Tal besetzen (innerhalb von 15 Minuten) und bis zum Eintreffen der Kolonne halten', 'Höhen halten, bis die Kolonne das Tal durchquert hat (mindestens 5 von 7 Fahrzeugen)', 'Optional: Keine Schäden an den Dörfern Bazarak und Rokha', 'Optional: Flak-Stellung auf der Nordhöhe ausschalten'],
   forces: ['Luftlandung: 3× Mi-8 mit 16 Fallschirmjägern (WDW), PK, RPG, Scharfschütze, Offizier', 'Nachgeführt: 2× Mi-8 mit weiteren 10 Mann', 'Kolonne: 2× BMP-1, 2× BTR-70, 1× T-62, 2× Ural', 'Fähigkeiten: Mi-24-Unterstützung (2×), Su-25-Angriff (1×), Artilleriefeuer 122 mm (3×)'],
   map: { ...P.map, seed: 1982, features: P.map.features.filter((f) => f.kind !== 'massoud_mausoleum' && !(f.type === 'house' && f.kind === 'watchtower' && Math.hypot(f.x + 134, f.z) < 4) && !(f.type === 'road' && f.pts?.length === 2 && f.pts[1][0] === -108)) },
   env: { ...P.env, sunElev: 46 },
@@ -30,11 +30,13 @@ export default {
   setup(g) {
     this.st = {}; this.held = new Set(); this.phase = 'land'; this.out = 0; this.tCol = 0;
     // Stellungen der Gegenseite auf den Höhen
-    post(g, [['af_muj_rifle', 2], ['af_muj_ak', 1]], H[0].at[0] - 6, H[0].at[1] - 14, { r: 26, tags: ['h1'] });
+    post(g, [['af_muj_rifle', 3], ['af_muj_ak', 2], ['af_muj_commander', 1]], H[0].at[0] - 6, H[0].at[1] - 14, { r: 26, tags: ['h1'] });
+    g.spawn('af_muj_dshk', 'RU', H[0].at[0] + 6, H[0].at[1] - 10, { heading: Math.PI, tags: ['h1'] });
     fort(g, 'af_sangar', 'RU', H[0].at[0], H[0].at[1] - 8, { rot: 0.4 });
-    post(g, [['af_muj_ak', 2], ['af_muj_rpg', 1]], H[1].at[0] + 8, H[1].at[1] - 12, { r: 26, tags: ['h2'] });
+    post(g, [['af_muj_ak', 3], ['af_muj_rifle', 1], ['af_muj_rpg', 1]], H[1].at[0] + 8, H[1].at[1] - 12, { r: 26, tags: ['h2'] });
     g.spawn('af_muj_zpu1', 'RU', H[1].at[0] + 2, H[1].at[1] - 18, { tags: ['h2', 'flak'], ai: { mode: 'hold' } });
-    post(g, [['af_muj_rifle', 2], ['af_muj_ak', 1]], H[2].at[0] + 10, H[2].at[1] + 12, { r: 26, tags: ['h3'] });
+    post(g, [['af_muj_rifle', 3], ['af_muj_ak', 2], ['af_muj_rpg', 1]], H[2].at[0] + 10, H[2].at[1] + 12, { r: 26, tags: ['h3'] });
+    g.spawn('af_muj_dshk', 'RU', H[2].at[0] + 14, H[2].at[1] + 4, { heading: 0, tags: ['h3'] });
     fort(g, 'af_sangar', 'RU', H[2].at[0] + 4, H[2].at[1] + 8, { rot: 2.4 });
     // Luftlandung
     const from = [-300, 120];
@@ -97,8 +99,16 @@ export default {
       }
     }
     if (this.phase === 'land') {
-      objCount(g, 'heights', 'Höhen besetzen', this.held.size, 3);
-      if (this.held.size >= 3) this.startColumn(g);
+      if (this.tReady === undefined) objCount(g, 'heights', 'Höhen besetzen', this.held.size, 3);
+      if (this.held.size >= 3 && this.tReady === undefined) {
+        this.tReady = g.time;
+        g.say('Sorokin', 'Alle drei Höhen besetzt. Die Kolonne steht noch vor dem Taleingang – zwei Minuten. Eingraben und halten!', 6);
+        wave(g, [['af_muj_ak', 3], ['af_muj_rifle', 2]], [-240, -260], [[-160, -120], H[0].at], { tags: ['ctr'] });
+        g.later(50, () => { if (!g.ended) { wave(g, [['af_muj_ak', 4], ['af_muj_rpg', 1]], [200, 280], [[150, 170], H[2].at], { tags: ['ctr'] }); g.alert('⚠ Angriff auf die Südhöhe!', 4); } });
+      }
+      if (this.tReady !== undefined) setText(g, 'heights', `Höhen halten – Kolonne erreicht das Tal in ${Math.max(0, Math.ceil(this.tReady + 120 - g.time))} s (${this.held.size}/3)`);
+      if (this.tReady !== undefined && g.time - this.tReady >= 120 && this.held.size >= 3) this.startColumn(g);
+      if (g.time > 900 && this.tReady === undefined) { settle(g, 'heights', 'failed'); g.lose('Die Höhen sind nicht rechtzeitig genommen worden – die Kolonne kehrt um, die Operation wird abgebrochen.'); return; }
       if (g.time > 30 && !alive(g, 'UA', (u) => u.type.infantry).length && !g.units.some((u) => u.alive && u.side === 'UA' && u.cargo?.length)) { g.lose('Die Luftlandung ist gescheitert.'); return; }
       return;
     }
@@ -110,7 +120,8 @@ export default {
     objCount(g, 'column', 'Kolonne durch das Tal bringen', this.out, 5);
     if (this.out + enroute < 5) { settle(g, 'column', 'failed'); g.lose('Die Kolonne ist im Tal zusammengeschossen worden.'); return; }
     if (!alive(g, 'UA', (u) => u.type.infantry).length) { g.lose('Die Höhen sind verloren, die Luftlandekräfte aufgerieben.'); return; }
-    if (this.out >= 5 && !enroute) {
+    if (this.out >= 5 && this.t5 === undefined) this.t5 = g.time;
+    if (this.out >= 5 && (!enroute || g.time - this.t5 > 90)) {
       settle(g, 'column', 'done'); settle(g, 'villages', 'done');
       g.say('Sorokin', 'Kolonne ist durch. Morgen ziehen wir weiter ins Tal – und in ein paar Wochen sind die anderen wieder hier.', 6);
       g.win('Die Kolonne hat das Tal durchquert. Die Höhen werden am Abend wieder geräumt.');
