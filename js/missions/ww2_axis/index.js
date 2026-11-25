@@ -7,8 +7,9 @@ import c2 from './c2_kreta.js';
 import c3 from './c3_gazala.js';
 import c4 from './c4_charkow.js';
 import c5 from './c5_ardennen.js';
+import c6 from './c6_halbe.js';
 
-export const MISSIONS = [c1, c2, c3, c4, c5];
+export const MISSIONS = [c1, c2, c3, c4, c5, c6];
 
 const DEF = {
   id: 'ww2-axis', era: 'ww2', faction: 'Deutsche Seite', order: 60,

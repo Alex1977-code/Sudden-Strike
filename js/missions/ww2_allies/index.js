@@ -5,9 +5,9 @@ import a2 from './a2_alamein.js';
 import a3 from './a3_pegasus.js';
 import a4 from './a4_omaha.js';
 import a5 from './a5_carentan.js';
-// V3-C3b: hier b1 (Arnheim) … b5 (V2-Labor) importieren und in MISSIONS hinter a5 eintragen.
+import b1 from './b1_arnheim.js';
 
-export const MISSIONS = [a1, a2, a3, a4, a5];
+export const MISSIONS = [a1, a2, a3, a4, a5, b1];
 
 const DEF = {
   id: 'ww2-allies', era: 'ww2', faction: 'Westalliierte',

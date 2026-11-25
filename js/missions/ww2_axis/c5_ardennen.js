@@ -50,7 +50,7 @@ export default {
   abilities: [{ id: 'ww2_nebelwerfer', charges: 1 }, { id: 'ww2_artillery', charges: 2 }, { id: 'smoke', charges: 3 }],
 
   setup(g) {
-    this.t0 = g.time; this.br = {}; this.phase = 'attack'; this.strikes = 0; this.nextStrike = 0; this.exitM = this.markers[1];
+    this.t0 = g.time; this.br = {}; this.phase = 'attack'; this.strikes = 0; this.nextStrike = 0; this.fwd = new Set(); this.exitM = this.markers[1];
     const tanks = g.spawnGroup([['ww2_panther', 3], ['ww2_stug3', 2]], 'UA', 220, 4, { spacing: 12, cols: 3, heading: -Math.PI / 2, tags: ['tank'] });
     for (const u of tanks) if (u.maxFuel) u.fuel = START_FUEL;
     for (const u of g.spawnGroup([['ww2_sdkfz251', 2]], 'UA', 226, 34, { spacing: 10, cols: 2, heading: -Math.PI / 2, tags: ['htr'] })) if (u.maxFuel) u.fuel = START_FUEL;
@@ -65,12 +65,15 @@ export default {
     fort(g, 'ww2_mgnest', 'RU', -6, -4, { heading: Math.PI / 2, tags: ['bk'] }); fort(g, 'ww2_foxhole', 'RU', 0, 12, {});
     g.spawn('ww2_us_57mm', 'RU', -14, 8, { heading: Math.PI / 2, ai: { mode: 'hold' }, tags: ['bk'] });
     g.spawn('ww2_m10', 'RU', -46, -14, { ai: { mode: 'guard', radius: 32 } });
+    g.spawnGroup([[us.rifle, 6], [us.lmg, 2], [us.at, 2]], 'RU', 70, -26, { spacing: 3.6, cols: 4, ai: { mode: 'guard', radius: 26 } });
+    g.spawn('ww2_us_57mm', 'RU', 62, 16, { heading: -Math.PI / 2, ai: { mode: 'hold' } });
     g.addObjective('bridge', 'Die Steinbrücke über die Ourthe nehmen');
     g.addObjective('retreat', 'Rückzug: 12 Mann (davon 2 Panzer) zum Sammelpunkt im Osten', { hidden: true });
     g.addObjective('truck', 'Den Versorgungs-Lkw retten', { optional: true });
     g.later(3, () => g.say('Lessing', 'Sprit sparen: Nicht auf der Stelle drehen, Umwege vermeiden. Den Lkw dicht an den Panzern halten – er ist unsere letzte Reserve.', 7));
     g.later(40, () => g.say('Scholz', 'Aus dem Nebel kommen sie nicht auf Sicht heran. Fahrt vorsichtig auf die Brücke zu – die Pak steht am Westende.', 6));
     g.later(210, () => { g.alert('⚠ Gegner verstärkt das Dorf!', 4); wave(g, [[us.rifle, 7], [us.lmg, 1], [us.at, 2], ['ww2_m10', 1]], -250, -10, [[-130, -6], [-70, 0]], { tags: ['w'] }); });
+    g.later(280, () => { g.alert('⚠ Zweiter Gegenstoß über die Brücke!', 4); wave(g, [[us.rifle, 8], [us.lmg, 2], [us.at, 2], ['ww2_sherman', 2]], -250, 4, [[-130, 0], [-30, 0], [20, 0]], { tags: ['w'] }); });
     g.later(CLEAR_AT - 20, () => g.say('Brink', 'Der Wind dreht. Der Nebel reißt auf – mir gefällt das nicht.', 4));
   },
 
@@ -81,16 +84,22 @@ export default {
     if (this.phase === 'attack') {
       const b = holdZone(g, dt, this.br, BRIDGE[0], BRIDGE[1], 22, { need: 2, secs: 6, enemyR: 26 });
       if (b) {
-        this.phase = 'retreat'; g.setObjective('bridge', 'done');
-        const o = g.objectives.find((q) => q.id === 'retreat'); if (o) { o.hidden = false; g.emit('objectives'); }
-        this.exitM.hidden = false;
-        g.say('Lessing', 'Brücke genommen. Der Rückzug ist befohlen – zurück zum Sammelpunkt, Gruppe um Gruppe. Verwundete und Sprit zuerst.', 7);
-        g.alert('Rückzug zum Sammelpunkt im Osten!', 5);
-        this.nextStrike = Math.max(t + 30, CLEAR_AT + 10);
+        this.phase = 'held'; g.setObjective('bridge', 'done');
+        g.addObjective('held', 'Brückenkopf halten, bis der Rückzugsbefehl kommt');
+        g.say('Lessing', 'Brücke genommen. Wir halten sie, bis Befehl kommt – und der Himmel macht mir Sorgen.', 6);
       }
     }
+    if (this.phase === 'held' && t >= CLEAR_AT) {
+      this.phase = 'retreat'; g.setObjective('held', 'done');
+      const o = g.objectives.find((q) => q.id === 'retreat'); if (o) { o.hidden = false; g.emit('objectives'); }
+      this.exitM.hidden = false;
+      g.say('Lessing', 'Der Himmel ist klar, die Jabos kommen. Rückzug! Zurück zum Sammelpunkt, Gruppe um Gruppe. Verwundete und Sprit zuerst.', 7);
+      g.alert('Rückzug zum Sammelpunkt im Osten!', 5);
+      this.nextStrike = t + 8;
+    }
+    if (this.phase === 'attack' || this.phase === 'held') for (const u of g.units) if (u.alive && u.side === 'UA' && u.pos.x < 45) this.fwd.add(u.id);
     // Wetter klart auf → alliierte Jagdbomber (Aircraft.js über die Fähigkeiten, Seite RU)
-    if (t >= CLEAR_AT + 10 && t >= this.nextStrike && !g.ended) {
+    if (this.phase === 'retreat' && t >= this.nextStrike && !g.ended) {
       const ours = alive(g, 'UA', (u) => !u.type.structure);
       if (ours.length) {
         if (this.strikes === 0) { g.alert('⚠ Der Himmel klart auf – Jagdbomber!', 5); g.say('Brink', 'Jabos! Auseinander, runter von der Straße!', 4); }
@@ -98,11 +107,11 @@ export default {
         let best = ours[0], bn = -1;
         for (const u of ours) { const n = ours.filter((v) => Math.hypot(v.pos.x - u.pos.x, v.pos.z - u.pos.z) < 14).length + (u.type.vehicle ? 2 : 0); if (n > bn) { bn = n; best = u; } }
         foeStrike(g, 'ww2_airstrike_us', best.pos.x, best.pos.z);
-        this.strikes++; this.nextStrike = t + (this.phase === 'retreat' ? 34 : 60);
+        this.strikes++; this.nextStrike = t + 32;
       }
     }
     if (this.phase === 'retreat') {
-      const inExit = near(g, 'UA', EXIT[0], EXIT[1], 36);
+      const inExit = near(g, 'UA', EXIT[0], EXIT[1], 36).filter((u) => this.fwd.has(u.id));
       const tanksIn = inExit.filter((u) => u.tags.has('tank')).length;
       setText(g, 'retreat', `Rückzug: ${inExit.length}/12 Mann (davon ${Math.min(tanksIn, 2)}/2 Panzer) am Sammelpunkt im Osten`);
       if (g.objState('truck') === 'open' && !alive(g, 'UA', (u) => u.tags.has('truck')).length) g.setObjective('truck', 'failed');
@@ -113,8 +122,8 @@ export default {
         return;
       }
     }
-    if (mine < 4 && t > 5) { g.setObjective(this.phase === 'attack' ? 'bridge' : 'retreat', 'failed'); g.lose('Der Verband ist aufgerieben. Kaum jemand kommt zurück.'); return; }
-    if (t > LIMIT) { g.setObjective(this.phase === 'attack' ? 'bridge' : 'retreat', 'failed'); g.lose('Zu spät: Der Verband ist abgeschnitten, bevor er den Sammelpunkt erreicht.'); }
+    if (mine < 4 && t > 5) { g.setObjective(this.phase === 'attack' ? 'bridge' : this.phase === 'held' ? 'held' : 'retreat', 'failed'); g.lose('Der Verband ist aufgerieben. Kaum jemand kommt zurück.'); return; }
+    if (t > LIMIT) { g.setObjective(this.phase === 'attack' ? 'bridge' : this.phase === 'held' ? 'held' : 'retreat', 'failed'); g.lose('Zu spät: Der Verband ist abgeschnitten, bevor er den Sammelpunkt erreicht.'); }
   },
   victory: 'Die Brücke war genommen – und für den Krieg im Westen entschied das nichts mehr.',
 };

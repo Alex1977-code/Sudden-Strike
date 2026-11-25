@@ -97,7 +97,7 @@ export default placeMission(PLACE_BY_ID.stalingrad, {
     w(25, () => wave(g, 'RU', [[E.rifle, 5], [E.mg, 1]], -30, 62, [[44, 58], [80, 48]], { tags: ['w'] }));
     w(80, () => { this._ferry(g, 'Fähre legt an: Munition und frische Soldaten!'); });
     w(95, () => { g.alert('Angriff von Süden – Mühle!', 4); wave(g, 'RU', [[E.rifle, 5], [E.smg, 2]], 110, 130, [[112, 96], [100, 54]], { tags: ['w'] }); });
-    w(170, () => { g.say('Bykowa', 'Panzer IV auf dem Platz! Panzerbüchsen – Seitenfenster!', 5); wave(g, 'RU', [[E.pz4, 1], [E.rifle, 3]], -34, 64, [[30, 58], [70, 54]], { tags: ['w'] }); });
+    w(170, () => { g.say('Bykowa', 'Panzer IV auf dem Platz! Panzerbüchsen – Seitenfenster!', 5); for (const u of wave(g, 'RU', [[E.pz4, 1], [E.rifle, 3]], -34, 64, [[30, 58], [70, 54]], { tags: ['w'] })) if (u.type.vehicle) u.maxHp = u.hp = 300; // angeschlagen, kommt allein ohne Begleitpanzer });
     w(240, () => { this._ferry(g, 'Zweite Fähre: Verwundete raus, Munition und ein T-34 rein.'); g.spawn(S.t34, 'UA', FERRY[0] - 4, FERRY[1] + 12, { heading: -Math.PI / 2 }); });
     w(260, () => wave(g, 'RU', [[E.rifle, 4], [E.mg, 1]], 120, 140, [[114, 100], [100, 56]], { tags: ['w'] }));
     w(340, () => { g.say('Sorokin', 'Das ist der stärkste Angriff bisher – haltet die Obergeschosse!', 5); wave(g, 'RU', [[E.rifle, 4], [E.smg, 1], [E.at, 1]], -34, 60, [[40, 58], [78, 50]], { tags: ['w'] }); });
