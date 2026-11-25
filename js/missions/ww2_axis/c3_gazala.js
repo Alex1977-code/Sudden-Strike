@@ -99,7 +99,7 @@ export default {
     if (!this.counter && near(g, 'UA', BOX[0], BOX[1], 70).length >= 3) {
       this.counter = true;
       g.alert('⚠ Gegenangriff: Panzerreserve aus Westen!', 4);
-      wave(g, [['ww2_sherman', 3], [uk.rifle, 5], [uk.at, 1]], -250, 20, [[-160, 14], [BOX[0], BOX[1]]], { tags: ['w'] });
+      wave(g, [['ww2_sherman', 3], [uk.rifle, 4], [uk.at, 1]], -250, 20, [[-160, 14], [BOX[0], BOX[1]]], { tags: ['w'] });
     }
     const laneMines = g.units.filter((u) => u.alive && u.side === 'RU' && u.type.mineKind && Math.hypot(u.pos.x - (BOX[0] + 55), u.pos.z - (BOX[1] + 2)) < 8).length;
     setText(g, 'lanes', laneMines ? `Gasse durch den Minengürtel räumen – noch ${laneMines} Minenfelder` : 'Gasse durch den Minengürtel ist geräumt');

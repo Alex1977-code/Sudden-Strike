@@ -569,29 +569,26 @@ export class Effects {
   }
   _waterExplosion(x, y, z, size, sc) {
     const m = this.mul;
-    // V3-R: Partikel sind unbeleuchtet – nachts (weather → nightF) auf mondlichtgraues Blau abdunkeln, damit die Fontäne
-    // sichtbar bleibt, aber nicht wie eine leuchtend weiße Wolke wirkt (tagsüber unverändert)
-    const nf = Math.min(1, Math.max(0, this.nightF || 0)), kR = 1 - 0.42 * nf, kG = 1 - 0.36 * nf, kB = 1 - 0.26 * nf;
     this._sprite(x, y + 1, z, 7 * size, 0.12, this.glowTex, 1.6, 1.8, 2.2, 1.4);
     // Wassersaeule
     const nC = Math.floor((12 + 12 * sc) * m);
     for (let i = 0; i < nC; i++) {
       const a = Math.random() * 6.28, r = Math.random() * 1.2 * size, k = i / nC;
       this.smoke.emit(x + Math.cos(a) * r, y + k * 2 * size, z + Math.sin(a) * r, Math.cos(a) * rand(0.5, 2.5), rand(10, 20) * size * (0.6 + k * 0.5), Math.sin(a) * rand(0.5, 2.5),
-        rand(2, 4) * size, rand(1.2, 2.2), 0.88 * kR, 0.94 * kG, kB, 0.8, { grow: 1.5, drag: 0.5, grav: 14 });
+        rand(2, 4) * size, rand(1.2, 2.2), 0.88, 0.94, 1, 0.8, { grow: 1.5, drag: 0.5, grav: 14 });
     }
     // Gischt (Tropfen)
     for (let i = 0; i < Math.floor((14 + 14 * sc) * m); i++) {
       const a = Math.random() * 6.28, sp = rand(2, 7) * size;
-      this.smoke.emit(x, y + 1, z, Math.cos(a) * sp, rand(8, 18) * size, Math.sin(a) * sp, rand(0.7, 1.4), rand(0.9, 1.7), 0.95 * kR, 0.98 * kG, kB, 0.85, { grow: 1.2, drag: 0.3, grav: 20 });
+      this.smoke.emit(x, y + 1, z, Math.cos(a) * sp, rand(8, 18) * size, Math.sin(a) * sp, rand(0.7, 1.4), rand(0.9, 1.7), 0.95, 0.98, 1, 0.85, { grow: 1.2, drag: 0.3, grav: 20 });
     }
     // Gischt-Ring am Wasser
     const nR = Math.floor((14 + 10 * sc) * m);
     for (let i = 0; i < nR; i++) {
       const a = (i / nR) * 6.28, sp = rand(5, 9) * size;
-      this.smoke.emit(x + Math.cos(a) * 2, y + 0.3, z + Math.sin(a) * 2, Math.cos(a) * sp, rand(0.5, 2), Math.sin(a) * sp, rand(2, 3.4) * size, rand(1.2, 2), 0.93 * kR, 0.97 * kG, kB, 0.6, { grow: 1.7, drag: 2, fadeIn: 0.05 });
+      this.smoke.emit(x + Math.cos(a) * 2, y + 0.3, z + Math.sin(a) * 2, Math.cos(a) * sp, rand(0.5, 2), Math.sin(a) * sp, rand(2, 3.4) * size, rand(1.2, 2), 0.93, 0.97, 1, 0.6, { grow: 1.7, drag: 2, fadeIn: 0.05 });
     }
-    _col.setRGB(0.9 * kR, 1.1 * kG, 1.3 * kB);
+    _col.setRGB(0.9, 1.1, 1.3);
     this._ring(x, y, z, 1.5, 6 * size + 3, 0.6, _col, 0.8);
     this._ring(x, y, z, 0.8, 3.5 * size + 2, 0.9, _col, 0.5);
     this.fire.emit(x, y + 1, z, 0, 0, 0, 5 * size, 0.1, 0.9, 1, 1, 0.8);

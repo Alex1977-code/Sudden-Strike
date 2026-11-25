@@ -438,6 +438,14 @@ export class HUD {
     if (this.attackPing) { this.attackPing.t -= dt; if (this.attackPing.t <= 0) this.attackPing = null; }
     this.mmT -= dt;
     if (this.mmT <= 0) { this.mmT = 0.15; this.drawMinimap(); this._updateAbilityState(); this._refreshSelHp(); }
+    // V3-R: Schnellwahlgruppen immer über der (je nach Auswahl ein- bis dreizeiligen) Befehlsleiste – feste CSS-Abstände
+    // überlappten am Handy Auswahl bzw. Befehle
+    this.grpT = (this.grpT || 0) - dt;
+    if (this.grpT <= 0 && this.groupsEl) {
+      this.grpT = 0.3;
+      const bb = document.getElementById('bottombar'), r = bb?.getBoundingClientRect();
+      if (r && r.height > 0) { const v = Math.round(innerHeight - r.top + 6) + 'px'; if (this.groupsEl.style.bottom !== v) this.groupsEl.style.bottom = v; }
+    }
     this.drawOverlay();
     g.satnet?.hudUpdate?.(this, dt); // V3-SL: Netzstatus oben, Terminal-Symbole, Netzradius-Ring
     this.timerEl.textContent = g.countdown ? `${g.countdown.label} ${fmtTime(g.countdown.t)}` : '';

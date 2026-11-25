@@ -147,6 +147,7 @@ body.touch .key { display: none; }
   #minimap { width: 120px; height: 120px; }
   #bottombar { right: calc(140px + var(--safe-r)); }
   #orders button, #abilities button { width: 48px; height: 48px; font-size: 17px; }
+  #orders { flex-wrap: wrap; max-width: 100%; }
   #abilities button { width: 54px; }
   #orders button span, #abilities button span { font-size: 9px; }
   .sel-unit { width: 38px; height: 38px; font-size: 18px; }
@@ -179,6 +180,7 @@ body.touch .key { display: none; }
   #selection { min-height: 44px; min-width: 0; max-width: 100%; padding: 4px; }
   #selection:empty { display: none; }
   #orders button, #abilities button { width: 46px; height: 46px; font-size: 16px; }
+  #orders { flex-wrap: wrap; max-width: 100%; } /* V3-R: mit „Angriff“/„Kette“ (Touch) nicht unter die Minikarte */
   #abilities button { width: 52px; }
   #orders button span, #abilities button span { font-size: 9px; }
   .sel-unit { width: 36px; height: 36px; font-size: 17px; }

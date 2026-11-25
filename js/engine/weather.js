@@ -612,7 +612,6 @@ export class Weather {
     const fx = this.g.effects; if (fx) fx.flashMul = 1 + 0.5 * nightF; // gedämpft: sonst überstrahlen Explosionen nachts (v. a. über Wasser)
     // Scheinwerfer/Kennzeichen
     if (this.g.terrain?.waterNightU) this.g.terrain.waterNightU.value = nightF;
-    if (this.g.effects) this.g.effects.nightF = nightF; // V3-R: Wassergischt nachts mondlichtgrau statt reinweiß
     this._night(nightF);
   }
   _night(nf) {

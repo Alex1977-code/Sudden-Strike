@@ -8,6 +8,7 @@ const LIMIT = 1150;
 const START_FUEL = 85;      // s Fahrzeit: reicht für den Vorstoß, für den Rückzug kaum
 const CLEAR_AT = 330;       // s – das Wetter klart auf
 const NEED = 14;            // V3-R: 12 → 14 Mann am Sammelpunkt
+const RET_HOLD = 50;        // V3-R: s nach dem Rückzugsbefehl, bis der Verband abmarschiert (vorher Sieg ~35 s nach dem Befehl ohne Verlust)
 
 const feats = [
   river([[26, -270], [30, -120], [18, 0], [34, 120], [30, 270]], 20, { depth: 2.4, bank: 4, name: 'Ourthe' }),
@@ -94,11 +95,11 @@ export default {
       this.phase = 'retreat'; g.setObjective('held', 'done');
       const o = g.objectives.find((q) => q.id === 'retreat'); if (o) { o.hidden = false; g.emit('objectives'); }
       this.exitM.hidden = false;
-      g.say('Lessing', 'Der Himmel ist klar, die Jabos kommen. Rückzug! Zurück zum Sammelpunkt, Gruppe um Gruppe. Verwundete und Sprit zuerst.', 7);
+      g.say('Lessing', 'Der Himmel ist klar, die Jabos kommen. Rückzug! Zurück zum Sammelpunkt, Gruppe um Gruppe. Verwundete und Sprit zuerst. Abmarsch vom Sammelpunkt in einer knappen Minute – bis dahin dort halten!', 8);
       g.alert('Rückzug zum Sammelpunkt im Osten!', 5);
-      this.nextStrike = t + 4;
+      this.nextStrike = t + 8; this.retT = t;
       // V3-R (Balance, Automatik siegte nach 365 s ohne einen Verlust): Panzerspitze der Gegenseite stößt von Norden in den Rückzugsweg
-      g.later(6, () => { if (g.ended) return; g.alert('⚠ Gegnerische Panzer stoßen von Norden in den Rückzugsweg!', 4); wave(g, [['ww2_sherman', 2], [us.rifle, 6], [us.lmg, 1]], 150, -250, [[160, -80], [190, 0], [EXIT[0], EXIT[1]]], { tags: ['w'] }); wave(g, [['ww2_m10', 1], [us.rifle, 4]], -120, 4, [[-20, 0], [60, 0], [140, 4]], { tags: ['w'] }); });
+      g.later(6, () => { if (g.ended) return; g.alert('⚠ Gegnerische Panzer stoßen von Norden in den Rückzugsweg!', 4); wave(g, [['ww2_sherman', 1], [us.rifle, 5], [us.lmg, 1]], 150, -250, [[160, -80], [190, 0], [EXIT[0], EXIT[1]]], { tags: ['w'] }); });
     }
     if (this.phase === 'attack' || this.phase === 'held') for (const u of g.units) if (u.alive && u.side === 'UA' && u.pos.x < 45) this.fwd.add(u.id);
     // Wetter klart auf → alliierte Jagdbomber (Aircraft.js über die Fähigkeiten, Seite RU)
@@ -110,15 +111,16 @@ export default {
         let best = ours[0], bn = -1;
         for (const u of ours) { const n = ours.filter((v) => Math.hypot(v.pos.x - u.pos.x, v.pos.z - u.pos.z) < 14).length + (u.type.vehicle ? 2 : 0); if (n > bn) { bn = n; best = u; } }
         foeStrike(g, 'ww2_airstrike_us', best.pos.x, best.pos.z);
-        this.strikes++; this.nextStrike = t + 20; // V3-R: 32 → 20 s
+        this.strikes++; this.nextStrike = t + 36; // V3-R: 32 → 36 s (Sammelpunkt muss gehalten werden)
       }
     }
     if (this.phase === 'retreat') {
       const inExit = near(g, 'UA', EXIT[0], EXIT[1], 36).filter((u) => this.fwd.has(u.id));
       const tanksIn = inExit.filter((u) => u.tags.has('tank')).length;
-      setText(g, 'retreat', `Rückzug: ${inExit.length}/${NEED} Mann (davon ${Math.min(tanksIn, 2)}/2 Panzer) am Sammelpunkt im Osten`);
+      const wait = Math.max(0, RET_HOLD - (t - this.retT)); // V3-R: Abmarsch erst nach RET_HOLD s – bis dahin Jabos und Verfolger
+      setText(g, 'retreat', `Rückzug: ${inExit.length}/${NEED} Mann (davon ${Math.min(tanksIn, 2)}/2 Panzer) am Sammelpunkt im Osten` + (wait > 0 ? ` – Abmarsch in ${mmss(wait)}` : ''));
       if (g.objState('truck') === 'open' && !alive(g, 'UA', (u) => u.tags.has('truck')).length) g.setObjective('truck', 'failed');
-      if (inExit.length >= NEED && tanksIn >= 2) {
+      if (inExit.length >= NEED && tanksIn >= 2 && wait <= 0) {
         g.setObjective('retreat', 'done');
         if (g.objState('truck') === 'open') g.setObjective('truck', inExit.some((u) => u.tags.has('truck')) ? 'done' : 'failed');
         g.win('Die Brücke ist gefallen, doch der Vorstoß ist nach wenigen Tagen zu Ende: Sprit, Wetter und Luftüberlegenheit der Gegenseite entscheiden. Es war die letzte große Offensive im Westen – tausende Tote auf beiden Seiten und in den Dörfern der Ardennen, und danach der unaufhaltsame Rückweg.');
