@@ -38,7 +38,7 @@ export default {
   env: { season: 'winter', sunElev: 9, sunAzim: 170, fogDensity: 0.0034 },
   weather: { type: 'snow', intensity: 0.5, changes: [{ at: 180, type: 'snow', intensity: 0.95, fade: 40 }, { at: 700, type: 'snow', intensity: 0.4, fade: 60 }] },
   time: { start: '09:10', speed: 2 },
-  camera: { x: 0, z: 150, dist: 105 },
+  camera: { x: 0, z: 120, dist: 150 },
   abilities: ['ww2_katyusha', { id: 'ww2_artillery', charges: 3 }],
 
   setup(g) {

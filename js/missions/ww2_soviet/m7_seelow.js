@@ -9,7 +9,7 @@ const LIMIT = 1500;
 const LIGHTS = [[-150, -170], [-150, -70], [-150, 40], [-150, 150]];
 
 export default placeMission(PLACE_BY_ID.seelow, {
-  structures: true, markers: false, defender: 'RU',
+  structures: false, markers: false, defender: 'RU',
   id: 'sw7', era: 'ww2', difficulty: 3,
   title: 'Seelower Höhen',
   place: 'Oderbruch · Seelower Höhen (angelehnt an die Seelower Höhen)',
@@ -21,7 +21,7 @@ export default placeMission(PLACE_BY_ID.seelow, {
     { s: 'Generaloberst Kusnezow', t: 'Die Männer auf den Höhen sind überwiegend Jugendliche und Volkssturm, dazwischen kampferprobte Verbände. Ihr Krieg ist verloren, das weiß hier jeder. Wir müssen trotzdem durch. Seelow ist das Ziel.' },
   ],
   objectivesPreview: ['Die Alte Oder überqueren und das Westufer sichern', 'Die Höhenstellung durchbrechen (alle Stützpunkte)', 'Seelow einnehmen', 'Optional: Die 8,8-cm-Flak auf den Höhen ausschalten'],
-  forces: ['10× T-34/85', '2× IS-2', '2× SU-100', '14× Schützen', '8× PPSch', '4× DP-28', '3× Panzerbüchse', '4× Pioniere', '1× Offizier', '2× Sanitäter', '2× BM-13', 'Verstärkung: 4× T-34/85 nach 6 Minuten', 'Fähigkeiten: Katjuscha, Artillerie, Schlachtflieger (Il-2)'],
+  forces: ['13× T-34/85', '3× IS-2', '2× SU-100', '14× Schützen', '8× PPSch', '4× DP-28', '3× Panzerbüchse', '4× Pioniere', '1× Offizier', '2× Sanitäter', '2× BM-13', 'Verstärkung: 4× T-34/85 nach 6 Minuten', 'Fähigkeiten: Katjuscha, Artillerie, Schlachtflieger (Il-2)'],
   weather: { type: 'fog', intensity: 0.7, changes: [{ at: 600, type: 'fog', intensity: 0.4, fade: 120 }, { at: 1100, type: 'overcast', intensity: 0.4, fade: 120 }] },
   time: { start: '03:20', speed: 3 },
   camera: { x: 240, z: -40, dist: 130 },
@@ -36,7 +36,7 @@ export default placeMission(PLACE_BY_ID.seelow, {
     ];
     setupMines(this, g, [[40, -120, 20], [60, 10, 20], [30, 120, 18], [-60, -30, 18], [-70, 90, 18], [-50, -190, 18], [-96, 30, 14]]);
     // Eigene Kräfte (Ostufer der Alten Oder)
-    g.spawnGroup([[S.t85, 10], [S.is2, 2], [S.su100, 2]], 'UA', 268, -90, { spacing: 12, cols: 5, heading: Math.PI / 2, tags: ['tank'] });
+    g.spawnGroup([[S.t85, 13], [S.is2, 3], [S.su100, 2]], 'UA', 268, -90, { spacing: 12, cols: 5, heading: Math.PI / 2, tags: ['tank'] });
     g.spawnGroup([[S.rifle, 14], [S.smg, 8], [S.dp, 4], [S.at, 3], [S.eng, 4], [S.off, 1], [S.med, 2]], 'UA', 262, -10, { spacing: 3, cols: 10, heading: Math.PI / 2 });
     g.spawn(S.bm13, 'UA', 282, 20, { heading: Math.PI / 2 }); g.spawn(S.bm13, 'UA', 282, 34, { heading: Math.PI / 2 });
     // Brückenkopf am Westufer der Alten Oder
@@ -45,16 +45,16 @@ export default placeMission(PLACE_BY_ID.seelow, {
     g.spawn(E.pak, 'RU', 96, -24, { heading: Math.PI / 2, ai: { mode: 'hold' }, tags: ['line', 'bank'] });
     // Höhenstellung (Steilrand) – Pak, MG, Flak, Infanterie
     for (const z of [-220, -150, -90, -30, 30, 90, 150, 210]) {
-      if (z % 60 === 30 || z === -150) g.spawn(E.pak, 'RU', -152, z, { heading: Math.PI / 2, ai: { mode: 'hold' }, tags: ['line'] });
-      g.spawnGroup([[E.rifle, 4], [E.at, 1]], 'RU', -156, z + 10, { spacing: 3, cols: 3, ai: { mode: 'guard', radius: 18 }, tags: ['line'] });
+      if (z === -150 || z === -30 || z === 90 || z === 210) g.spawn(E.pak, 'RU', -152, z, { heading: Math.PI / 2, ai: { mode: 'hold' }, tags: ['line'] });
+      g.spawnGroup([[E.rifle, 3], [E.at, 1]], 'RU', -156, z + 10, { spacing: 3, cols: 3, ai: { mode: 'guard', radius: 18 }, tags: ['line'] });
     }
     for (const z of [-190, -60, 60, 180]) g.spawn(E.mgnest, 'RU', -146, z, { heading: Math.PI / 2, tags: ['line'] });
-    for (const z of [-110, 10, 130]) g.spawn(E.flak88, 'RU', -176, z, { heading: Math.PI / 2, ai: { mode: 'hold' }, tags: ['line', 'flak'] });
+    for (const z of [-90, 100]) g.spawn(E.flak88, 'RU', -176, z, { heading: Math.PI / 2, ai: { mode: 'hold' }, tags: ['line', 'flak'] });
     g.spawn(E.mortar, 'RU', -190, -60, { ai: { mode: 'guard', radius: 14 } }); g.spawn(E.mortar, 'RU', -190, 80, { ai: { mode: 'guard', radius: 14 } });
     // Bruch: vorgeschobene Posten am Hauptgraben
-    for (const z of [-170, -80, 20, 120]) g.spawnGroup([[E.rifle, 3], [E.mg, 1]], 'RU', -88, z, { spacing: 3, ai: { mode: 'guard', radius: 18 }, tags: ['line'] });
+    for (const z of [-170, 20]) g.spawnGroup([[E.rifle, 3], [E.mg, 1]], 'RU', -88, z, { spacing: 3, ai: { mode: 'guard', radius: 18 }, tags: ['line'] });
     // Seelow
-    g.spawnGroup([[E.rifle, 6], [E.mg, 2], [E.at, 2]], 'RU', SEELOW[0], SEELOW[1], { spacing: 5, cols: 5, ai: { mode: 'guard', radius: 34 }, tags: ['town'] });
+    g.spawnGroup([[E.rifle, 4], [E.mg, 1], [E.at, 1]], 'RU', SEELOW[0], SEELOW[1], { spacing: 5, cols: 5, ai: { mode: 'guard', radius: 34 }, tags: ['town'] });
     g.spawn(E.panther, 'RU', SEELOW[0] - 14, SEELOW[1] + 18, { ai: { mode: 'guard', radius: 30 }, tags: ['town'] });
 
     g.addObjective('bank', 'Die Alte Oder überqueren und das Westufer sichern');

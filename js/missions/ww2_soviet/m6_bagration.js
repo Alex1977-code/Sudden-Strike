@@ -44,7 +44,7 @@ export default {
   env: { season: 'summer', sunElev: 20, sunAzim: 140, fogDensity: 0.0038 },
   weather: { type: 'fog', intensity: 0.45, changes: [{ at: 300, type: 'clear', intensity: 0, fade: 120 }] },
   time: { start: '04:20', speed: 4 },
-  camera: { x: 30, z: -105, dist: 110 },
+  camera: { x: 30, z: -80, dist: 150 },
   abilities: [{ id: 'ww2_airstrike_su', charges: 2 }, { id: 'ww2_artillery', charges: 3 }],
 
   setup(g) {

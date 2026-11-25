@@ -23,7 +23,7 @@ export default placeMission(PLACE_BY_ID.brest, {
   weather: { type: 'fog', intensity: 0.5, changes: [{ at: 240, type: 'clear', intensity: 0, fade: 90 }] },
   env: { season: 'summer', sunElev: 8, sunAzim: 70, fogDensity: 0.004 },
   time: { start: '03:50', speed: 5 },
-  camera: { x: 0, z: -4, dist: 120 },
+  camera: { x: 0, z: -4, dist: 150 },
   abilities: [],
 
   setup(g) {
