@@ -72,7 +72,7 @@ export default {
     g.spawnGroup([[E.rifle, 4], [E.mg, 1]], 'RU', 70, -160, { spacing: 4, ai: { mode: 'guard', radius: 20 }, tags: L });
     g.spawn(E.flak37, 'RU', 20, 80, { ai: { mode: 'guard', radius: 18 } });
     // Knotenpunkt
-    g.spawnGroup([[E.rifle, 7], [E.mg, 2], [E.at, 2], [E.sniper, 1]], 'RU', J[0], J[1], { spacing: 5, cols: 6, ai: { mode: 'guard', radius: 32 }, tags: ['junction'] });
+    g.spawnGroup([[E.rifle, 5], [E.mg, 2], [E.at, 2]], 'RU', J[0], J[1], { spacing: 5, cols: 6, ai: { mode: 'guard', radius: 32 }, tags: ['junction'] });
     g.spawn(E.pz4, 'RU', J[0] + 20, J[1] - 16, { ai: { mode: 'hold' }, tags: ['junction'] });
     g.spawn(E.pak, 'RU', J[0] + 34, J[1] + 6, { heading: Math.PI / 2, ai: { mode: 'hold' }, tags: ['junction'] });
     // Streife auf dem Bahndamm (vor dem Zug)

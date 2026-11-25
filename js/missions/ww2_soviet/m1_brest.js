@@ -42,7 +42,7 @@ export default placeMission(PLACE_BY_ID.brest, {
     g.spawn(S.ba64, 'UA', 30, -4);
     // Gegner: Ausbruchsriegel im Osten (steht von Anfang an, greift nicht an)
     g.spawn(E.mgnest, 'RU', 196, 112, { heading: -2.2 });
-    g.spawnGroup([[E.rifle, 5], [E.mg, 1]], 'RU', 182, 108, { spacing: 4, cols: 5, ai: { mode: 'guard', radius: 24 }, tags: ['exit'] });
+    g.spawnGroup([[E.rifle, 4], [E.mg, 1]], 'RU', 182, 108, { spacing: 4, cols: 5, ai: { mode: 'guard', radius: 24 }, tags: ['exit'] });
     g.spawn(E.pak, 'RU', 222, 126, { heading: -2.4, ai: { mode: 'guard', radius: 20 }, tags: ['exit'] });
 
     g.addObjective('hold', 'Die Zitadelle halten, bis der Ausbruch möglich ist');

@@ -27,6 +27,31 @@ const SLOT_KEY = (s) => 'steppensturm.save.v1.' + s;
 export const SAVE_SLOTS = ['1', '2', '3', 'quick', 'auto'];
 export const AUTOSAVE_EVERY = 300; // Spielsekunden
 
+// Aufrufer, deren Zufallsverbrauch nur die Optik betrifft (Dateipfade im Stacktrace)
+const VISUAL_CALLER = /vendor\/three\/|three\.module|\/models\.js|\/effects\.js|\/audio\.js|\/music\.js|\/settlement\.js|\/terrain\.js/;
+// Erster Aufrufer außerhalb von savegame.js/util.js (rand) – V8: strukturierte Aufrufstellen, sonst Stack-Text
+const SKIP_FILE = /savegame\.js|\/util\.js/;
+const visualCaller = (() => {
+  if (typeof Error.captureStackTrace === 'function') {
+    const holder = {}, prep = (_, cs) => cs;
+    return function visualCaller() {
+      const pst = Error.prepareStackTrace, lim = Error.stackTraceLimit;
+      Error.prepareStackTrace = prep; Error.stackTraceLimit = 5;
+      Error.captureStackTrace(holder, visualCaller);
+      const cs = holder.stack;
+      Error.prepareStackTrace = pst; Error.stackTraceLimit = lim;
+      if (!Array.isArray(cs)) return false;
+      for (const c of cs) { const f = c.getFileName() || ''; if (SKIP_FILE.test(f)) continue; return VISUAL_CALLER.test(f); }
+      return false;
+    };
+  }
+  return function visualCaller() {
+    const lim = Error.stackTraceLimit; Error.stackTraceLimit = 6;
+    const st = new Error().stack || ''; Error.stackTraceLimit = lim;
+    for (const l of st.split('\n')) { if (!l || l === 'Error' || SKIP_FILE.test(l) || /visualCaller/.test(l)) continue; return VISUAL_CALLER.test(l); }
+    return false;
+  };
+})();
 const hashSeed = (a, b) => { let h = (a >>> 0) ^ Math.imul(b + 0x9e3779b9, 0x85ebca6b); h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35); return ((h ^ (h >>> 16)) >>> 0) || 1; };
 
 // Alle Methoden eines Objekts (Instanz + Prototypkette) so umhüllen, dass darin der native Zufall gilt
@@ -54,6 +79,9 @@ export class SimRecorder {
     this.on = false; this.armed = null; this.replaying = false;
     this.state = 1; this.stack = []; this.inSim = 0;
     this.next = () => {
+      // Optik-Aufrufer (three.js-UUIDs neuer Objekte, Modelle, Effekte, Audio) nutzen den nativen Zufall: ihre Anzahl hängt von
+      // Caches/Pools/Qualität ab (z. B. kalte Geometrie-Caches nach dem Neuladen der Seite) und würde die Simulation verschieben.
+      if (visualCaller()) return NATIVE();
       let a = (this.state = (this.state + 0x6d2b79f5) >>> 0);
       a = Math.imul(a ^ (a >>> 15), a | 1);
       a ^= a + Math.imul(a ^ (a >>> 7), a | 61);

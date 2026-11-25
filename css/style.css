@@ -1268,6 +1268,12 @@ body.reduce-motion .screen, body.reduce-motion .screen *, body.reduce-motion .sc
 .award-toast.hidden, .ui-toast.hidden { display: none; }
 .brief-level { display: flex; align-items: center; gap: 8px; margin-right: 8px; }
 .brief-level .bl-lbl { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--m-muted); }
-.brief-level .seg button { min-height: 40px; padding: 6px 10px; font-size: 12.5px; }
-@media (max-width: 760px) { .brief-level .bl-lbl span { display: none; } .brief-level .seg button { padding: 6px 7px; min-width: 40px; font-size: 11.5px; } }
+.brief-level .seg { flex-wrap: nowrap; }
+.brief-level .seg button { min-height: 44px; min-width: 44px; padding: 6px 10px; font-size: 12.5px; }
+.briefing .scr-foot { flex-wrap: wrap !important; }
+@media (max-width: 900px) {
+  .briefing .brief-level { order: -1; flex: 1 1 100%; justify-content: center; margin: 0 0 4px; }
+  .brief-level .bl-lbl span { display: none; }
+  .brief-level .seg button { padding: 6px 8px; font-size: 11.5px; }
+}
 .mm-sub { grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); }

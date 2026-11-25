@@ -83,7 +83,7 @@ export default {
       g.say('Gromow', 'Das Dorf ist unser. Die Bewohner kommen aus den Kellern. Jetzt gleich der Gegenstoß – Stellung beziehen!', 6);
       g.later(8, () => {
         this.counterSpawned = true;
-        wave(g, 'RU', [[E.pz4, 2], [E.rifle, 8], [E.mg, 2]], 0, -200, [[0, -130], [0, -82]], { tags: ['counter'], aggro: 60 });
+        wave(g, 'RU', [[E.pz4, 1], [E.rifle, 6], [E.mg, 1]], 0, -200, [[0, -130], [0, -82]], { tags: ['counter'], aggro: 60 });
         g.alert('Gegenstoß von Norden!', 4);
       });
     }

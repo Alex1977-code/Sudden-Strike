@@ -55,8 +55,9 @@ export default {
     g.later(1, () => g.say('Sova', 'Drohne startet. Wählt die Aufklärungsdrohne und schickt sie nach Norden die Straße entlang.', 6));
     g.later(8, () => g.say('Sova', 'Javelin-Teams in die Waldränder links und rechts der Straße. Im Wald seid ihr schwer zu entdecken.', 6));
     g.later(16, () => g.say('Sova', 'Tipp: Ziehen mit der Maus wählt mehrere Einheiten, Rechtsklick gibt Befehle. Am Handy: antippen und Ziel antippen.', 6));
-    g.later(75, () => this.spawnWave(g, ['btr', 'truck', 'truck', 'bmp', 'truck', 't72', 'truck']));
-    g.later(210, () => this.spawnWave(g, ['t72', 'bmp', 'truck', 'truck', 'btr', 'truck', 't72']));
+    const dt = (s) => g.diff?.t(s) ?? s; // V3-X: Schwierigkeitsgrad – Zeit bis zur gegnerischen Verstärkung
+    g.later(dt(75), () => this.spawnWave(g, ['btr', 'truck', 'truck', 'bmp', 'truck', 't72', 'truck']));
+    g.later(dt(210), () => this.spawnWave(g, ['t72', 'bmp', 'truck', 'truck', 'btr', 'truck', 't72']));
     g.later(195, () => { g.addAbilityCharges('artillery', 1); g.say('Koval', 'Die Artillerie hat nachgeladen – ein weiterer Feuerschlag steht bereit.', 4); });
     g.later(150, () => {
       g.spawn('orlan', 'RU', 0, -125, { ai: { mode: 'loiter', center: [0, -10], radius: 45 } });

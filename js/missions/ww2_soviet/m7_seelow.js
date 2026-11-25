@@ -45,7 +45,7 @@ export default placeMission(PLACE_BY_ID.seelow, {
     g.spawn(E.pak, 'RU', 96, -24, { heading: Math.PI / 2, ai: { mode: 'hold' }, tags: ['line', 'bank'] });
     // Höhenstellung (Steilrand) – Pak, MG, Flak, Infanterie
     for (const z of [-220, -150, -90, -30, 30, 90, 150, 210]) {
-      g.spawn(E.pak, 'RU', -152, z, { heading: Math.PI / 2, ai: { mode: 'hold' }, tags: ['line'] });
+      if (z % 60 === 30 || z === -150) g.spawn(E.pak, 'RU', -152, z, { heading: Math.PI / 2, ai: { mode: 'hold' }, tags: ['line'] });
       g.spawnGroup([[E.rifle, 4], [E.at, 1]], 'RU', -156, z + 10, { spacing: 3, cols: 3, ai: { mode: 'guard', radius: 18 }, tags: ['line'] });
     }
     for (const z of [-190, -60, 60, 180]) g.spawn(E.mgnest, 'RU', -146, z, { heading: Math.PI / 2, tags: ['line'] });

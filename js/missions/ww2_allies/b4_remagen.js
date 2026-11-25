@@ -26,9 +26,9 @@ const mission = placeMission(PLACE, {
     { s: 'Sergeant Kowal', t: 'Wenn wir drüben sind, holt sich die Gegenseite die Brücke wieder: Panzer, Infanterie, Artillerie. Wir brauchen den Brückenkopf, bis Verstärkung nachrückt. Die Brücke muss stehen – an beiden Enden.' },
   ],
   objectivesPreview: ['Alle drei Sprengladungen entschärfen (Pioniere)', 'Mit mindestens 8 Mann das Ostufer erreichen', 'Brückenkopf halten (7 Minuten)', 'Optional: Tunnelstellung der Erpeler Ley ausschalten', 'Optional: Mindestens 2 Panzer bringen die Brücke über'],
-  forces: ['12× Rifleman', '4× Thompson-Schütze', '4× BAR-Schütze', '3× Bazooka-Team', '4× Pionier', '1× Offizier', '1× Sanitäter', '1× Mörsertrupp', '3× Sherman (76 mm)', '1× M10', '2× Halbkette M3', 'Fähigkeiten: Artillerie, Nebel, Jabo-Angriff'],
+  forces: ['12× Rifleman', '4× Thompson-Schütze', '4× BAR-Schütze', '3× Bazooka-Team', '4× Pionier', '1× Offizier', '1× Sanitäter', '1× Mörsertrupp', '4× Sherman (76 mm)', '1× M10', '2× Halbkette M3', 'Fähigkeiten: Artillerie, Nebel, Jabo-Angriff'],
   weather: { type: 'overcast', intensity: 0.3 }, time: { start: '15:30', speed: 3 },
-  camera: { x: -100, z: -10, dist: 110, yaw: -1.57 },
+  camera: { x: -96, z: -10, dist: 150, yaw: -1.57 },
   abilities: [{ id: 'ww2_artillery', charges: 3 }, { id: 'smoke', charges: 3 }, { id: 'ww2_airstrike_us', charges: 1 }],
 
   setup(g) {
@@ -36,15 +36,14 @@ const mission = placeMission(PLACE, {
     // Eigene Truppen am Westufer
     g.spawnGroup([[us.rifle, 12], [us.smg, 4], [us.lmg, 4], [us.at, 3]], 'UA', -128, -72, { spacing: 3.3, cols: 6, heading: Math.PI / 2, tags: ['own'] });
     g.spawnGroup([[us.engineer, 4], [us.officer, 1], [us.medic, 1], [us.mortar, 1]], 'UA', -140, -62, { spacing: 3.5, cols: 4, heading: Math.PI / 2, tags: ['own'] });
-    g.spawnGroup([['ww2_sherman76', 3], ['ww2_m10', 1], ['ww2_m3ht', 2]], 'UA', -150, -80, { spacing: 9, cols: 3, heading: Math.PI / 2, tags: ['own', 'tank'] });
+    g.spawnGroup([['ww2_sherman76', 4], ['ww2_m10', 1], ['ww2_m3ht', 2]], 'UA', -150, -80, { spacing: 9, cols: 3, heading: Math.PI / 2, tags: ['own', 'tank'] });
     // Verteidiger am Westende: MG-Nester, Schützen, Brückenwache
     fort(g, 'ww2_mgnest', 'RU', -72, -12, { heading: -Math.PI / 2, tags: ['gar', 'wb'] }); fort(g, 'ww2_mgnest', 'RU', -72, 6, { heading: -Math.PI / 2, tags: ['gar', 'wb'] });
     fort(g, 'ww2_foxhole', 'RU', -86, -2, {}); fort(g, 'ww2_foxhole', 'RU', -94, -18, {});
-    g.spawnGroup([['ww2_de_rifle', 5], ['ww2_de_mg42', 1], ['ww2_de_mp40', 1]], 'RU', -76, -2, { spacing: 3.6, cols: 4, ai: { mode: 'guard', radius: 26 }, tags: ['gar', 'wb'] });
-    g.spawn('ww2_pak40', 'RU', -96, -10, { heading: -Math.PI / 2, ai: { mode: 'hold' }, tags: ['gar', 'wb'] });
+    g.spawnGroup([['ww2_de_rifle', 4], ['ww2_de_mg42', 1], ['ww2_de_panzer', 1]], 'RU', -76, -2, { spacing: 3.6, cols: 4, ai: { mode: 'guard', radius: 26 }, tags: ['gar', 'wb'] });
     // Auf und hinter der Brücke
     g.spawnGroup([['ww2_de_rifle', 4], ['ww2_de_mg42', 1], ['ww2_de_engineer', 2]], 'RU', 52, -2, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 20 }, tags: ['gar', 'mid'] });
-    g.spawn('ww2_flak37', 'RU', 150, -14, { heading: Math.PI, ai: { mode: 'hold' }, tags: ['gar', 'eb', 'flak'] }); g.spawn('ww2_flak37', 'RU', 150, 8, { heading: Math.PI, ai: { mode: 'hold' }, tags: ['gar', 'eb', 'flak'] });
+    g.spawn('ww2_flak37', 'RU', 150, -14, { heading: Math.PI, hpMul: 0.5, ai: { mode: 'hold' }, tags: ['gar', 'eb', 'flak'] }); g.spawn('ww2_flak37', 'RU', 150, 8, { heading: Math.PI, hpMul: 0.5, ai: { mode: 'hold' }, tags: ['gar', 'eb', 'flak'] });
     // Ostufer: Brückenturm, Uferstraße, Tunnelstellung der Erpeler Ley
     fort(g, 'ww2_mgnest', 'RU', 168, -14, { heading: Math.PI / 2, tags: ['gar', 'eb'] }); fort(g, 'ww2_mgnest', 'RU', 168, 8, { heading: Math.PI / 2, tags: ['gar', 'eb'] });
     fort(g, 'ww2_foxhole', 'RU', 176, -2, {}); fort(g, 'ww2_foxhole', 'RU', 186, 22, {});

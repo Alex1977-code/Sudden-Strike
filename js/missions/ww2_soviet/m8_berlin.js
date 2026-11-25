@@ -48,10 +48,10 @@ export default placeMission(PLACE_BY_ID.berlin, {
     g.spawn(E.trap, 'RU', -108, -58); g.spawn(E.trap, 'RU', -100, -48); g.spawn(E.trap, 'RU', -20, 18); g.spawn(E.trap, 'RU', -22, -18);
     g.spawnGroup([[E.rifle, 6], [E.at, 3], [E.mg, 2]], 'RU', -104, -36, { spacing: 4, cols: 5, ai: { mode: 'guard', radius: 26 } });
     g.spawnGroup([[E.rifle, 6], [E.at, 2], [E.sniper, 1]], 'RU', -78, -40, { spacing: 4, cols: 4, ai: { mode: 'guard', radius: 22 } }); // Schweizer Gesandtschaft
-    g.spawn(E.pz4, 'RU', -50, 6, { ai: { mode: 'hold' } }); g.spawn(E.stug, 'RU', -46, -16, { ai: { mode: 'hold' } });
+    g.spawn(E.pz4, 'RU', -50, 6, { ai: { mode: 'hold' } });
     g.spawn(E.flak88, 'RU', 0, 30, { heading: -Math.PI / 2, ai: { mode: 'hold' } });
     g.spawn(E.mgnest, 'RU', -10, -12, { heading: -Math.PI / 2 }); g.spawn(E.mgnest, 'RU', -10, 12, { heading: -Math.PI / 2 });
-    g.spawnGroup([[E.rifle, 10], [E.mg, 3], [E.at, 4], [E.smg, 3]], 'RU', RT[0] - 14, RT[1], { spacing: 5, cols: 8, ai: { mode: 'guard', radius: 36 }, tags: ['rt'] });
+    g.spawnGroup([[E.rifle, 8], [E.mg, 2], [E.at, 3], [E.smg, 2]], 'RU', RT[0] - 14, RT[1], { spacing: 5, cols: 8, ai: { mode: 'guard', radius: 36 }, tags: ['rt'] });
     g.spawnGroup([[E.rifle, 6], [E.mg, 1]], 'RU', RT[0] + 30, RT[1] - 8, { spacing: 4, cols: 4, ai: { mode: 'guard', radius: 28 }, tags: ['rt'] });
 
     g.addObjective('bridge', 'Die Moltkebrücke überqueren und das Ostufer sichern');

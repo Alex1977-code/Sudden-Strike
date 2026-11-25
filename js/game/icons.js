@@ -323,8 +323,17 @@ export function resolveIcon(name) {
   if (has(name)) return name;
   if (ALIAS[name] && has(ALIAS[name])) return ALIAS[name];
   if (KEY_MAP[name]) return KEY_MAP[name];
+  // Fähigkeiten der Epochen (ww2_*, af_*, m_*) ohne eigenen Eintrag: nach Namensbestandteil zuordnen
+  if (typeof name === 'string') for (const [re, k] of ABILITY_PATTERNS) if (re.test(name) && has(k)) return k;
   return 'unknown';
 }
+const ABILITY_PATTERNS = [
+  [/paradrop|airdrop|airborne/, 'airdrop'], [/medevac/, 'medic'], [/smoke|nebel(?!werfer)/, 'smoke'],
+  [/katyusha|nebelwerfer|grad|salvo|mlrs|tornado/, 'salvo'], [/iskander|kinzhal|kinschal|atacms|neptun|flamingo|kh101|storm|scalp|missile/, 'missile'],
+  [/fpv|lancet|molniya|kvn|fibre|glasfaser/, 'fpv'], [/lyutyi|shahed|geran|longrange/, 'delta'], [/hind|heli|mi24|ka52/, 'heli'],
+  [/airstrike|carpet|cas|su25|su34|su57|mig|f16|f35|b52|b2|mirage|kab|jdam|stuka|ju87|il2|p47|typhoon|prototype|jet/, 'plane'],
+  [/recon|scan|drone|uav|orlan/, 'scan'], [/arty|artillery|mortar|barrage|shell|howitzer/, 'demolish'], [/ambush/, 'ambush'], [/ew|jam|tobol/, 'ew'],
+];
 
 // Kategorie-/Rollen-Heuristik für Typen ohne iconKey und ohne Eintrag in KEY_MAP (z. B. neue Epochen)
 export function unitIconKey(type) {

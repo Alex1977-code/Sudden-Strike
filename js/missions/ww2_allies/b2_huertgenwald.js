@@ -53,8 +53,8 @@ export default {
     { s: 'Colonel Briggs', t: 'Der Gegner schießt mit Artillerie in die Baumwipfel. Die Granaten krepieren in der Luft, die Splitter kommen von oben – Deckung im Graben hilft kaum, nur Bewegung. Bleibt nicht im Wald stehen.' },
     { s: 'Sergeant Pruitt', t: 'Minen liegen auf dem Trail und an den Hängen, die Pioniere müssen vor. Bunker nehmt ihr mit Artillerie und Sprengladungen, nicht mit Gewehren. Und dann: Kommerscheidt halten, bis die Panzer über den Trail nachkommen.' },
   ],
-  objectivesPreview: ['Westwall-Bunker ausschalten (0/5)', 'Kommerscheidt einnehmen und gegen den Gegenangriff halten', 'Optional: Minen auf dem Kall-Trail räumen', 'Optional: Mindestens 24 Schützen kommen durch den Wald', 'Zeitlimit: 23 Minuten'],
-  forces: ['14× Rifleman', '4× Thompson-Schütze', '4× BAR-Schütze', '4× Bazooka-Team', '4× Pionier', '2× Sanitäter', '1× Offizier', '1× Mörsertrupp', '3× Sherman', '1× M10', 'Fähigkeiten: Artillerie, Nebel'],
+  objectivesPreview: ['Westwall-Bunker ausschalten (0/5)', 'Kommerscheidt einnehmen und gegen den Gegenangriff halten', 'Optional: Minen auf dem Kall-Trail räumen', 'Optional: Mindestens 20 Schützen kommen durch den Wald', 'Zeitlimit: 23 Minuten'],
+  forces: ['18× Rifleman', '4× Thompson-Schütze', '6× BAR-Schütze', '4× Bazooka-Team', '4× Pionier', '3× Sanitäter', '1× Offizier', '1× Mörsertrupp', '3× Sherman', '1× M10', 'Fähigkeiten: Artillerie, Nebel'],
   map: { size: 500, seed: 2200, season: 'autumn', palette: 'mud', terrainStyle: 'hills', relief: 9, baseHeight: 7, seaLevel: 0, scatterTrees: 20, features: feats },
   env: { season: 'autumn', sunElev: 22, sunAzim: 180, fogDensity: 0.0042 },
   weather: { type: 'rain', intensity: 0.55, changes: [{ at: 420, type: 'fog', intensity: 0.6, fade: 40 }] }, time: { start: '08:10', speed: 3 },
@@ -69,14 +69,14 @@ export default {
   setup(g) {
     this.t0 = g.time; this.bunk = 0; this.tTown = null; this.capT = 0; this.lostT = 0; this.mineT = 0; this.burstT = 18; this.warnedBurst = false; this.relief = false;
     // Eigene Truppen in Vossenack
-    g.spawnGroup([[us.rifle, 14], [us.smg, 4], [us.lmg, 4], [us.at, 4]], 'UA', -178, -24, { spacing: 3.2, cols: 6, heading: Math.PI / 2, tags: ['own'] });
-    g.spawnGroup([[us.engineer, 4], [us.officer, 1], [us.medic, 2], [us.mortar, 1]], 'UA', -196, -18, { spacing: 3.4, cols: 4, heading: Math.PI / 2, tags: ['own'] });
+    g.spawnGroup([[us.rifle, 18], [us.smg, 4], [us.lmg, 6], [us.at, 4]], 'UA', -178, -24, { spacing: 3.2, cols: 6, heading: Math.PI / 2, tags: ['own'] });
+    g.spawnGroup([[us.engineer, 4], [us.officer, 1], [us.medic, 3], [us.mortar, 1]], 'UA', -196, -18, { spacing: 3.4, cols: 4, heading: Math.PI / 2, tags: ['own'] });
     g.spawnGroup([['ww2_sherman', 3], ['ww2_m10', 1]], 'UA', -214, -22, { spacing: 8, cols: 2, heading: Math.PI / 2, tags: ['own', 'tank'] });
     // Westwall: Bunker (hpMul = geschwächte Altbauten), Höckerlinie, Draht, MG-Nester, Besatzung
     for (const [x, z, h, tag] of BUNK) {
-      g.spawn('ww2_bunker', 'RU', x, z, { heading: h + Math.PI / 2, hpMul: 0.3, tags: ['bunker', tag] });
+      g.spawn('ww2_bunker', 'RU', x, z, { heading: h + Math.PI / 2, hpMul: 0.15, tags: ['bunker', tag] });
       fort(g, 'ww2_mgnest', 'RU', x - 6, z + 7, { heading: Math.PI / 2, tags: [tag] });
-      g.spawnGroup([['ww2_de_rifle', 3], ['ww2_de_mg42', 1], ['ww2_de_mp40', 1], ['ww2_de_panzer', 1]], 'RU', x + 6, z - 3, { spacing: 3.4, cols: 3, ai: { mode: 'guard', radius: 26 }, tags: ['gar', tag] });
+      g.spawnGroup([['ww2_de_rifle', 2], ['ww2_de_mg42', 1], ['ww2_de_panzer', 1]], 'RU', x + 6, z - 3, { spacing: 3.4, cols: 3, ai: { mode: 'guard', radius: 26 }, tags: ['gar', tag] });
     }
     for (let k = -3; k <= 3; k++) { fort(g, 'ww2_tetrahedron', 'RU', -18, 24 + k * 6.5, { tags: ['dz'] }); fort(g, 'ww2_tetrahedron', 'RU', 44, 22 + k * 6.5, { tags: ['dz'] }); }
     for (let k = -2; k <= 2; k++) fort(g, 'ww2_barbedwire', 'RU', -24, 24 + k * 6, { tags: ['wire'] });
@@ -84,14 +84,14 @@ export default {
     for (const [x, z] of [[-12, 22], [-4, 23], [4, 23], [44, 18], [50, 18], [66, 14]]) fort(g, 'ww2_mines_at', 'RU', x, z, { mines: 3, tags: ['mine', 'trail'] });
     for (const [x, z] of [[-14, 6], [-16, 40], [52, 50], [60, -14], [94, 40], [140, -6]]) fort(g, 'ww2_mines_ap', 'RU', x, z, { mines: 4, tags: ['mine'] });
     // Besatzung des Ortes und der Hänge
-    g.spawnGroup([['ww2_de_rifle', 4], ['ww2_de_mg42', 1], ['ww2_de_mp40', 2]], 'RU', 106, 10, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 26 }, tags: ['gar', 'town'] });
-    g.spawnGroup([['ww2_de_rifle', 3], ['ww2_de_mg42', 1]], 'RU', 128, 22, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 24 }, tags: ['gar', 'town'] });
+    g.spawnGroup([['ww2_de_rifle', 3], ['ww2_de_mg42', 1], ['ww2_de_mp40', 1]], 'RU', 106, 10, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 26 }, tags: ['gar', 'town'] });
+    g.spawnGroup([['ww2_de_rifle', 2], ['ww2_de_mg42', 1]], 'RU', 128, 22, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 24 }, tags: ['gar', 'town'] });
     fort(g, 'ww2_mgnest', 'RU', 96, 26, { heading: Math.PI / 2, tags: ['town'] }); fort(g, 'ww2_foxhole', 'RU', 90, 6, { tags: ['town'] });
     g.spawn('ww2_pak40', 'RU', 124, 6, { heading: -Math.PI / 2, ai: { mode: 'hold' }, tags: ['gar', 'town'] });
     g.addObjective('bunk', `Westwall-Bunker ausschalten (0/${NBUNK})`);
     g.addObjective('town', 'Kommerscheidt einnehmen und halten');
     g.addObjective('mines', 'Panzerminen auf dem Kall-Trail räumen', { optional: true });
-    g.addObjective('burst', 'Mindestens 24 Schützen am Leben behalten', { optional: true });
+    g.addObjective('burst', 'Mindestens 20 Schützen am Leben behalten', { optional: true });
     g.later(3, () => g.say('Briggs', 'Vorwärts über den Trail! Pioniere zuerst an die Minen, die Bunker bekommen Artillerie.', 6));
     g.later(25, () => g.say('Pruitt', 'Hört auf die Einschläge: Wenn es über den Wipfeln kracht, sofort weiter – nicht liegen bleiben.', 6));
     g.later(430, () => { g.say('Briggs', 'Eine Gruppe aus Vossenack ist unterwegs – sechs Schützen.', 5); g.spawnGroup([[us.rifle, 6]], 'UA', -190, -24, { spacing: 3.2, cols: 3, heading: Math.PI / 2, tags: ['own'] }); });
@@ -111,7 +111,7 @@ export default {
     if (!best || bn < 3) return;
     if (!this.warnedBurst) { this.warnedBurst = true; g.say('Pruitt', 'Baumkrepierer! Die Granaten gehen in den Kronen hoch – Splitterregen von oben. Raus aus dem Wald oder weiter vor!', 6); }
     g.alert('⚠ Artillerie in den Baumkronen!', 3);
-    g.artilleryBarrage(best.pos.x, best.pos.z, 9, 5, { delay: 3.5, dmg: 70 });
+    g.artilleryBarrage(best.pos.x, best.pos.z, 12, 4, { delay: 3.5, dmg: 20 });
   },
   update(g, dt) {
     if (g.ended) return;
@@ -119,11 +119,11 @@ export default {
     clearByEngineers(g, dt, 'UA');
     // Baumkrepierer in Abständen (häufiger, je länger die Gruppe im Wald steht)
     this.burstT -= dt;
-    if (this.burstT <= 0) { this.burstT = 22 + Math.random() * 14; this.baumkrepierer(g); }
+    if (this.burstT <= 0) { this.burstT = 30 + Math.random() * 20; this.baumkrepierer(g); }
     // Nebenziel: Wie viele Schützen leben noch? (fällt, sobald weniger als 24 übrig sind)
     this.nowN = alive(g, 'UA', (u) => u.type.infantry).length;
-    setText(g, 'burst', `Mindestens 24 Schützen am Leben behalten (${this.nowN})`);
-    if (g.objState('burst') === 'open' && this.nowN < 24) g.setObjective('burst', 'failed');
+    setText(g, 'burst', `Mindestens 20 Schützen am Leben behalten (${this.nowN})`);
+    if (g.objState('burst') === 'open' && this.nowN < 20) g.setObjective('burst', 'failed');
     // Panzerminen im Trail geräumt?
     if (g.objState('mines') === 'open' && g.units.filter((u) => u.alive && u.tags.has('trail')).length === 0) { g.setObjective('mines', 'done'); g.say('Pruitt', 'Der Trail ist minenfrei – die Panzer können vor.', 4); }
     // Ort einnehmen
@@ -141,7 +141,7 @@ export default {
           g.setObjective('town', 'done');
           if (g.objState('bunk') !== 'done') { g.setObjective('bunk', 'failed'); }
           if (g.objState('mines') === 'open') g.setObjective('mines', 'failed');
-          if (g.objState('burst') === 'open') g.setObjective('burst', this.nowN >= 24 ? 'done' : 'failed');
+          if (g.objState('burst') === 'open') g.setObjective('burst', this.nowN >= 20 ? 'done' : 'failed');
           g.say('Briggs', 'Kommerscheidt ist in unserer Hand. Der Trail ist offen, die Panzer rollen nach.', 5);
           g.win('Kommerscheidt ist gehalten. Der Preis im Hürtgenwald war hoch – aber der Weg über die Kall ist offen.'); return;
         }

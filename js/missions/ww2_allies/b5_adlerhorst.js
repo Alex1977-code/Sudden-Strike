@@ -75,7 +75,7 @@ const feats = [
   road([[-214, 176], [-150, 128], [-110, 100], [-70, 62], [-40, 30], [-4, 8], [40, -12], [GATE.x, GATE.z]], 4, false, { name: 'Passweg' }),
   road([[GATE.x, GATE.z], [100, -44], [120, -66], [150, -66]], 5, false), road([[GATE.x, GATE.z], [40, -66], [10, -100], [-10, -112]], 4, false),
   road([[100, -44], [112, -96], [118, -150]], 5, false), road([[RAD.x, RAD.z], [140, -100], [120, -80]], 3, false),
-  forest([[-290, 90], [-160, 60], [-110, 150], [-170, 240], [-290, 260]], 'pine', 0.05), forest([[-80, 110], [-20, 60], [10, 120], [-40, 200], [-110, 200]], 'pine', 0.05),
+  forest([[-290, 60], [-190, 60], [-200, 120], [-290, 130]], 'pine', 0.05), forest([[-290, 230], [-170, 250], [-160, 290], [-290, 290]], 'pine', 0.05), forest([[-80, 150], [-20, 90], [30, 130], [-10, 220], [-80, 220]], 'pine', 0.05),
   forest([[-130, -20], [-70, -40], [-50, 0], [-90, 40], [-130, 20]], 'pine', 0.05), forest([[190, -20], [260, -10], [262, 70], [200, 80]], 'pine', 0.05),
   forest([[-60, -150], [-30, -170], [10, -160], [8, -150]], 'pine', 0.045),
   // Festungsbauten (Gebirgsfestung, frei erfunden)
@@ -101,7 +101,7 @@ const mission = {
     { s: 'Sergeant Dunn', t: 'Wir haben nur Handwaffen und Ladungen. Rauch deckt unseren Rückweg. Wenn der Alarm losgeht, kommen Verstärkungen aus der Kaserne – dann zählt jede Minute. Kein Held spielen: Wir wollen alle durchbringen, auch die, die wir befreien.' },
   ],
   objectivesPreview: ['Radar und beide Flak ausschalten', 'Unterlagen im Verwaltungsbau sichern', 'Raketenprüfstand sprengen', 'Häftlinge befreien und mit ihnen zum Absetzpunkt entkommen (mind. 8)', 'Optional: Unentdeckt bleiben (kein Alarm)', 'Optional: Kein Häftling kommt zu Schaden'],
-  forces: ['4× Sten-Schütze (Kommando)', '3× Rifleman', '2× Scharfschütze', '2× Bren-Gunner', '3× Sapper', '1× Offizier', '1× Sanitäter', 'Fähigkeit: Nebel'],
+  forces: ['6× Sten-Schütze (Kommando)', '4× Rifleman', '2× Scharfschütze', '3× Bren-Gunner', '3× Sapper', '1× Offizier', '2× Sanitäter', 'Fähigkeit: Nebel'],
   map: { size: 520, seed: 1945, season: 'winter', palette: 'winter', terrainStyle: 'mountains', relief: 11, baseHeight: 8, seaLevel: 0, scatterTrees: 22, features: feats },
   env: { season: 'winter', sunElev: 5, sunAzim: 200, fogDensity: 0.0034 },
   weather: { type: 'snow', intensity: 0.35 }, time: { start: '23:10', speed: 3 },
@@ -120,25 +120,25 @@ const mission = {
     this.freed = false; this.campT = 0; this.wavesSent = 0; this.pLost = 0; this.escaped = new Set(); this.freeT = 0;
     // Kommandotrupp
     this.team = [
-      ...g.spawnGroup([[uk.smg, 4], [uk.rifle, 3], [uk.sniper, 2], [uk.lmg, 2]], 'UA', START.x, START.z, { spacing: 3.2, cols: 6, heading: 0.9, tags: ['team'] }),
-      ...g.spawnGroup([[uk.engineer, 3], [uk.officer, 1], [uk.medic, 1]], 'UA', START.x - 8, START.z + 6, { spacing: 3.4, cols: 3, heading: 0.9, tags: ['team'] }),
+      ...g.spawnGroup([[uk.smg, 6], [uk.rifle, 4], [uk.sniper, 2], [uk.lmg, 3]], 'UA', START.x, START.z, { spacing: 3.2, cols: 6, heading: 0.9, tags: ['team'] }),
+      ...g.spawnGroup([[uk.engineer, 3], [uk.officer, 1], [uk.medic, 2]], 'UA', START.x - 8, START.z + 6, { spacing: 3.4, cols: 3, heading: 0.9, tags: ['team'] }),
     ];
     // Festung: Radar auf dem Grat, Flak, Prüfstand
     g.spawn('ww2_adler_radar', 'RU', RAD.x, RAD.z, { tags: ['radar'] });
     g.spawn('ww2_flak37', 'RU', RAD.x - 20, RAD.z + 8, { heading: PI, ai: { mode: 'hold' }, tags: ['flak', 'gar'] });
     g.spawn('ww2_flak37', 'RU', RAD.x + 22, RAD.z + 6, { heading: PI, ai: { mode: 'hold' }, tags: ['flak', 'gar'] });
-    g.spawnGroup([['ww2_de_rifle', 3], ['ww2_de_mg42', 1]], 'RU', RAD.x, RAD.z + 18, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 20 }, tags: ['gar', 'radarwache'] });
+    g.spawnGroup([['ww2_de_rifle', 2], ['ww2_de_mg42', 1]], 'RU', RAD.x, RAD.z + 18, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 20 }, tags: ['gar', 'radarwache'] });
     g.spawn('ww2_adler_stand', 'RU', STAND.x, STAND.z, { tags: ['stand'] });
-    g.spawnGroup([['ww2_de_rifle', 3], ['ww2_de_mg42', 1]], 'RU', STAND.x - 18, STAND.z + 14, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 22 }, tags: ['gar', 'stand'] });
+    g.spawnGroup([['ww2_de_rifle', 2], ['ww2_de_mg42', 1]], 'RU', STAND.x - 18, STAND.z + 14, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 22 }, tags: ['gar', 'stand'] });
     // Tor und Wachquartier (Wachen schlafen bzw. stehen, KI hält Stellung)
     fort(g, 'ww2_mgnest', 'RU', GATE.x + 6, GATE.z + 10, { heading: -2.4, tags: ['gar', 'gate'] }); fort(g, 'ww2_mgnest', 'RU', GATE.x - 4, GATE.z - 12, { heading: -2.4, tags: ['gar', 'gate'] });
-    g.spawnGroup([['ww2_de_rifle', 3], ['ww2_de_mp40', 1]], 'RU', GATE.x + 10, GATE.z - 2, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 18 }, tags: ['gar', 'gate'] });
-    g.spawnGroup([['ww2_de_rifle', 2], ['ww2_de_mp40', 1]], 'RU', -30, 14, { spacing: 3.4, cols: 3, ai: { mode: 'guard', radius: 14 }, tags: ['gar', 'patrol'] });
-    g.spawnGroup([['ww2_de_rifle', 2], ['ww2_de_mg42', 1]], 'RU', -98, 80, { spacing: 3.4, cols: 3, ai: { mode: 'guard', radius: 14 }, tags: ['gar', 'patrol'] });
-    g.spawnGroup([['ww2_de_rifle', 3], ['ww2_de_mp40', 1]], 'RU', 30, -50, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 16 }, tags: ['gar', 'arch'] });
-    g.spawnGroup([['ww2_de_rifle', 4], ['ww2_de_mg42', 1]], 'RU', 96, -36, { spacing: 3.4, cols: 3, ai: { mode: 'guard', radius: 18 }, tags: ['gar', 'barracks'] });
+    g.spawnGroup([['ww2_de_rifle', 2]], 'RU', GATE.x + 10, GATE.z - 2, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 18 }, tags: ['gar', 'gate'] });
+    g.spawnGroup([['ww2_de_rifle', 2]], 'RU', -24, 8, { spacing: 3.4, cols: 3, ai: { mode: 'guard', radius: 14 }, tags: ['gar', 'patrol'] });
+    g.spawnGroup([['ww2_de_rifle', 2]], 'RU', -98, 80, { spacing: 3.4, cols: 3, ai: { mode: 'guard', radius: 14 }, tags: ['gar', 'patrol'] });
+    g.spawnGroup([['ww2_de_rifle', 2], ['ww2_de_mp40', 1]], 'RU', 30, -50, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 16 }, tags: ['gar', 'arch'] });
+    g.spawnGroup([['ww2_de_rifle', 2]], 'RU', 96, -36, { spacing: 3.4, cols: 3, ai: { mode: 'guard', radius: 18 }, tags: ['gar', 'barracks'] });
     // Häftlingslager: Wachen, Draht, Häftlinge (unbewaffnet, bis zur Befreiung festgesetzt)
-    g.spawnGroup([['ww2_de_rifle', 4], ['ww2_de_mg42', 1], ['ww2_de_mp40', 1]], 'RU', CAMP.x, CAMP.z + 24, { spacing: 3.6, cols: 3, ai: { mode: 'guard', radius: 22 }, tags: ['gar', 'camp'] });
+    g.spawnGroup([['ww2_de_rifle', 3], ['ww2_de_mp40', 1]], 'RU', CAMP.x, CAMP.z + 24, { spacing: 3.6, cols: 3, ai: { mode: 'guard', radius: 22 }, tags: ['gar', 'camp'] });
     fort(g, 'ww2_mgnest', 'RU', CAMP.x - 22, CAMP.z + 28, { heading: PI, tags: ['gar', 'camp'] });
     for (let k = -4; k <= 4; k++) { fort(g, 'ww2_barbedwire', 'RU', CAMP.x + k * 6, CAMP.z + 14, { tags: ['wire'] }); }
     this.pris = g.spawnGroup([['ww2_adler_prisoner', 14]], 'UA', CAMP.x, CAMP.z, { spacing: 3.2, cols: 5, heading: 0, tags: ['pris'] });
@@ -181,7 +181,7 @@ const mission = {
       let eng = 0;
       for (const u of g.units) if (u.alive && u.side === 'RU' && u.type.infantry && u.weapons.some((w) => w.target && w.target.alive && w.target.side === 'UA')) eng++;
       this.engaged += eng * dt;
-      if (eng >= 3 || this.engaged > 45) this.raiseAlarm(g);
+      if (eng >= 5 || this.engaged > 70) this.raiseAlarm(g);
     }
     // Radar & Flak
     const left = g.units.filter((u) => u.alive && (u.tags.has('radar') || u.tags.has('flak'))).length;
