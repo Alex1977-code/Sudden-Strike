@@ -55,7 +55,7 @@ export default {
     if (typeof g.addBridge === 'function') {
       try { this.bridge = g.addBridge(BR, { width: 6, kind: 'road', style: 'wood', name: 'Übungsbrücke' }); if (this.bridge?.state !== 'destroyed') g.mapobj.br.destroy(this.bridge, 'test'); } catch (e) { console.warn('[tutorial] Brücke:', e); this.bridge = null; }
     }
-    for (let i = 0; i < 4; i++) dummy(g, i < 3 ? 'e_rifle' : 'e_mg', GOAL[0] + (i - 1.5) * 4, GOAL[1] - 4, 'guard', 'Übungsgegner (Rote Partei)', false).ai = { mode: 'guard', radius: 30 };
+    for (let i = 0; i < 3; i++) { const e = dummy(g, 'e_rifle', GOAL[0] + (i - 1) * 4, GOAL[1] - 6, 'guard', 'Übungsgegner (Rote Partei)', false); e.ai = { mode: 'guard', radius: 24 }; e.hp = e.maxHp = Math.round(e.maxHp * 0.7); }
     const inf = () => this.inf.filter((u) => u.alive);
     const own = () => g.units.filter((u) => u.alive && g.isOwn(u) && !u.type.structure);
     const T = (pc, touch, pad) => ({ pc, touch, pad });
@@ -102,7 +102,7 @@ export default {
         padNote: true, check: (g, t) => t.cmd('stance', (c) => c.move === 'hold') || own().some((u) => u.moveMode === 'hold') },
       { id: 'retreat', title: 'Rückzug', enter(g, t) {
           g.select(own()); g.camera.focus(0, 40);
-          const r = g.spawnGroup([['e_rifle', 3], ['e_mg', 1]], 'RU', 0, -10, { spacing: 3, cols: 4, tags: ['counter'], ai: { mode: 'attackMove', points: [[0, 60], [0, 100]], aggressive: true } });
+          const r = g.spawnGroup([['e_rifle', 3]], 'RU', 0, -10, { spacing: 3, cols: 3, tags: ['counter'], ai: { mode: 'attackMove', points: [[0, 60], [0, 100]], aggressive: true } });
           for (const u of r) u.name = 'Übungsgegner (Rote Partei)';
         },
         say: ['Ausbilder', 'Die Rote Partei greift von Norden an! Zeit für den Rückzug zum Sammelpunkt.', 7],

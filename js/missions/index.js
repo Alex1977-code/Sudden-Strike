@@ -25,7 +25,7 @@ for (const m of [m1, m2, m3, m4, m5]) { const x = UA_META[m.id] || {}; m.era ||=
 
 export const CAMPAIGN = [m1, m2, m3, m4, m5];
 
-registerCampaign({
+registerCampaign({ placeholder: true,
   id: 'tutorial', era: 'tutorial', faction: 'Ausbildung', order: 0,
   title: 'Tutorial – Grundausbildung', subtitle: 'Übungsgelände', years: '',
   desc: 'Auswählen, Bewegen, Deckung, Fahrzeuge und Unterstützungsfeuer – Schritt für Schritt auf dem Übungsplatz.',
@@ -39,7 +39,7 @@ registerCampaign({
   art: { sky: ['#1f3550', '#d9b15c'], sun: { x: 300, y: 140, r: 24, color: '#ffd98a' }, terrain: 'steppe', far: '#3a4552', ground: '#2c2a1c', ink: '#101318',
     sil: [['tank', 46, 190, 1.25], ['drone', 236, 58, 0.85, true], ['drone', 278, 80, 0.6, true], ['pylon', 340, 190, 1.7]] },
 });
-registerCampaign({
+registerCampaign({ placeholder: true,
   id: 'afghan-isaf', era: 'afghan', faction: 'ISAF / Bundeswehr', order: 20,
   title: 'Afghanistan – ISAF', subtitle: 'Stabilisierungseinsatz', years: '2001–2014',
   desc: 'Patrouillen im Raum Kunduz, Hinterhalte an Bewässerungsgräben und im Gebirge – Schutz der Bevölkerung unter ständiger Bedrohung.',
@@ -47,7 +47,7 @@ registerCampaign({
   art: { sky: ['#30455c', '#e2bd85'], sun: { x: 84, y: 64, r: 18, color: '#fff1cc' }, terrain: 'mountains', far: '#8a7559', ground: '#4d3d2a', ink: '#1b150f',
     sil: [['heli', 230, 66, 1.4, true], ['truck', 52, 200, 1.15], ['soldier', 120, 204, 1.2]] },
 });
-registerCampaign({
+registerCampaign({ placeholder: true,
   id: 'afghan-soviet', era: 'afghan', faction: 'Sowjetisch-Afghanischer Krieg', order: 30,
   title: 'Afghanistan – Sowjetkrieg', subtitle: 'Salang · Pandschir · Kandahar', years: '1979–1989',
   desc: 'Konvois über den Salang-Pass, Gefechte im Pandschir-Tal – ein zermürbender Krieg in unwegsamem Hochgebirge.',
@@ -55,7 +55,7 @@ registerCampaign({
   art: { sky: ['#3a2f3a', '#d49a6a'], sun: { x: 320, y: 84, r: 22, color: '#ffd2a0' }, terrain: 'mountains', snow: true, far: '#6f5a52', ground: '#3a2b22', ink: '#170f0c',
     sil: [['heli', 120, 60, 1.2], ['heli', 200, 84, 0.8], ['truck', 260, 204, 1.0], ['truck', 318, 206, 1.0]] },
 });
-registerCampaign({
+registerCampaign({ placeholder: true,
   id: 'ww2-allies', era: 'ww2', faction: 'Westalliierte', order: 40,
   title: 'WK2 – Westalliierte', subtitle: 'Dünkirchen · Normandie · Remagen', years: '1940–1945',
   desc: 'Von der Evakuierung bei Dünkirchen über die Landung in der Normandie bis zur Brücke von Remagen.',
@@ -63,7 +63,7 @@ registerCampaign({
   art: { sky: ['#2a3340', '#a9a48c'], sun: { x: 330, y: 64, r: 16, color: '#f6ecd0' }, terrain: 'coast', ground: '#3a3a2c', ink: '#11151a',
     sil: [['plane', 70, 50, 1.1, true], ['plane', 120, 74, 0.8, true], ['tank_ww2', 250, 200, 1.3]] },
 });
-registerCampaign({
+registerCampaign({ placeholder: true,
   id: 'ww2-soviet', era: 'ww2', faction: 'Rote Armee', order: 50,
   title: 'WK2 – Rote Armee', subtitle: 'Brest · Stalingrad · Berlin', years: '1941–1945',
   desc: 'Von der Festung Brest über Stalingrad und Prochorowka bis zu den Seelower Höhen und Berlin.',
@@ -71,7 +71,7 @@ registerCampaign({
   art: { sky: ['#28303a', '#b9b7ae'], sun: null, terrain: 'snow', far: '#59616a', ground: '#d6dade', ink: '#161a1e',
     sil: [['birch', 30, 186, 1.6], ['birch', 52, 190, 1.3], ['tank_ww2', 200, 202, 1.4], ['tank_ww2', 300, 198, 1.0], ['soldier', 150, 206, 1.1]] },
 });
-registerCampaign({
+registerCampaign({ placeholder: true,
   id: 'ww2-axis', era: 'ww2', faction: 'Deutsche Seite', order: 60,
   title: 'WK2 – Deutsche Seite', subtitle: 'Eben-Emael · Tobruk · Königsberg', years: '1940–1945',
   desc: 'Eben-Emael, der Wüstenkrieg um Tobruk und El Alamein, Rückzugskämpfe bis Königsberg – nüchtern, ohne Verklärung.',

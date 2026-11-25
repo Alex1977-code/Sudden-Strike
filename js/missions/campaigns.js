@@ -91,6 +91,16 @@ export function registerCampaign(def) {
   if (prev && Array.isArray(def.missions) && !def.missions.length && prev.missions?.length) { def = { ...def }; delete def.missions; }
   // V3-C1: ebenso eine Teilliste (z. B. Ukraine m1–m5 aus index.js), deren Missionen alle schon enthalten sind
   else if (prev && Array.isArray(def.missions) && prev.missions?.length > def.missions.length && def.missions.every((m) => prev.missions.some((x) => x === m || (m?.id && x.id === m.id)))) { def = { ...def }; delete def.missions; }
+  // Platzhalter (placeholder: true, aus missions/index.js) ergänzen nur Felder, die keine Kampagnendatei ausdrücklich gesetzt hat –
+  // unabhängig von der Importreihenfolge (Kampagnenordner werden vor den Platzhaltern ausgewertet).
+  if (def.placeholder) {
+    def = { ...def }; delete def.placeholder;
+    if (prev) { for (const k of Object.keys(def)) if (!prev._explicit?.has(k)) prev[k] = def[k]; registry.set(prev.id, normalize(prev)); return prev; }
+  } else if (prev || def) {
+    const ex = (prev && prev._explicit) || new Set();
+    for (const k of Object.keys(def)) ex.add(k);
+    def = { ...def, _explicit: ex };
+  }
   const c = prev ? Object.assign(prev, def) : { era: 'modern', faction: '', title: def.id, subtitle: '', years: '', desc: '', accent: '#c8a84b', order: 100, missions: [], ...def };
   registry.set(c.id, normalize(c));
   return c;

@@ -609,6 +609,49 @@ $('btn-pause-settings').onclick = () => { returnTo = 'pause'; openSettings(); };
 $('btn-pause-save').onclick = () => saveUI.open('save', 'pause');
 $('btn-pause-load').onclick = () => saveUI.open('load', 'pause');
 $('btn-title-load').onclick = () => saveUI.open('load', 'title');
+function uiToast(text) {
+  let el = $('ui-toast');
+  if (!el) { el = document.createElement('div'); el.id = 'ui-toast'; el.className = 'ui-toast hidden'; el.setAttribute('role', 'status'); document.body.appendChild(el); }
+  el.textContent = text; el.classList.remove('hidden');
+  clearTimeout(uiToast.t); uiToast.t = setTimeout(() => el.classList.add('hidden'), 2600);
+}
+const saveUI = createSaveUI({
+  game, rec, show, hideScreens,
+  current: () => current,
+  isOnline: () => !!online.inGame || !!game.net,
+  inMission: () => inMission && !game.ended && !game.demo,
+  toast: uiToast,
+  saveMeta: () => {
+    const sk = game.mission?.skirmish;
+    if (sk) return { title: game.mission.title || 'Gefecht', over: `Gefecht ${sk.setup.mode}v${sk.setup.mode} · Seed ${sk.setup.seed}` };
+    const fm = findMission(currentMission);
+    return { title: currentMission?.title || 'Einsatz', over: fm ? `${fm.campaign.title} · ${t('common.mission', 'Mission')} ${fm.index + 1}/${fm.campaign.missions.length}` : '' };
+  },
+  startFromSave: async (data) => {
+    const c = data.ctx;
+    if (c.kind === 'mission') {
+      const camp = getCampaign(c.cid);
+      let m = camp?.missions[c.idx];
+      if (!m || (c.mid && m.id !== c.mid)) { const f = findMission(c.mid); m = f ? f.campaign.missions[f.index] : null; }
+      if (!m) return false;
+      if (current === 'pause' || game.paused) game.paused = false;
+      await startMission(m, { save: data });
+      return game.active && !game.demo;
+    }
+    if (c.kind === 'skirmish') {
+      const r = await startSkirmishGame(withCustomMap({ ...c.setup }), { save: data });
+      return !!r;
+    }
+    return false;
+  },
+  onLoaded: (rep) => {
+    hud.sayQueue = []; hud.subEl?.classList.add('hidden');
+    voice.clear();
+    awards.unlock('saver');
+    game.paused = false; hideScreens(); updatePauseInfo();
+    uiToast(`Spielstand geladen (${fmtTime(game.time)})`);
+  },
+});
 $('btn-awards').onclick = () => { awards.checkStatic(); renderAwardsPage($('awards-body')); show('awards'); };
 $('btn-awards-back').onclick = () => show('title');
 $('btn-restart').onclick = () => { game.paused = false; if (currentSkirmish) startSkirmishGame(currentSkirmish); else startMission(currentMission); };
@@ -745,7 +788,22 @@ function renderLang() { $('set-lang').querySelectorAll('button').forEach((b) => 
 $('set-lang').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && !b.disabled && setLang(b.dataset.v)) renderLang(); });
 $('btn-reset-all').onclick = (e) => armButton(e.currentTarget, t('common.confirmReset', 'Wirklich zurücksetzen? Nochmal tippen'), () => { resetProgress(); renderTitle(); });
 $('btn-set-help').onclick = () => { helpFrom = 'settings'; show('help'); };
+// V3-X: Sprachfunk und Standard-Schwierigkeitsgrad
+if (typeof settings.speechVolume !== 'number') settings.speechVolume = 0.9;
+if (typeof settings.speechRate !== 'number') settings.speechRate = 1.05;
+$('set-speech').addEventListener('input', () => { voice.setEnabled($('set-speech').checked); saveSettings(); });
+$('set-speechvol').addEventListener('input', () => { settings.speechVolume = +$('set-speechvol').value; saveSettings(); });
+$('set-speechrate').addEventListener('input', () => { settings.speechRate = +$('set-speechrate').value; saveSettings(); });
+$('set-level').addEventListener('click', (e) => { const b = e.target.closest('button[data-v]'); if (!b) return; settings.level = b.dataset.v; saveSettings(); renderSetLevel(); });
+function renderSetLevel() { $('set-level').querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.v === settings.level)); }
+function renderSpeechSettings() {
+  $('set-speech').checked = voice.enabled; $('set-speech').disabled = !voice.available;
+  $('set-speechvol').value = settings.speechVolume; $('set-speechrate').value = settings.speechRate;
+  $('set-speechvol').disabled = $('set-speechrate').disabled = !voice.available;
+  $('set-speech-d').textContent = !voice.available ? 'In dieser Umgebung nicht verfügbar' : voice.hasVoice ? 'Funksprüche vorlesen (Sprachausgabe des Browsers)' : 'Keine passende Stimme gefunden – Browser-Standardstimme';
+}
 function openSettings() {
+  renderSetLevel(); renderSpeechSettings(); // V3-X
   ensureMusicUI(); $('set-music').checked = settings.music; $('set-musicvol').value = settings.musicVolume;
   $('set-reducemotion').checked = !!settings.reduceMotion; renderLang();
   $('set-quality').value = settings.quality;
