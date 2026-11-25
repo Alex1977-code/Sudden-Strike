@@ -28,7 +28,7 @@ const mission = placeMission(PLACE, {
   objectivesPreview: ['Kanalbrücken halten, bis die Boote ablegen (10 Minuten)', 'Nicht zulassen, dass der Feind in die Stadt durchbricht', 'Optional: Mörserstellung südlich des Kanals ausschalten', 'Optional: Höchstens 12 Mann verlieren'],
   forces: ['12× Rifleman', '4× Bren-Gunner', '4× PIAT-Team', '1× Offizier', '2× Sanitäter', '2× Scharfschütze', '1× Mörsertrupp', '4× 6-pdr Pak', '1× Bofors-Flak', '2× Universal Carrier', 'Verstärkung: weitere Schützen und Pak', 'Fähigkeiten: Nebel, Artillerie, Aufklärungsflug'],
   weather: { type: 'overcast', intensity: 0.55 }, time: { start: '12:00', speed: 4 },
-  camera: { x: 60, z: 170, dist: 120 },
+  camera: { x: 10, z: 176, dist: 85 },
   abilities: [{ id: 'smoke', charges: 4 }, { id: 'ww2_artillery', charges: 3 }, 'ww2_recon_uk'],
 
   setup(g) {

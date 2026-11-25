@@ -38,7 +38,7 @@ export default {
   map: { size: 400, seed: 1942, season: 'summer', palette: 'desert', terrainStyle: 'desert', relief: 2.5, baseHeight: 6, seaLevel: 0, scatterTrees: 3, features: feats },
   env: { season: 'summer', sunElev: 14, sunAzim: 80, fogDensity: 0.0026 },
   weather: { type: 'clear' }, time: { start: '06:10', speed: 4 },
-  camera: { x: 120, z: 0, dist: 120, yaw: -1.57 },
+  camera: { x: 168, z: 0, dist: 80, yaw: -1.57 },
   markers: [
     { x: BELT1, z: 0, r: 10, label: 'Minengürtel Ost', color: '#ff6b6b' },
     { x: BELT2, z: 0, r: 10, label: 'Minengürtel West', color: '#ff6b6b' },
