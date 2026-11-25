@@ -52,7 +52,7 @@ class OnlineUI {
   // ================================================================ Menü „Online-Gefecht“
   _bind() {
     $('btn-online').onclick = () => this.open();
-    document.querySelector('#screen-online .back').onclick = () => { this.ctx.show('title'); };
+    document.querySelector('#screen-online .back').onclick = () => { this.coopPending = null; this.ctx.show('title'); }; // V3-RS: Koop-Vorgabe verwerfen
     if (this.artifact) $('online-artifact-note').classList.remove('hidden');
     $('net-name').value = this.prefs.name;
     $('net-name').addEventListener('change', () => { this.prefs.name = $('net-name').value.trim().slice(0, 20); this.savePrefs(); });
@@ -129,6 +129,7 @@ class OnlineUI {
     L.on('event', (e) => { if (e?.k === 'ping' && L.phase === 'lobby') { this.pings = e.p || {}; this.renderLobby(); } });
     L.on('left', (i) => this.onLeft(i));
     L.on('error', (e) => this.onError(e));
+    this.ctx.onLobby?.(L); // V3-RS: Wiederholungs-Anfragen (Host/Client)
     return L;
   }
   _busy(v) { for (const id of ['btn-net-host', 'btn-net-join']) $(id).disabled = v; }
@@ -138,7 +139,10 @@ class OnlineUI {
     this.status('net-status', this.prefs.kind === 'peer' ? 'Verbinde mit dem Vermittlungsserver …' : 'Eröffne lokalen Raum …');
     const L = this._newLobby();
     try {
-      await L.hostLobby({ ...DEFAULT_SETTINGS, ...(this.prefs.settings || {}), seed: Math.floor(Math.random() * 99999) + 1 });
+      const coop = this.coopPending; // V3-RS: Koop-Kampagne – 2 Spieler im Team UA, Gegner stellt die Mission
+      await L.hostLobby(coop ? { ...DEFAULT_SETTINGS, playersPerTeam: 2, fillAI: false, coop, seed: Math.floor(Math.random() * 99999) + 1 } : { ...DEFAULT_SETTINGS, ...(this.prefs.settings || {}), seed: Math.floor(Math.random() * 99999) + 1 });
+      if (coop) for (const sl of L.state.slots) if (sl.team === 'RU') L.setSlot(sl.slot, 'closed');
+      this.coopPending = null;
       this.enterLobby();
     } catch (e) {
       this._drop();
@@ -146,7 +150,8 @@ class OnlineUI {
     }
     this._busy(false);
   }
-  async join() {
+  async join(opts = {}) { // V3-RS: opts.spectate – als Zuschauer beitreten
+    this.coopPending = null;
     const raw = $('net-code').value.trim();
     if (!raw) { this.status('net-status', 'Bitte den Raumcode eingeben (z. B. stst-K7PXM).', true); return; }
     const code = normalizeRoomCode(raw);
@@ -154,7 +159,7 @@ class OnlineUI {
     this.status('net-status', `Verbinde mit Raum ${code} …`);
     const L = this._newLobby();
     try {
-      await L.joinLobby(code);
+      await L.joinLobby(code, opts);
       this.enterLobby();
     } catch (e) {
       this._drop();
@@ -247,7 +252,8 @@ class OnlineUI {
     if (host) {
       const notReady = st.slots.filter((s) => s.kind === 'human' && !s.ready && s.peerId !== st.hostId);
       const has = (t) => st.slots.some((s) => s.team === t && (s.kind === 'human' || s.kind === 'ai' || (s.kind === 'open' && S.fillAI)));
-      const why = notReady.length ? `Warte auf: ${notReady.map((s) => s.name).join(', ')}` : !has('UA') || !has('RU') ? 'Jedes Team braucht mindestens einen Teilnehmer.' : '';
+      const coop = !!S.coop, humans = st.slots.filter((s) => s.kind === 'human').length; // V3-RS: Koop braucht den zweiten Spieler
+      const why = notReady.length ? `Warte auf: ${notReady.map((s) => s.name).join(', ')}` : coop ? (humans < 2 ? 'Warte auf den zweiten Spieler (Raumcode weitergeben).' : '') : !has('UA') || !has('RU') ? 'Jedes Team braucht mindestens einen Teilnehmer.' : '';
       $('btn-lobby-start').disabled = !!why;
       $('btn-lobby-start').title = why || 'Alle bereit – Spiel starten';
       if (!this._statusSticky) this.status('lobby-status', why || 'Alle bereit. Offene Plätze werden von der KI übernommen.', false);
@@ -394,8 +400,12 @@ class OnlineUI {
     this._lostShown = false;
     const role = L.isHost ? 'host' : 'client';
     const myId = L.playerId;
-    const S = setupFromStart(info, myId, role);
+    // V3-RS: Koop-Kampagne (eigenes Setup) bzw. Zuschauer (game.spectator sperrt Befehle)
+    const S = info.settings.coop && this.ctx.coopSetup ? this.ctx.coopSetup(info, myId, role) : setupFromStart(info, myId, role);
+    const spectating = role === 'client' && L.isSpectator;
+    this.game._specNext = spectating;
     const sess = role === 'host' ? new HostSession(this.game, L, info, S) : new ClientSession(this.game, L, info, S);
+    sess.spectator = spectating;
     this.session = sess;
     this.game.net = sess.net;
     sess.onSys = (txt) => this.sysChat(txt);
@@ -406,10 +416,13 @@ class OnlineUI {
     await this.ctx.startGame(S, sess);
     if (this.session !== sess) return; // inzwischen verlassen
     sess.onLoaded();
+    this.ctx.onSessionLoaded?.(sess, S); // V3-RS: Koop-Hooks, Zuschauer-Panel
     $('btn-chat').classList.remove('hidden');
     $('net-chat').classList.remove('hidden');
     if (role === 'host') this._startTicker();
-    this.sysChat(`Online-Gefecht ${S.mode}v${S.mode} gestartet – Raum ${info.code}. Enter öffnet den Chat (/t … nur Team).`);
+    if (S.coop) this.sysChat(`Koop-Einsatz „${S.coop.title || ''}“ gestartet – Raum ${info.code}. Enter öffnet den Chat.`);
+    else if (spectating) this.sysChat(`Du schaust zu – Raum ${info.code}. Der Chat erreicht nur andere Zuschauer.`);
+    else this.sysChat(`Online-Gefecht ${S.mode}v${S.mode} gestartet – Raum ${info.code}. Enter öffnet den Chat (/t … nur Team).`);
   }
   // Pro Frame aus main.js
   update(dt) { this.session?.update(dt); this._chatFade(dt); }

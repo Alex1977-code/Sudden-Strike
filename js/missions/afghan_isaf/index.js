@@ -2,8 +2,12 @@
 // und Bergungsaufträge, nüchtern aus Sicht der Soldaten. Alle Charaktere sind erfunden; Zivilisten sind nie Ziel.
 import { registerCampaign } from '../campaigns.js';
 import i1 from './i1_versorgungsfahrt.js';
+import i2 from './i2_brunnen.js';
+import i3 from './i3_bergung.js';
+import i4 from './i4_bruecke.js';
+import i5 from './i5_abzug.js';
 
-export const MISSIONS = [i1];
+export const MISSIONS = [i1, i2, i3, i4, i5];
 
 registerCampaign({
   id: 'afghan-isaf', era: 'afghan', faction: 'ISAF / Bundeswehr', order: 20,

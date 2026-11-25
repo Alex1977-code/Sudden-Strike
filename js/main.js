@@ -37,6 +37,8 @@ import { RadioVoice } from './engine/speech.js';
 import { AwardTracker, evaluateMedal, medalBarHTML, awardsOnlyHTML, renderAwardsPage, MEDAL_NAMES } from './game/medals.js';
 import { getCampaignLevel, setCampaignLevel } from './missions/campaigns.js';
 import { createReplayUI } from './game/replayui.js'; // V3-RS: Wiederholungen
+import { installCoop } from './net/coop.js'; // V3-RS: Koop-Kampagne online
+import { createSpectatorUI } from './net/spectator.js'; // V3-RS: Zuschauermodus
 initMods(); // V3-E: aktive Mods (Einheitenwerte) vor dem ersten Spielstart anwenden
 
 const $ = (id) => document.getElementById(id);
@@ -513,6 +515,10 @@ const online = createOnline({
   startGame: (S) => startOnlineGame(S),
   toMenu: async () => { inMission = false; game.paused = false; hud.show(false); await loadDemo(); show('title'); },
   simTick: (dt) => simTick(dt),
+  // V3-RS: Koop-Setup, Sitzungs-Hooks (Koop, Zuschauer), Wiederholungs-Anfragen über die Lobby
+  coopSetup: (info, myId, role) => coop.coopSetup(info, myId, role),
+  onSessionLoaded: (sess, S) => { coop.onSession(sess, S); if (sess.spectator) spectatorUI.begin(sess); },
+  onLobby: (L) => replayUI.attachLobby(L),
 });
 // V3-MENU: Lobby – Wetter, Tageszeit, Satellitennetz-Ausfälle als Lobby-Einstellungen (Settings werden an Clients übertragen;
 // setupFromStart in js/net/session.js muss st.weather/st.daytime/st.satOutage noch an normalizeSetup weiterreichen – siehe Bericht)
@@ -540,6 +546,12 @@ async function startOnlineGame(S) {
   currentSkirmish = null;
   hideScreens();
   game.difficulty = 'normal'; // V3-X: Online ohne Schwierigkeitsmodifikatoren
+  if (S.coop) { // V3-RS: Koop-Kampagne
+    const cm = await coop.startGame(S, { loadWithSpinner });
+    if (!cm || !game.active) { online.hostLost('Die Mission konnte nicht geladen werden.'); return; }
+    currentMission = cm; inMission = true; hud.show(true); game.stats.start = game.time; updatePauseInfo();
+    return;
+  }
   let m = null;
   await loadWithSpinner(`Lade Online-Gefecht (${S.mode}v${S.mode}) …`, () => {
     game.camera.orbit = false;
@@ -682,7 +694,7 @@ async function loadForReplay(data) {
     if (c.kind === 'mission') { m = resolveMissionCtx(c); if (m) rec.runLoad(c, s.seed, () => game.load(m)); }
     else if (c.kind === 'skirmish') m = rec.runLoad(c, s.seed, () => startSkirmish(game, withCustomMap({ ...c.setup })));
     else if (c.kind === 'online') m = rec.runLoad(c, s.seed, () => { const mm = createSkirmish(c.setup); game.setupPlayers(mm.players); game.load(mm); return mm; });
-    else if (c.kind === 'coop' && window.__coop) m = window.__coop.loadForReplay(c, s.seed, resolveMissionCtx(c));
+    else if (c.kind === 'coop') m = coop.loadForReplay(c, s.seed, resolveMissionCtx(c));
   });
   if (!m || !game.active) return false;
   currentMission = m;
@@ -692,6 +704,8 @@ async function loadForReplay(data) {
   game.stats.start = game.time;
   return true;
 }
+const coop = installCoop({ game, rec, online, currentMission: () => currentMission, findMission, resolveMission: resolveMissionCtx });
+const spectatorUI = createSpectatorUI({ game, online });
 const replayUI = createReplayUI({
   game, rec, show, hideScreens, toast: uiToast,
   loadForReplay,
@@ -774,6 +788,11 @@ game.on('end', (won, text) => {
     next.onclick = async () => { await loadDemo(); if (camp) openCampaign(camp.id, idx); else { renderCampaignGrid(); show('campaign'); } };
   }
   $('btn-end-retry').onclick = () => { game.paused = false; startMission(m); };
+  if (online.inGame) { // V3-RS: Koop online – zurück ins Hauptmenü (Verbindung beenden)
+    $('btn-end-retry').classList.add('hidden');
+    next.textContent = t('end.toMenu', 'Zum Hauptmenü');
+    next.onclick = () => online.leaveGame();
+  }
   show('end');
 });
 
@@ -942,6 +961,7 @@ function frame(now) {
   window.__openMods = openMods;
   window.__saves = { rec, ui: saveUI, readSave, awards, voice, losTool, LEVELS }; // V3-X
   window.__replay = replayUI; // V3-RS
+  window.__coop = coop; window.__spectator = spectatorUI;
 })();
 
 // Offline-Fähigkeit (PWA)

@@ -22,8 +22,11 @@ export function settle(g, id, state) { if (g.objState(id) === 'open') g.setObjec
 
 // ---------------------------------------------------------------- Einheiten
 // Angriffsgruppe der Gegenseite: erscheint bei from, greift entlang pts an, danach Wache
+// Punkt in die Karte ziehen (Spawns am Rand)
+export const inMap = (g, p, m = 6) => { const h = g.terrain.half - m; return [Math.max(-h, Math.min(h, p[0])), Math.max(-h, Math.min(h, p[1]))]; };
 export function wave(g, list, from, pts, { spacing = 4, cols = 4, tags = ['wave'], aggro = 40, after = 'guard', side = 'RU' } = {}) {
   if (g.ended) return [];
+  from = inMap(g, from, 8);
   return g.spawnGroup(list, side, from[0], from[1], { spacing, cols, tags, heading: Math.atan2(pts[0][0] - from[0], pts[0][1] - from[1]),
     ai: { mode: 'attackMove', points: pts.map((p) => [...p]), aggressive: true, aggroRadius: aggro, after } });
 }
@@ -104,7 +107,8 @@ export class Convoy {
     for (const [k, v] of this.vehicles.entries()) {
       if (!v.alive || v.arrivedConvoy) { if (v.alive) prev = v; continue; }
       let i = v._cv;
-      while (i < R.length && Math.hypot(v.pos.x - R[i][0], v.pos.z - R[i][1]) < this.arriveR) i++;
+      const idle = !v.moving && !v.path?.length && v._tgt === i;
+      while (i < R.length && Math.hypot(v.pos.x - R[i][0], v.pos.z - R[i][1]) < (idle || i === R.length - 1 ? this.arriveR * 2 : this.arriveR)) i++;
       v._cv = i;
       if (i >= R.length) { v.arrivedConvoy = true; v.stop(); prev = v; continue; }
       const wait = i > lim || (prev && prev.alive && prev.moving && !prev.arrivedConvoy && Math.hypot(prev.pos.x - v.pos.x, prev.pos.z - v.pos.z) < this.gap && (prev._cv || 1) <= i);
@@ -120,6 +124,7 @@ export class Convoy {
 
 // Hubschrauber setzt Infanterie an einem Punkt ab (landet, setzt ab) und fliegt zurück; Rückgabe: Hubschrauber
 export function heliInsert(g, type, side, from, to, cargo, { onLand, leave = true, alt = 18 } = {}) {
+  from = inMap(g, from, 8);
   const h = g.spawn(type, side, from[0], from[1], { startAlt: alt, cargo, tags: ['insert'] });
   h.ai = null;
   if (g.trans) { h.unloadAt = { x: to[0], z: to[1] }; h.moveTo(to[0], to[1]); } else h.moveTo(to[0], to[1]);
@@ -164,7 +169,7 @@ export function refill(units, frac = 0.6) {
 }
 
 // ---------------------------------------------------------------- Fähigkeiten (missionseigen)
-const edgeOf = (game, p) => game.mission?.friendlyEdges?.[p.team] || (p.team === 'UA' && game.mission?.friendlyEdge) || [0, (p.team === 'UA' ? 1 : -1) * (game.terrain.half + 40)];
+const edgeOf = (game, p) => inMap(game, game.mission?.friendlyEdges?.[p.team] || (p.team === 'UA' && game.mission?.friendlyEdge) || [0, (p.team === 'UA' ? 1 : -1) * game.terrain.half], 8);
 const sfx = (game, k, x, z) => { try { game.audio.shot(k, x, z); } catch (e) { /* kein Ton */ } };
 const MORT120 = { name: '120-mm-Mörser', dmg: 160, splash: 6, vs: { soft: 1, light: 0.6, heavy: 0.2, air: 0, struct: 0.35 } };
 const HOW122 = { name: '122-mm-Haubitze D-30', dmg: 190, splash: 6.5, vs: { soft: 1, light: 0.8, heavy: 0.4, air: 0, struct: 0.5 } };
@@ -207,8 +212,9 @@ if (!ABILITIES.af_c2_flare) Object.assign(ABILITIES, {
         if (!game.active) return;
         if (!h.alive) { game.sayTo(p.id, 'Rettungsleitstelle', 'Hubschrauber getroffen und abgedreht – neuer Anflug später!', 4); game.mission?.onMedevacLost?.(game); return; }
         if (st === 'in') {
-          if (Math.hypot(h.pos.x - x, h.pos.z - z) < 7) { st = 'land'; h.stop(); game.trans?.land?.(h); tl = game.time; }
-          else if (game.time - t0 > 60) { vanish(game, h); return; }
+          const d = Math.hypot(h.pos.x - x, h.pos.z - z);
+          if (d < 12 || (d < 26 && !h.moving && !h.path?.length)) { st = 'land'; h.stop(); game.trans?.land?.(h); tl = game.time; }
+          else if (game.time - t0 > 70) { vanish(game, h); game.sayTo(p.id, 'Rettungsleitstelle', 'Hubschrauber findet die Landezone nicht – Anflug abgebrochen.', 4); game.mission?.onMedevacLost?.(game); return; }
         } else if (st === 'land' && game.time - tl > 7) {
           const w = game.units.filter((u) => u.alive && u.side === p.team && u.tags.has('wounded') && Math.hypot(u.pos.x - x, u.pos.z - z) < 18);
           for (const u of w) vanish(game, u);

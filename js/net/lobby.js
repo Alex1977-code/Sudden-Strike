@@ -20,7 +20,12 @@
 //   Ohne slot.role bestimmt die Integration die Rolle aus der Position im Team. Zusätzliche Einstellungen
 //   (preset, night, reinforce, victory, difficulty …) reicht updateSettings unverändert durch.
 
-export const PROTOCOL_VERSION = 1;
+// V3-RS: Version 2 – Zuschauerplätze (state.specs, ids ab SPEC_ID0), Koop-Vorgabe (settings.coop), Wiederholungs-Anfrage.
+//   Zuschauer: hello {spectate:true} bzw. 'setSpectate' {on}; im Spiel 'specView' {view:'all'|'UA'|'RU'} → emit('specView', id, view);
+//   'replayReq' (Spieler oder Zuschauer) → emit('replayReq', id). Zuschauer stehen in startInfo.spectators und startInfo.assignments.
+export const PROTOCOL_VERSION = 2;
+export const MAX_SPECTATORS = 4;
+export const SPEC_ID0 = 100;
 export const TEAMS = ['UA', 'RU'];
 export const MAX_PER_TEAM = 6;
 export const SIZES = ['small', 'medium', 'large'];
@@ -97,7 +102,10 @@ export class Lobby {
     const s = this.state?.slots.find(s => s.kind === 'human' && s.peerId === this.transport.selfId);
     return s ? s.slot : -1;
   }
-  get mySlot() { const id = this.playerId; return id >= 0 ? this.state.slots[id] : null; }
+  get mySlot() { const id = this.playerId; return id >= 0 ? this.state.slots[id] || null : null; }
+  /** V3-RS: eigener Zuschauerplatz (oder null). */
+  get mySpec() { return this.state?.specs?.find((s) => s.peerId === this.transport.selfId) || null; }
+  get isSpectator() { return !!this.mySpec || (this.startInfo ? (this.startInfo.assignments[this.transport.selfId] ?? -1) >= SPEC_ID0 : false); }
   /** Latenz (ms) zu einem Spieler (Host) bzw. zum Host (Client). */
   latencyOf(playerId) {
     if (!this.isHost) return this.transport.latency[this.transport.hostId] ?? null;
@@ -111,7 +119,7 @@ export class Lobby {
     const code = await this.transport.host(roomCode);
     const st = this._normSettings({ ...DEFAULT_SETTINGS, ...settings });
     if (!st.seed) st.seed = randomSeed();
-    this.state = { v: PROTOCOL_VERSION, code, phase: 'lobby', hostId: this.transport.selfId, rev: 0, settings: st, slots: [] };
+    this.state = { v: PROTOCOL_VERSION, code, phase: 'lobby', hostId: this.transport.selfId, rev: 0, settings: st, slots: [], specs: [] };
     this._buildSlots(st.playersPerTeam);
     const s0 = this.state.slots[0];
     Object.assign(s0, { kind: 'human', peerId: this.transport.selfId, name: this.name, ready: true });
@@ -126,6 +134,7 @@ export class Lobby {
     out.playersPerTeam = Math.max(1, Math.min(MAX_PER_TEAM, Math.round(+out.playersPerTeam || DEFAULT_SETTINGS.playersPerTeam)));
     out.seed = (Math.abs(Math.round(+out.seed || 0)) >>> 0);
     out.fillAI = out.fillAI !== false;
+    out.specDelay = [0, 10].includes(+out.specDelay) ? +out.specDelay : 0; // V3-RS: Zuschauer-Verzögerung (s)
     return out;
   }
 
@@ -233,6 +242,7 @@ export class Lobby {
       if (s.kind === 'human') s.ready = true;
     }
     for (const t of TEAMS) {
+      if (st.settings.coop) break; // V3-RS: Koop-Kampagne – Gegner stellt die Mission
       if (!slots.some(s => s.team === t && (s.kind === 'human' || s.kind === 'ai'))) {
         this._emit('error', lobbyError(`Team ${t} hat keine Teilnehmer.`, 'empty-team'));
         return false;
@@ -240,6 +250,7 @@ export class Lobby {
     }
     const assignments = {};
     for (const s of slots) if (s.kind === 'human') assignments[s.peerId] = s.slot;
+    for (const s of st.specs || []) assignments[s.peerId] = s.id; // V3-RS: Zuschauer
     st.slots = slots;
     st.phase = 'game';
     st.rev++;
@@ -247,6 +258,7 @@ export class Lobby {
       type: 'start', v: PROTOCOL_VERSION, code: st.code, seed: st.settings.seed,
       settings: clone(st.settings), slots: clone(slots), assignments,
       hostPlayerId: assignments[this.transport.selfId],
+      spectators: clone((st.specs || []).map(s => ({ id: s.id, name: s.name }))),
     };
     this.startInfo = info;
     this.transport.broadcast(info);
@@ -280,6 +292,14 @@ export class Lobby {
 
   _onPeerLeave(peerId, reason) {
     if (!this.isHost || !this.state) return;
+    const sp = this._specOfPeer(peerId);
+    if (sp) { // V3-RS: Zuschauer
+      const info = { playerId: sp.id, peerId, name: sp.name, team: null, reason, spectator: true };
+      if (this.state.phase === 'lobby') { this.state.specs = this.state.specs.filter(x => x !== sp); this._changed(); } else sp.connected = false;
+      this.transport.broadcast({ type: 'left', info });
+      this._emit('left', info);
+      return;
+    }
     const s = this._slotOfPeer(peerId);
     if (!s) return;
     const info = { playerId: s.slot, peerId, name: s.name, team: s.team, reason };
@@ -303,15 +323,27 @@ export class Lobby {
       };
       if (msg.v !== PROTOCOL_VERSION) return reject('Unterschiedliche Spielversion – bitte Seite neu laden.');
       if (st.phase !== 'lobby') return reject('Das Spiel läuft bereits.');
-      const free = this._freeSlot(TEAMS.includes(msg.team) ? msg.team : null);
-      if (!free) return reject('Die Lobby ist voll.');
+      if (this._specOfPeer(from)) { this.transport.send(from, { type: 'lobby', lobby: st }); return; }
+      const free = msg.spectate ? null : this._freeSlot(TEAMS.includes(msg.team) ? msg.team : null);
+      if (!free) { // V3-RS: Zuschauerplatz (gewünscht oder Lobby voll)
+        if (this._addSpec(from, msg.name)) return;
+        return reject(msg.spectate ? 'Alle Zuschauerplätze sind belegt.' : 'Die Lobby ist voll.');
+      }
       Object.assign(free, { kind: 'human', peerId: from, name: cleanName(msg.name, 'Spieler ' + (free.slot + 1)), ready: false });
       this._changed();
       return;
     }
+    const sp = this._specOfPeer(from);
+    if (sp) return this._specHandle(sp, from, msg); // V3-RS: Zuschauer
     const s = this._slotOfPeer(from);
     if (!s) return; // nicht (mehr) Teil der Lobby
     switch (msg.type) {
+      case 'setSpectate': // V3-RS: Spieler wird Zuschauer
+        if (st.phase !== 'lobby' || !msg.on || from === this.transport.selfId) return;
+        if ((st.specs ||= []).length >= MAX_SPECTATORS) { this.transport.send(from, { type: 'notice', text: 'Alle Zuschauerplätze sind belegt.', code: 'spec-full' }); return; }
+        { const name = s.name; Object.assign(s, { kind: 'open', peerId: null, name: '', ready: false }); delete s.role; this._addSpec(from, name); }
+        return;
+      case 'replayReq': this._emit('replayReq', s.slot); return;
       case 'setName':
         if (st.phase !== 'lobby') return;
         s.name = cleanName(msg.name, s.name);
@@ -341,6 +373,35 @@ export class Lobby {
     }
   }
 
+  // ---------------------------------------------------------------- V3-RS: Zuschauer
+  _specOfPeer(peerId) { return this.state?.specs?.find(s => s.peerId === peerId) || null; }
+  _addSpec(peerId, name) {
+    const st = this.state;
+    st.specs ||= [];
+    if (st.specs.length >= MAX_SPECTATORS || st.settings.coop) return false;
+    let id = SPEC_ID0; while (st.specs.some(s => s.id === id)) id++;
+    st.specs.push({ id, peerId, name: cleanName(name, 'Zuschauer ' + (id - SPEC_ID0 + 1)) });
+    this._changed();
+    return true;
+  }
+  _specHandle(sp, from, msg) {
+    const st = this.state;
+    switch (msg.type) {
+      case 'setName': if (st.phase === 'lobby') { sp.name = cleanName(msg.name, sp.name); this._changed(); } break;
+      case 'setSpectate':
+        if (st.phase !== 'lobby' || msg.on) return;
+        { const free = this._freeSlot(TEAMS.includes(msg.team) ? msg.team : null);
+          if (!free) { this.transport.send(from, { type: 'notice', text: 'Kein freier Spielerplatz.', code: 'lobby-full' }); return; }
+          st.specs = st.specs.filter(x => x !== sp);
+          Object.assign(free, { kind: 'human', peerId: from, name: sp.name, ready: false });
+          this._changed(); }
+        break;
+      case 'chat': this._relayChat({ slot: sp.id, name: sp.name, team: null, spectator: true }, msg.text, 'all'); break;
+      case 'specView': if (st.phase === 'game') this._emit('specView', sp.id, ['all', 'UA', 'RU'].includes(msg.view) ? msg.view : 'all'); break;
+      case 'replayReq': this._emit('replayReq', sp.id); break;
+    }
+  }
+
   _moveToTeam(s, team, peerId) {
     if (!TEAMS.includes(team) || s.team === team) return;
     const target = this.state.slots.find(x => x.team === team && x.kind === 'open');
@@ -361,15 +422,20 @@ export class Lobby {
     text = String(text ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 300);
     if (!text) return;
     const out = { type: 'chat', playerId: s.slot, name: s.name, team: s.team, scope: scope === 'team' ? 'team' : 'all', text };
+    if (s.spectator) out.spectator = true;
+    // V3-RS: Zuschauer lesen den allgemeinen Chat; im Spiel schreiben sie nur unter sich (kein Einsagen)
+    const toPlayers = !(s.spectator && this.state.phase === 'game');
     for (const x of this.state.slots) {
-      if (x.kind !== 'human' || !x.peerId) continue;
+      if (!toPlayers || x.kind !== 'human' || !x.peerId) continue;
       if (out.scope === 'team' && x.team !== s.team) continue;
       if (x.peerId === this.transport.selfId) this._emit('chat', out);
       else this.transport.send(x.peerId, out);
     }
+    if (out.scope !== 'team') for (const x of this.state.specs || []) if (x.peerId && x.connected !== false) this.transport.send(x.peerId, out);
   }
 
   _peerOfPlayer(playerId) {
+    if (playerId >= SPEC_ID0) return this.state?.specs?.find(s => s.id === playerId)?.peerId || null; // V3-RS
     const s = this.state?.slots[playerId];
     return s && s.kind === 'human' ? s.peerId : null;
   }
@@ -384,9 +450,9 @@ export class Lobby {
         err ? reject(err) : resolve(st);
       };
       const timer = setTimeout(() => done(lobbyError('Keine Antwort vom Host (Zeitüberschreitung bei der Platzvergabe).', 'timeout')), opts.timeout || JOIN_TIMEOUT);
-      const offU = this.on('update', st => { if (this.playerId >= 0) done(null, st); });
+      const offU = this.on('update', st => { if (this.playerId >= 0 || this.mySpec) done(null, st); });
       const offE = this.on('_reject', reason => done(lobbyError(reason, 'rejected')));
-      this.transport.send(this.transport.hostId, { type: 'hello', v: PROTOCOL_VERSION, name: this.name, team: opts.team });
+      this.transport.send(this.transport.hostId, { type: 'hello', v: PROTOCOL_VERSION, name: this.name, team: opts.team, spectate: !!opts.spectate });
     });
   }
 
@@ -442,6 +508,12 @@ export class Lobby {
     if (this.state) this._request('setName', { name: this.name });
   }
   setTeam(team) { this._request('setTeam', { team }); }
+  /** V3-RS: Zuschauer werden (on) bzw. einen Spielerplatz nehmen (off). */
+  setSpectate(on, team) { this._request('setSpectate', { on: !!on, team }); }
+  /** V3-RS: Zuschauer – gewünschte Sicht ('all' | 'UA' | 'RU'). */
+  specView(view) { if (!this.isHost) this.transport.send(this.transport.hostId, { type: 'specView', view }); }
+  /** V3-RS: Wiederholung beim Host anfordern (Antwort als Event {k:'rp', …}). */
+  requestReplay() { if (!this.isHost) this.transport.send(this.transport.hostId, { type: 'replayReq' }); }
   /** Eigene Rolle wählen (Erweiterung MP-T5). */
   setRole(role) { this._request('setRole', { role: cleanRole(role) }); }
   setReady(ready = true) {

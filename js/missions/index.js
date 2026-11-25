@@ -13,6 +13,7 @@ import './ww2_axis/index.js';
 import './ukraine/index.js';
 import './tutorial/index.js';
 import './afghan_isaf/index.js';
+import './afghan_soviet/index.js';
 import '../i18n/runtime.js'; // V3-I18N-B: englische Missions-/Kampagnen-/Ortstexte (Overlay + Laufzeittexte)
 
 // Ukraine-Missionen: Epoche, Schwierigkeit und Kurztext für die Missionsliste (Missionsdateien bleiben unverändert)

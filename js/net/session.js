@@ -19,6 +19,7 @@ import { packMods, unpackMods } from '../game/tactics.js';
 import { AICommander } from '../skirmish/ai.js';
 import { normalizeSetup, netPointState, applyNetPoints, endFor, ROLES, TEAM_NAME } from '../skirmish/skirmish.js';
 import { applyLeave } from '../game/replay.js'; // V3-RS: Verlassen eines Spielers (identisch in der Wiedergabe)
+import { SpectatorFeed } from './spectator.js'; // V3-RS: Zuschauer (ungefilterte bzw. Team-Snapshots, optional verzögert)
 
 export const TYPE_KEYS = Object.keys(UNIT_TYPES);
 const TYPE_IDX = new Map(TYPE_KEYS.map((k, i) => [k, i]));
@@ -80,6 +81,7 @@ export function setupFromStart(info, myId, role) {
     difficulty: st.difficulty || 'normal', reinforce: st.reinforce || 180, victory: st.victory || 'points', seed: info.seed,
     // Wetter, Tageszeit und Satellitennetz-Ausfälle aus den Lobby-Einstellungen des Hosts – für alle Rechner gleich
     weather: st.weather || 'clear', daytime: st.daytime || 'day', satOutage: st.satOutage !== false,
+    ...(st.timeLimit > 0 ? { timeLimit: +st.timeLimit } : {}), // V3-RS: feste Spieldauer (Tests/Turniere)
   });
   S.players = playersFromStart(info, myId);
   S.team = S.players.find((p) => p.local)?.team || 'UA';
@@ -115,7 +117,7 @@ export class HostSession {
       sendCommand: (cmd) => g.command(g.localPlayerId, cmd),
       feedback: (to, kind, args) => this._feedback(to, kind, args),
       // V3-M2: Welt-Ereignisse (Walzen 'cr', Brücke 'br', Fallschirm 'pd'); all = an beide Teams, sonst nur bei Sicht
-      event: (ev, x, z, all) => { if (all) { for (const t of ['UA', 'RU']) if (this._teamHasRemote(t)) this.teamQ[t].push(ev); } else this._fxAt(x, z, ev); },
+      event: (ev, x, z, all) => { if (all) { this.spec?.ev(ev); for (const t of ['UA', 'RU']) if (this._teamHasRemote(t)) this.teamQ[t].push(ev); } else this._fxAt(x, z, ev); },
       attacked: (u) => this._attacked(u),
       onMissile: (m) => this._onMissile(m),
       onMissileGone: (m) => this._onMissileGone(m),
@@ -123,6 +125,9 @@ export class HostSession {
     relaxTimeout(lobby);
     this.unsub.push(lobby.on('cmd', (pid, cmd) => this._onCmd(pid, cmd)));
     this.unsub.push(lobby.on('left', (info2) => this._onLeft(info2)));
+    // V3-RS: Zuschauer
+    this.spec = info.spectators?.length ? new SpectatorFeed(this, info) : null;
+    this.unsub.push(lobby.on('specView', (id, v) => this.spec?.setView(id, v)));
     this._onKill = (u, killer, silent) => this._kill(u, silent);
     this._onBuilt = (u) => this._teamEvent(u.side, ['bt', u.id]);
   }
@@ -158,10 +163,10 @@ export class HostSession {
     // V3-M1: Würfe (Granate, Molotow, Nebel, Ladung), Brandflächen, Rauchwände (Rauch auch für die Sichtprüfung der Clients)
     fx.throwable = function (a, b, fl, fu, kind) { o.throwable.call(this, a, b, fl, fu, kind); self._fxAt(a.x, a.z, ['th', r1(a.x), r1(a.y), r1(a.z), r1(b.x), r1(b.y), r1(b.z), Math.round(fl * 100) / 100, Math.round(fu * 100) / 100, kind], b.x, b.z); };
     fx.firePool = function (x, y, z, dur) { o.firePool.call(this, x, y, z, dur); self._fxAt(x, z, ['fp', r1(x), r1(y), r1(z), dur]); };
-    fx.smokeScreen = function (c) { o.smokeScreen.call(this, c); for (const t of ['UA', 'RU']) if (self._teamHasRemote(t)) self.teamQ[t].push(['sm', r1(c.x), r1(c.z), r1(c.r), c.dur, r1(c.age)]); };
+    fx.smokeScreen = function (c) { o.smokeScreen.call(this, c); const ev = ['sm', r1(c.x), r1(c.z), r1(c.r), c.dur, r1(c.age)]; self.spec?.ev(ev); for (const t of ['UA', 'RU']) if (self._teamHasRemote(t)) self.teamQ[t].push(ev); };
     au.shot = function (kind, x, z) { o.shot.call(this, kind, x, z); self._fxAt(x, z, ['s', kind, r1(x), r1(z)]); };
     au.drone = function (x, z) { o.drone.call(this, x, z); self._fxAt(x, z, ['d', r1(x), r1(z)]); };
-    au.boom = function () { o.boom.call(this); for (const t of ['UA', 'RU']) self.teamQ[t].push(['b']); };
+    au.boom = function () { o.boom.call(this); self.spec?.ev(['b']); for (const t of ['UA', 'RU']) self.teamQ[t].push(['b']); };
     g.addReveal = function (x, z, r, t, team = g.localSide) { o.addReveal.call(g, x, z, r, t, team); self._teamEvent(team, ['rv', r1(x), r1(z), r, t]); };
   }
   _untap() {
@@ -175,6 +180,7 @@ export class HostSession {
   _teamHasRemote(team) { return this.connected.some((id) => this.game.playerById(id)?.team === team); }
   _fxAt(x, z, ev, x2, z2) {
     const g = this.game;
+    this.spec?.ev(ev); // V3-RS: Zuschauer sehen alle Effekte
     for (const t of ['UA', 'RU']) {
       if (!this._teamHasRemote(t)) continue;
       const f = g.fows[t];
@@ -185,6 +191,7 @@ export class HostSession {
   _push(pid, ev) { if (!this.gone.has(pid) && this.remote.includes(pid)) { let l = this.q.get(pid); if (!l) this.q.set(pid, (l = [])); l.push(ev); } }
   _feedback(to, kind, args) {
     const g = this.game;
+    if (this.spec && (kind === 'say' || kind === 'alert' || kind === 'air' || kind === 'chat')) this.spec.ev(['fb', kind, args]); // V3-RS: Funk beider Teams
     for (const id of this.connected) {
       const p = g.playerById(id); if (!p) continue;
       const hit = to === null || to === undefined || ((to === 'UA' || to === 'RU') ? p.team === to : String(to) === String(id));
@@ -200,6 +207,7 @@ export class HostSession {
     this._push(id, ['ua', u.id]);
   }
   _kill(u, silent) {
+    this.spec?.ev(['k', u.id, silent ? 1 : 0]);
     for (const t of ['UA', 'RU']) {
       if (!this._teamHasRemote(t)) continue;
       if (u.side === t || u.side === 'N' || u.seenBy?.[t] || u.prevSide === t) this.teamQ[t].push(['k', u.id, silent ? 1 : 0]);
@@ -219,8 +227,9 @@ export class HostSession {
       const f = g.fows[t];
       if (m.side === t || f.isVisible(m.pos.x, m.pos.z) || f.isVisible(m.end.x, m.end.z)) { this.teamQ[t].push(['ms', d]); m.netTeams.push(t); }
     }
+    if (this.spec?.active) { this.spec.ev(['ms', d]); m.netSpec = true; }
   }
-  _onMissileGone(m) { for (const t of m.netTeams || []) this.teamQ[t].push(['mx', m.nid]); m.netTeams = null; }
+  _onMissileGone(m) { for (const t of m.netTeams || []) this.teamQ[t].push(['mx', m.nid]); m.netTeams = null; if (m.netSpec) { this.spec?.ev(['mx', m.nid]); m.netSpec = false; } }
 
   // ---------------- Eingänge ----------------
   _onCmd(pid, cmd) {
@@ -238,6 +247,7 @@ export class HostSession {
   // Client weg → KI übernimmt seinen Slot
   _onLeft(info) {
     const g = this.game, pid = info.playerId;
+    if (info.spectator) { this.spec?.left(pid); return; } // V3-RS
     if (info.host || !this.remote.includes(pid) || this.gone.has(pid)) return;
     this.gone.add(pid);
     this.goneInfo = { ...(this.goneInfo || {}), [pid]: { reason: info.reason, t: this.game.time, loaded: this.loaded, ready: this.ready.has(pid) } };
@@ -285,6 +295,7 @@ export class HostSession {
       this.lobby.sendEvent(msg, id);
     }
     this.teamQ.UA = []; this.teamQ.RU = []; this.q.clear();
+    this.spec?.flush(); // V3-RS
   }
   _count(k, id, msg) { this.stats[k][id] = (this.stats[k][id] || 0) + JSON.stringify(msg).length + 24; }
   _sendSnapshots() {
@@ -300,12 +311,15 @@ export class HostSession {
     }
     // Spielerliste je Team: Einheitenzahl und „wartet“ nur für das eigene Team (MP-T6: keine Feindstärke über das Netz)
     const plFor = {};
+    let rowsAll = null;
+    if (this.extraSnap) Object.assign(common, this.extraSnap(withPlayers)); // V3-RS: Koop – Ziele/Countdown der Mission
     if (withPlayers) {
       const rows = g.players.map((p) => {
         let n = 0; for (const u of g.units) if (u.alive && u.owner === p.id && !u.type.structure && !u.type.kamikaze) n++;
         const s = p.stats;
         return [p.id, p.name, p.ai ? 1 : 0, p.defeated ? 1 : 0, p.waiting ? 1 : 0, s.kills, s.lost, s.captured || 0, s.reinf || 0, n, s.shots || 0, s.intercepts || 0];
       });
+      rowsAll = rows;
       for (const T of ['UA', 'RU']) plFor[T] = rows.map((r, i) => (g.players[i].team === T ? r : [r[0], r[1], r[2], r[3], 0, r[5], r[6], r[7], r[8], -1, r[10], r[11]]));
     }
     const enc = {}, extra = {};
@@ -320,6 +334,7 @@ export class HostSession {
       this._count('bytes', id, msg);
       this.lobby.sendSnap(msg, id);
     }
+    this.spec?.snap(common, rowsAll); // V3-RS: Zuschauer (ungefiltert bzw. gewählte Teamsicht)
     this.stats.snaps++;
     this.stats.snapMs += performance.now() - t0;
   }
@@ -568,6 +583,7 @@ export class ClientSession {
       if (prevCycle !== sk.reinfCycle) g.emit('abilities');
     }
     if (sk && s.res && !sk.result) { sk.result = s.res; if (!g.ended) endFor(g, s.res); }
+    this.onExtraSnap?.(s); // V3-RS: Koop (Ziele, Countdown)
   }
   _applyUnit(e, t) {
     const g = this.game;
@@ -732,6 +748,7 @@ export class ClientSession {
         else if (kind === 'marker') fx?.marker(...a);
         else if (kind === 'chat') this.onSys?.(a[0]);
         else if (kind === 'air') { if (this.loaded) getAirShow(g).play(a[0]); }
+        else this.onFb?.(kind, a); // V3-RS: z. B. Koop-Missionsende
         break;
       }
     }
