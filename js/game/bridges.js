@@ -153,8 +153,14 @@ export class BridgeSystem {
     const hAbove = style === 'pontoon' ? 0.35 : style === 'wood' ? clamp(1.8 + span * 0.02, 2, 2.8)
       : style === 'stone_arch' ? clamp(2.8 + span * 0.04, 3, 5.5) : style === 'steel_truss' ? clamp(3.2 + span * 0.025, 3.5, 6)
         : style === 'cable_arch' ? 6 : clamp(2.8 + span * 0.03, 3, 6);
+    // Fahrbahn mindestens auf Uferhöhe (sonst Stufe am höheren Ufer); das niedrigere Ufer erhält eine Rampe
+    T._deckOff = true;
+    const qa = polyAt(P, cum, Math.max(0, sA - 1.5)), qb = polyAt(P, cum, Math.min(L, sB + 1.5));
+    const bank = Math.max(T.height(qa.x, qa.z), T.height(qb.x, qb.z));
+    T._deckOff = false;
+    const deck = style === 'pontoon' ? sea + hAbove : Math.max(sea + hAbove, Math.min(bank + 0.05, sea + 9));
     const b = {
-      id: o.id ?? this.list.length + 1, name: o.name || null, kind, style, width, pts: P, cum, sA, sB, deck: sea + hAbove,
+      id: o.id ?? this.list.length + 1, name: o.name || null, kind, style, width, pts: P, cum, sA, sB, deck,
       state: 'intact', maxHp: o.hp || (style === 'wood' ? BR.hp.wood : style === 'pontoon' ? BR.hp.pontoon : BR.hp[kind]), hp: 0, build: 0,
       boats: hAbove >= 2.5, group: null, parts: {}, wreck: null, repairVis: null, causeway: !!o.causeway,
     };
@@ -176,7 +182,8 @@ export class BridgeSystem {
     b.piers = style === 'pontoon' ? [] : piers;
     const c = polyAt(P, cum, (b.gA + b.gB) / 2); b.cx = c.x; b.cz = c.z;
     // Rampen/Widerlager an beiden Ufern bis zur Fahrbahnhöhe
-    b.ramp = style === 'pontoon' ? 4 : clamp(hAbove * 5.5, 8, 32);
+    b.ramp = style === 'pontoon' ? 4 : clamp((deck - sea) * 5.5, 8, 32);
+    b.boats = deck - sea >= 2.5;
     this._ramps(b);
     // Hüllrechteck für die Höhenabfrage
     let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;

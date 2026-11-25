@@ -524,7 +524,7 @@ reg('ww2_ruin', (c) => {
 
 // Getreidesilo (Elevator): hoher Arbeitsturm + Block aus Betonsilos (zylindrisch), Galerie oben, Granattreffer
 reg('grain_elevator', (c) => {
-  const { w, d } = c, con = wmat('panel', 0xb4aea0), cyl = pm(0x958f82, 0.95), dk = DARK(), trim = pm(0x7f7a70, 0.95);
+  const { w, d } = c, con = wmat('panel', 0xb4aea0), cyl = pm(0x837d70, 0.95), dk = DARK(), trim = pm(0x7f7a70, 0.95);
   const tw = Math.min(12, w * 0.27), tx = -w / 2 + tw / 2, Ht = 38, Hs = 27;
   const TF = boxFaces(tx, 0, tw, d - 1);
   const body = TB(c.g, tw, Ht, d - 1, con, tx, Ht / 2, 0, 0, 3);
