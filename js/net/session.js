@@ -18,6 +18,7 @@ import { getAirShow } from '../engine/aircraft.js';
 import { packMods, unpackMods } from '../game/tactics.js';
 import { AICommander } from '../skirmish/ai.js';
 import { normalizeSetup, netPointState, applyNetPoints, endFor, ROLES, TEAM_NAME } from '../skirmish/skirmish.js';
+import { applyLeave } from '../game/replay.js'; // V3-RS: Verlassen eines Spielers (identisch in der Wiedergabe)
 
 export const TYPE_KEYS = Object.keys(UNIT_TYPES);
 const TYPE_IDX = new Map(TYPE_KEYS.map((k, i) => [k, i]));
@@ -77,6 +78,8 @@ export function setupFromStart(info, myId, role) {
   const S = normalizeSetup({
     mode: st.playersPerTeam, preset: st.preset || 'random', size: st.size, season: st.season, night: !!st.night,
     difficulty: st.difficulty || 'normal', reinforce: st.reinforce || 180, victory: st.victory || 'points', seed: info.seed,
+    // Wetter, Tageszeit und Satellitennetz-Ausfälle aus den Lobby-Einstellungen des Hosts – für alle Rechner gleich
+    weather: st.weather || 'clear', daytime: st.daytime || 'day', satOutage: st.satOutage !== false,
   });
   S.players = playersFromStart(info, myId);
   S.team = S.players.find((p) => p.local)?.team || 'UA';
@@ -225,7 +228,10 @@ export class HostSession {
     if (cmd?.t === 'netReady') { this.ready.add(pid); if (this.loaded) this._waitNote(); return; }
     if (!this.loaded || !g.active || g.ended) return;
     if (pid === g.localPlayerId) return; // Host steuert direkt
-    const ok = g.command(pid, cmd);
+    // V3-RS: Aufzeichnung für Wiederholungen – Kommando mit Spieler-id protokollieren und im Seed-RNG ausführen
+    const R = g.recorder?.on && !g.recorder.replaying ? g.recorder : null;
+    if (R) R.onCommand(cmd, pid);
+    const ok = R ? R.sim(() => g.command(pid, cmd)) : g.command(pid, cmd);
     this.stats.cmds++; if (!ok) this.stats.cmdsRejected++;
     if (!ok && cmd && typeof cmd === 'object') this._push(pid, ['fb', 'ui', ['fail']]);
   }
@@ -239,12 +245,13 @@ export class HostSession {
     const p = g.playerById(pid);
     const why = info.reason === 'timeout' ? 'Verbindung verloren' : 'hat das Spiel verlassen';
     if (p && this.loaded && !g.ended) {
-      p.remote = false; p.ai = true;
-      p.name = `${info.name || p.name} (KI)`;
-      const sk = g.mission?.skirmish;
-      if (sk && !p.defeated) sk.ais.push(new AICommander(g, sk, p, { difficulty: this.S.difficulty, phase: 0.3 }));
+      // V3-RS: über applyLeave (replay.js) – dieselbe Wirkung in der Wiedergabe; im Protokoll als Sonderkommando '__left'
+      const R = g.recorder?.on && !g.recorder.replaying ? g.recorder : null;
+      const c = { t: '__left', name: info.name || p.name, difficulty: this.S.difficulty || 'normal' };
+      if (R) R.onCommand(c, pid);
+      const how = R ? R.sim(() => applyLeave(g, pid, c)) : applyLeave(g, pid, c);
       this.stats.takeovers++;
-      const txt = `${info.name || 'Ein Spieler'} ${why} – die KI übernimmt seine Einheiten.`;
+      const txt = how === 'coop' ? `${info.name || 'Ein Spieler'} ${why} – seine Einheiten gehen an den Host.` : `${info.name || 'Ein Spieler'} ${why} – die KI übernimmt seine Einheiten.`;
       g.alertTo(null, txt, 5);
       this._feedback(null, 'chat', [txt]); this.onSys?.(txt); // zusätzlich dauerhaft im Chat-Protokoll
       g.emit('players');
