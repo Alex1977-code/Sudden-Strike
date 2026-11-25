@@ -358,6 +358,7 @@ body.touch .key { display: none; }
   .lobby-grid { grid-template-columns: 1fr 270px; gap: 10px; }
   .lobby-settings { order: 0; }
   .lobby-settings.sk-form { display: block; min-width: 0; }
+.lobby-settings input.switch { padding: 0 !important; max-width: none; flex-shrink: 0; }
   .lobby-settings .sk-field { flex-wrap: wrap; }
   .lobby-settings .seg button { min-height: 28px; min-width: 34px; padding: 3px 6px; font-size: 12px; }
   .lobby-settings label, .lobby-settings .sk-field { margin: 2px 0; font-size: 12px; }
@@ -685,7 +686,7 @@ div.set-row { cursor: default; }
 @media (pointer: coarse) {
   .mpanel select, .mpanel input[type=number], .mpanel input[type=text], .mpanel input:not([type]) { min-height: 44px; }
   .seedrow button { min-height: 44px; min-width: 44px; }
-  .mpanel .lobby-settings select, .mpanel .lobby-settings input { min-height: 44px; }
+  .mpanel .lobby-settings select, .mpanel .lobby-settings input:not([type=checkbox]) { min-height: 44px; }
 }
 /* Fokus: Tastatur und Gamepad deutlich sichtbar */
 .screen :focus-visible { outline: 2px solid var(--m-gold-2); outline-offset: 2px; }
@@ -935,7 +936,7 @@ div.set-row { cursor: default; }
 .net-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 14px; align-items: stretch; margin-top: 16px; }
 .net-card { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--m-line); background: rgba(0, 0, 0, .28); }
 .net-card-h { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
-.net-card-h .ic { width: 18px; height: 18px; color: var(--m-gold); }
+.net-card-h i.ic-slot .ic { width: 18px; height: 18px; color: var(--m-gold); }
 .net-card p { margin: 0; font-size: 13px; line-height: 1.45; flex: 1; }
 .net-card button { min-height: 46px; }
 .net-or { align-self: center; font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--m-muted); }
@@ -953,12 +954,13 @@ div.set-row { cursor: default; }
 .slot.me { background: rgba(216, 180, 90, .12); }
 .lobby-settings h3 { margin-top: 0; }
 .lobby-settings.sk-form { display: block; min-width: 0; }
+.lobby-settings input.switch { padding: 0 !important; max-width: none; flex-shrink: 0; }
 .lobby-settings .sk-field { flex-wrap: wrap; }
 .mpanel .lobby-settings select { width: min(180px, 58%); }
 .lobby-settings .seedrow input { width: 100px; }
 .lobby-chat { background: rgba(0, 0, 0, .3); border: 1px solid var(--m-line); border-radius: 2px; }
 .lobby-settings label, .lobby-settings .sk-field { min-height: 40px; padding: 4px 0; }
-.mpanel .lobby-settings select, .mpanel .lobby-settings input { width: auto; max-width: 170px; min-height: 34px; padding-top: 5px; padding-bottom: 5px; }
+.mpanel .lobby-settings select, .mpanel .lobby-settings input:not([type=checkbox]) { width: auto; max-width: 170px; min-height: 34px; padding-top: 5px; padding-bottom: 5px; }
 #ls-map { border-color: var(--m-line-2); border-radius: 0; }
 
 /* ---------- Mods, Hilfe ---------- */
@@ -982,7 +984,7 @@ div.set-row { cursor: default; }
 }
 .mpanel .tabs button:hover { color: var(--m-text); background: rgba(255, 255, 255, .03); }
 .mpanel .tabs button.active { color: var(--m-text); border-bottom-color: var(--m-gold); background: linear-gradient(0deg, rgba(216, 180, 90, .14), transparent); }
-.tabs button .ic { width: 17px; height: 17px; }
+.tabs button i.ic-slot .ic { width: 17px; height: 17px; }
 .tabs button.active .ic { color: var(--m-gold); }
 .tab-pane:not(.hidden) { animation: mFade .2s both; }
 .ctl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
@@ -1000,8 +1002,9 @@ dl.keys dd { margin: 0; color: var(--m-text-2); line-height: 1.45; }
 .pause-panel #pause-info { margin: 12px 0 0; font-size: 12.5px; line-height: 1.5; }
 .pause-menu { display: flex; flex-direction: column; gap: 6px; }
 .mpanel .pm-item { justify-content: flex-start; gap: 14px; width: 100%; min-height: 50px; padding: 10px 16px; text-align: left; font-size: 13.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-.pm-item .ic { width: 20px; height: 20px; color: var(--m-gold); }
-.pm-item.danger .ic { color: #ff8f86; }
+.pm-item i.ic-slot .ic { width: 20px; height: 20px; color: var(--m-gold); }
+.pm-item.danger i.ic-slot .ic { color: #ff8f86; }
+.pm-item.big i.ic-slot .ic { color: var(--m-ink); }
 .mpanel .pm-item.danger:hover { border-color: var(--m-danger); background: rgba(224, 87, 79, .16); }
 
 /* ---------- Endbildschirm ---------- */
@@ -1084,7 +1087,8 @@ dl.keys dd { margin: 0; color: var(--m-text-2); line-height: 1.45; }
   .set-row select { width: 52%; }
   .mpanel .set-row { gap: 12px; }
   .set-l small { font-size: 11.5px; }
-  .mpanel .tabs button { padding: 10px 12px; letter-spacing: .08em; }
+  .tabs { gap: 0; }
+  .mpanel .tabs button { flex: 1 1 0; min-width: 0; flex-direction: column; gap: 3px; padding: 7px 2px; font-size: 10.5px; letter-spacing: .06em; }
   .mpanel .sk-form select { width: 58%; }
   .end-word { gap: 12px; letter-spacing: .1em; }
   .end-banner { padding: 22px 16px 16px; }
@@ -1175,7 +1179,8 @@ dl.keys dd { margin: 0; color: var(--m-text-2); line-height: 1.45; }
   .title-vignette { background: linear-gradient(90deg, rgba(8, 10, 12, .86) 0%, rgba(8, 10, 12, .45) 42%, rgba(8, 10, 12, .72) 62%, rgba(8, 10, 12, .92) 100%), linear-gradient(0deg, rgba(8, 10, 12, .7), transparent 40%); }
   .title-layout { grid-template-columns: minmax(0, 1fr) minmax(290px, 360px); grid-template-rows: 1fr auto; grid-template-areas: "brand menu" "foot menu"; gap: 10px 28px; align-items: center;
     padding: calc(14px + var(--safe-t)) calc(16px + var(--safe-r)) calc(10px + var(--safe-b)) calc(24px + var(--safe-l)); }
-  .brand-title { font-size: clamp(34px, 7vw, 56px); }
+  .brand-title { font-size: clamp(30px, 5.2vw, 50px); }
+  .camp-empty { grid-template-columns: 240px minmax(0, 1fr); gap: 16px; padding: 12px; }
   .brand-sub { margin-top: 10px; font-size: 11.5px; }
   .brand-eras { display: none; }
   .main-menu { align-self: center; gap: 3px; }

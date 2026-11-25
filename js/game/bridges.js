@@ -168,7 +168,7 @@ export class BridgeSystem {
       for (let s = b.gB; s < sB - 4; s += BR.span.cable_arch) piers.push(s);
       piers.sort((x, y) => x - y);
     } else {
-      const n = Math.max(1, Math.round(span / BR.span[style]));
+      const n = Math.max(span >= 18 && style !== 'pontoon' ? 3 : 1, Math.round(span / BR.span[style])); // mittleres Feld stürzt ein
       for (let i = 1; i < n; i++) piers.push(sA + (i * span) / n);
       if (n >= 3) { const k = Math.floor(n / 2), all = [sA, ...piers, sB]; b.gA = all[k]; b.gB = all[k + 1]; }
       else { const mid = (sA + sB) / 2; b.gA = mid - span * 0.22; b.gB = mid + span * 0.22; }

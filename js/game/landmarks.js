@@ -792,7 +792,7 @@ reg('koenigsberg_dom', (c) => {
 
 // Wrangel-/Dohnaturm: runder Backstein-Festungsturm mit Konsolfries, Zinnen, Schießscharten, Treppentürmchen
 reg('wrangelturm', (c) => {
-  const { w, d } = c, R = Math.min(w, d) / 2 - 0.3, H = 9 + Math.min(4, c.floors || 2), br = pm(0x8e4a3a, 0.95), wh = pm(0xd9cfbc, 0.9), dk = DARK();
+  const { w, d } = c, R = Math.min(w, d) / 2 - 0.3, H = 9 + Math.min(4, c.floors || 2), br = pm(0x7a4436, 0.95), wh = pm(0xd9cfbc, 0.9), dk = DARK();
   const body = CY(c.g, R, R + 0.25, H, br, 0, H / 2, 0, 20);
   CY(c.g, R + 0.5, R + 0.5, 0.5, br, 0, 0.25, 0, 20);
   for (const y of [H * 0.4, H * 0.75]) CY(c.g, R + 0.06, R + 0.06, 0.3, wh, 0, y, 0, 20);
@@ -1332,20 +1332,22 @@ reg('mig17_monument', (c) => {
 }, 'concrete');
 // Sektkellerei (Artemiwsk): zweigeschossiges Betriebsgebäude vorn, dahinter Gipshang mit zwei Stollenportalen, Fässer
 reg('sektkellerei', (c) => {
-  const { w, d } = c, pl = wmat('plaster', 0xe6dcc4), roofM = wmat('seam', 0x7a3a2e, 0.55, 0.4), gyp = pm(0xd6cfbf, 1), trim = pm(0xf2ede0, 0.85), dk = DARK();
-  const bd = d * 0.5, bz = d / 2 - bd / 2, H = 7.4, F = boxFaces(0, bz, w, bd);
-  const body = TB(c.g, w, H, bd, pl, 0, H / 2, bz, 0, 4);
-  add(c.g, hipG(w + 0.6, bd + 0.6, 2.6), roofM, 0, H, bz);
+  const { w, d } = c, pl = wmat('plaster', 0xe6dcc4), roofM = wmat('seam', 0x7a3a2e, 0.55, 0.4), gyp = pm(0xb9b09c, 1), trim = pm(0xf2ede0, 0.85), dk = DARK();
+  const hd = d * 0.42, hz = -d / 2 + hd / 2, bw = w * 0.56, bx = -w / 2 + bw / 2, bd = d - hd - 0.5, bz = d / 2 - bd / 2, H = 7.4, F = boxFaces(bx, bz, bw, bd);
+  const body = TB(c.g, bw, H, bd, pl, bx, H / 2, bz, 0, 4);
+  add(c.g, hipG(bw + 0.6, bd + 0.6, 2.6), roofM, bx, H, bz);
   openings(c, F, { faces: [0, 2, 3], fh: 3.5, ww: 1.4, wh: 1.9, sill: 0.9, bay: 3.0, frame: trim, glass: 'auto', fl1: 2, soot: 0.2, skip: (fi, fl, i, n) => fi === 0 && fl === 0 && i === Math.floor(n / 2) });
   fp(c, F, archPlaneG(2.6, 3.4), pm(0x5a2a24, 0.8), 0, 0, 1.7, 0.05); fp(c, F, archPlaneG(3.0, 3.8), trim, 0, 0, 1.8, 0.03);
+  // Gipshang (Stollenberg) über die ganze Breite hinten, mit Stollenportalen zum Hof
   const rnd = c.rnd;
-  for (let k = 0; k < 7; k++) { const x = -w / 2 + (k + 0.5) * w / 7, h = 6 + rnd() * 4; BX(c.g, w / 7 + 1.2, h, d - bd + 0.4, gyp, x, h / 2 - 0.4, -d / 2 + (d - bd) / 2, (rnd() - 0.5) * 0.15, (rnd() - 0.5) * 0.2, (rnd() - 0.5) * 0.15); }
-  for (const s of [-1, 1]) { const x = s * w * 0.3; BX(c.g, 4.6, 5.0, 1.0, pm(0xc9c2b2, 0.95), x, 2.5, bz - bd / 2 - 0.3); add(c.g, archPlaneG(3.2, 4.0), dk, x, 2.0, bz - bd / 2 + 0.22, 0, 0, 0); }
-  for (let k = 0; k < 6; k++) CY(c.g, 0.45, 0.45, 1.2, pm(0x6a4a30, 0.9), -w * 0.4 + k * 1.0, 0.45, d / 2 + 0.0 - 0.6, 10, 0, 0, HP);
+  for (let k = 0; k < 7; k++) { const x = -w / 2 + (k + 0.5) * w / 7, h = 7 + rnd() * 4; BX(c.g, w / 7 + 1.2, h, hd, gyp, x, h / 2 - 0.4, hz - 0.3 * rnd(), (rnd() - 0.5) * 0.1, (rnd() - 0.5) * 0.15, (rnd() - 0.5) * 0.1); }
+  const fz = hz + hd / 2;
+  for (const t of [0.22, 0.4]) { const x = w * t; BX(c.g, 5.0, 5.4, 1.0, pm(0xcfc6b2, 0.95), x, 2.7, fz + 0.1); add(c.g, archPlaneG(3.4, 4.2), dk, x, 2.1, fz + 0.62, 0, 0, 0); add(c.g, archPlaneG(4.0, 4.7), trim, x, 2.25, fz + 0.61, 0, 0, 0); }
+  for (let k = 0; k < 8; k++) CY(c.g, 0.45, 0.45, 1.2, pm(0x6a4a30, 0.9), w * 0.12 + (k % 4) * 1.1, 0.45 + Math.floor(k / 4) * 0.9, d / 2 - 1.5, 10, 0, 0, HP);
   shellHoles(c, F, 5, H, 0.8, 1.8, [0, 2, 3]);
-  useBox(c, F, w, bd, H);
-  hipInfo(c, H, w + 0.6, bd + 0.6, 2.6);
-  return { height: H + 9, body };
+  useBox(c, F, bw, bd, H);
+  hipInfo(c, H, bw + 0.6, bd + 0.6, 2.6);
+  return { height: 12, body };
 }, 'brick');
 // Chemiewerk (AZOM): Produktionsgebäude (Beton/Glasband), Destillationskolonnen, Kugeltanks, Rohrbrücke, Schornstein
 reg('azom_plant', (c) => {
@@ -1402,7 +1404,7 @@ reg('mine_complex', (c) => {
 }, 'concrete');
 // Obelisk (Mithridates-Berg): dreistufiger Sockel, schlanker Granit-Obelisk mit Pyramidion
 reg('obelisk', (c) => {
-  const { w, d } = c, S = Math.min(w, d), gr = pm(0x8f8c86, 0.8), gr2 = pm(0x7a7772, 0.85), H = 22 + Math.min(8, (c.floors || 4)) * 0.5;
+  const { w, d } = c, S = Math.min(w, d), gr = pm(0x74716b, 0.8), gr2 = pm(0x63605b, 0.85), H = 22 + Math.min(8, (c.floors || 4)) * 0.5;
   let body;
   for (let k = 0; k < 3; k++) body = body || BX(c.g, S - k * 1.4, 0.6, S - k * 1.4, gr2, 0, 0.3 + k * 0.6, 0);
   for (let k = 1; k < 3; k++) BX(c.g, S - k * 1.4, 0.6, S - k * 1.4, gr2, 0, 0.3 + k * 0.6, 0);
@@ -1487,7 +1489,7 @@ reg('bala_hissar', (c) => {
 // Massoud-Mausoleum (Saricha, Pandschir): Stufenplattform, quadratischer weißer Bau mit Bogenöffnungen, Tambour mit großer,
 // leicht spitzer weißer Kuppel, vier kleine Ecktürmchen mit Kuppeln. Respektvoll schlicht, ohne Inschriften.
 reg('massoud_mausoleum', (c) => {
-  const { w, d } = c, S = Math.min(w, d), wh = wmat('plaster', 0xf6f4ef), trim = pm(0xe6e2d8, 0.6), dome = pm(0xf2f1ec, 0.45, 0.05), gl = pm(0x3f5f6a, 0.2, 0.4);
+  const { w, d } = c, S = Math.min(w, d), wh = pm(0xeeece6, 0.7), trim = pm(0xdedad0, 0.6), dome = pm(0xf2f1ec, 0.45, 0.05), gl = pm(0x3f5f6a, 0.2, 0.4);
   for (let k = 0; k < 3; k++) BX(c.g, S - k * 0.9, 0.35, S - k * 0.9, pm(0xd8d4ca, 0.8), 0, 0.175 + k * 0.35, 0);
   const B = S * 0.66, H = 7, F = boxFaces(0, 0, B, B), y0 = 1.05;
   const body = TB(c.g, B, H, B, wh, 0, y0 + H / 2, 0, 0, 4);
@@ -1617,7 +1619,6 @@ reg('hangar', (c) => {
   const g = sub(c, 0, 1.6, 0, HP);
   const body = add(g, vaultG(w, d, rise, 12), corr, 0, 0, 0);
   add(g, vaultG(w, d, rise, 12, true), con, 0, 0, 0);
-  for (const s of [-1, 1]) { TB(c.g, w, 1.6, 0.6, con, 0, 0.8, 0, 0, 3).position.set(0, 0.8, 0); }
   TB(c.g, 0.6, 1.6, d, con, -w / 2 + 0.3, 0.8, 0, 0, 3); TB(c.g, 0.6, 1.6, d, con, w / 2 - 0.3, 0.8, 0, 0, 3);
   for (const s of [-1, 1]) { BX(c.g, w * 0.7, rise * 0.65 + 1.6, 0.2, pm(0x5f6a66, 0.6, 0.4), 0, (rise * 0.65 + 1.6) / 2, s * (d / 2 + 0.06)); for (let k = 1; k < 6; k++) BX(c.g, 0.08, rise * 0.65 + 1.6, 0.25, pm(0x3a403e, 0.6, 0.4), -w * 0.35 + k * w * 0.7 / 6, (rise * 0.65 + 1.6) / 2, s * (d / 2 + 0.1)); }
   useBox(c, boxFaces(0, 0, w, d), w, d, 1.6 + rise * 0.6);

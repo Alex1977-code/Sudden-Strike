@@ -23,6 +23,7 @@ import { initMods, listCustomMaps, getCustomMap } from './editor/mods.js';
 import { compileMission, compileSkirmishGen } from './editor/compile.js';
 import { escapeHtml } from './editor/format.js';
 import { t, applyI18n, setLang, getLang, isLangAvailable } from './i18n.js'; // V3-MENU
+import { SK_WEATHER, SK_DAYTIME } from './engine/weather.js'; // V3-MENU: Wetter/Tageszeit im Gefecht-Setup und in der Lobby
 import { getCampaigns, getCampaign, findMission, getProgress, isUnlocked, completeMission, resetProgress, setUnlockAll, nextMission, lastPlayed, setLastPlayed, drawMapSketch, campaignArtSVG, DIFFICULTY, ERAS } from './missions/campaigns.js'; // V3-MENU
 initMods(); // V3-E: aktive Mods (Einheitenwerte) vor dem ersten Spielstart anwenden
 
@@ -374,6 +375,7 @@ function renderSkSetup() {
   $('sk-night').checked = !!skSetup.night; $('sk-diff').value = skSetup.difficulty; $('sk-reinforce').value = String(skSetup.reinforce);
   $('sk-victory').value = skSetup.victory; $('sk-seed').value = skSetup.seed;
   renderRoleDesc();
+  renderSkExtras(); // V3-MENU
   schedulePreview();
 }
 // MP-T7 (P3a): Was bringt die Rolle mit? (Zeile unter der Auswahl + Tooltip je Option, abhängig vom Team)
@@ -390,6 +392,16 @@ for (const [id, key, conv] of [['sk-role', 'role'], ['sk-preset', 'preset'], ['s
   $(id).addEventListener('change', () => { skSetup[key] = conv ? conv($(id).value) : $(id).value; skChanged(); });
 }
 $('sk-night').addEventListener('change', () => { skSetup.night = $('sk-night').checked; skChanged(); });
+// V3-MENU: Wetter, Tageszeit (V3-W) und Satellitennetz-Ausfälle (V3-SL) – im letzten Setup gespeichert und explizit an normalizeSetup übergeben
+$('skirmish-weather').innerHTML = Object.entries(SK_WEATHER).map(([k, v]) => opt(k, v)).join('');
+$('skirmish-daytime').innerHTML = Object.entries(SK_DAYTIME).map(([k, v]) => opt(k, v)).join('');
+if (!SK_WEATHER[skSetup.weather]) skSetup.weather = 'clear';
+if (!SK_DAYTIME[skSetup.daytime]) skSetup.daytime = 'day';
+if (typeof skSetup.satOutage !== 'boolean') skSetup.satOutage = true;
+function renderSkExtras() { $('skirmish-weather').value = skSetup.weather; $('skirmish-daytime').value = skSetup.daytime; if ($('skirmish-satoutage')) $('skirmish-satoutage').checked = skSetup.satOutage; }
+$('skirmish-weather').addEventListener('change', () => { skSetup.weather = $('skirmish-weather').value; skChanged(); });
+$('skirmish-daytime').addEventListener('change', () => { skSetup.daytime = $('skirmish-daytime').value; skChanged(); });
+$('skirmish-satoutage')?.addEventListener('change', () => { skSetup.satOutage = $('skirmish-satoutage').checked; skChanged(); });
 $('sk-custom').addEventListener('change', () => { skSetup.customKey = $('sk-custom').value; skChanged(); });
 $('sk-reroll').onclick = () => { skSetup.seed = Math.floor(Math.random() * 99999) + 1; skChanged(); };
 let previewTimer = null;
@@ -457,6 +469,28 @@ const online = createOnline({
   toMenu: async () => { inMission = false; game.paused = false; hud.show(false); await loadDemo(); show('title'); },
   simTick: (dt) => simTick(dt),
 });
+// V3-MENU: Lobby – Wetter, Tageszeit, Satellitennetz-Ausfälle als Lobby-Einstellungen (Settings werden an Clients übertragen;
+// setupFromStart in js/net/session.js muss st.weather/st.daytime/st.satOutage noch an normalizeSetup weiterreichen – siehe Bericht)
+$('ls-weather').innerHTML = Object.entries(SK_WEATHER).map(([k, v]) => opt(k, v)).join('');
+$('ls-daytime').innerHTML = Object.entries(SK_DAYTIME).map(([k, v]) => opt(k, v)).join('');
+$('ls-weather').addEventListener('change', () => online.setSetting({ weather: $('ls-weather').value }));
+$('ls-daytime').addEventListener('change', () => online.setSetting({ daytime: $('ls-daytime').value }));
+$('ls-satoutage').addEventListener('change', () => online.setSetting({ satOutage: $('ls-satoutage').checked }));
+{
+  const renderLobby0 = online.renderLobby.bind(online);
+  online.renderLobby = (...a) => {
+    const r = renderLobby0(...a);
+    const st = online.lobby?.state?.settings;
+    if (st) {
+      const host = !!online.lobby.isHost;
+      $('ls-weather').value = SK_WEATHER[st.weather] ? st.weather : 'clear';
+      $('ls-daytime').value = SK_DAYTIME[st.daytime] ? st.daytime : 'day';
+      $('ls-satoutage').checked = st.satOutage !== false;
+      for (const id of ['ls-weather', 'ls-daytime', 'ls-satoutage']) $(id).disabled = !host;
+    }
+    return r;
+  };
+}
 async function startOnlineGame(S) {
   currentSkirmish = null;
   hideScreens();
