@@ -814,8 +814,8 @@ div.set-row { cursor: default; }
 .cc-era { font: 600 10.5px/1.2 var(--font-ui); letter-spacing: .22em; text-transform: uppercase; color: var(--acc); }
 .cc-title { font: 700 19px/1.15 var(--font-display); letter-spacing: .05em; text-transform: uppercase; }
 .cc-sub { font-size: 12.5px; color: var(--m-text-2); }
-.cc-desc { font-size: 13px; line-height: 1.45; color: var(--m-muted); flex: 1; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.cc-foot { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12px; color: var(--m-text-2); }
+.cc-desc { font-size: 13px; line-height: 1.45; color: var(--m-muted); flex: none; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cc-foot { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 8px; font-size: 12px; color: var(--m-text-2); }
 .cc-bar { flex: 1; height: 4px; background: rgba(255, 255, 255, .1); }
 .cc-bar i { display: block; height: 100%; background: var(--acc); }
 .cc-count { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); }
@@ -1093,6 +1093,16 @@ dl.keys dd { margin: 0; color: var(--m-text-2); line-height: 1.45; }
   .stat b { font-size: 22px; }
   .scr-foot button { padding: 10px 14px; }
   .mpanel .scr-head h2 .sub { display: block; margin: 4px 0 0; }
+  .scr-foot { flex-wrap: nowrap; gap: 8px; }
+  .scr-foot .big { flex: 1 1 auto; min-width: 0; padding-left: 12px; padding-right: 12px; }
+  .scr-foot .back > span, .scr-foot .back-campaign > span, #btn-end-menu > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .scr-foot .back, .scr-foot .back-campaign, #btn-end-menu { min-width: 46px; padding: 10px 12px; flex-shrink: 0; }
+  #btn-reset-progress { font-size: 12px; padding: 8px 6px; }
+  #screen-settings .scr-foot .back > span { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+  #screen-settings .scr-foot .back { flex: 1 1 auto; }
+  .end-panel .scr-foot { flex-wrap: wrap; }
+  .end-panel #btn-end-next { flex: 1 1 100%; }
+  .end-panel #btn-end-retry { flex: 1 1 auto; }
 }
 /* Handy hochkant: Titel oben, Menü volle Breite */
 @media (max-width: 700px) and (orientation: portrait) {
@@ -1100,7 +1110,7 @@ dl.keys dd { margin: 0; color: var(--m-text-2); line-height: 1.45; }
   .title-vignette::after { -webkit-mask-image: linear-gradient(180deg, #000, transparent 50%); mask-image: linear-gradient(180deg, #000, transparent 50%); }
   .title-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr auto auto; grid-template-areas: "brand" "menu" "cont" "foot"; gap: 18px;
     padding: calc(30px + var(--safe-t)) calc(16px + var(--safe-r)) calc(14px + var(--safe-b)) calc(16px + var(--safe-l)); }
-  .brand-title { font-size: clamp(36px, 11.2vw, 60px); }
+  .brand-title { font-size: clamp(34px, 10.3vw, 60px); }
   .brand-sub { letter-spacing: .2em; font-size: 12px; }
   .brand-eras { font-size: 12px; }
   .main-menu { max-width: none; align-self: end; }
