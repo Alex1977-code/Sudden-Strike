@@ -362,7 +362,7 @@ export class Weather {
     gd.addColorStop(0, 'rgba(255,250,225,1)'); gd.addColorStop(0.25, 'rgba(255,225,160,0.7)'); gd.addColorStop(1, 'rgba(255,200,120,0)');
     x.fillStyle = gd; x.fillRect(0, 0, 64, 64);
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-    this.flareSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false, color: new THREE.Color(3, 2.6, 1.8) }));
+    this.flareSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false, color: new THREE.Color(1.8, 1.6, 1.15) }));
     this.flareSprite.visible = false; this.flareSprite.renderOrder = 7;
     this.gr.scene.add(this.flareSprite);
   }
@@ -519,8 +519,8 @@ export class Weather {
     const y = this.g.terrain.surface(f.x, f.z) + 46 - age * 0.9;
     const flick = 0.9 + 0.1 * Math.sin(this.t * 31 + f.id) + 0.05 * Math.sin(this.t * 13);
     L.position.set(f.x, y, f.z);
-    L.intensity = 2600 * fade * flick * (0.45 + 0.55 * this.nightF);
-    S.visible = true; S.position.set(f.x, y, f.z); S.scale.setScalar(9 * (0.8 + 0.2 * flick)); S.material.opacity = fade;
+    L.intensity = 900 * fade * flick * (0.45 + 0.55 * this.nightF);
+    S.visible = true; S.position.set(f.x, y, f.z); S.scale.setScalar(6 * (0.8 + 0.2 * flick)); S.material.opacity = fade * 0.75;
   }
 
   // ---------------- Abgeleitete Werte ----------------
@@ -609,7 +609,7 @@ export class Weather {
     // Nässe/Pfützen/Schnee am Boden
     this.wxU.value.set(wet, c.mud, Math.min(1, c.snow * 1.2), 0);
     // Effekte nachts heller
-    const fx = this.g.effects; if (fx) fx.flashMul = 1 + 1.6 * nightF;
+    const fx = this.g.effects; if (fx) fx.flashMul = 1 + 0.5 * nightF; // gedämpft: sonst überstrahlen Explosionen nachts (v. a. über Wasser)
     // Scheinwerfer/Kennzeichen
     this._night(nightF);
   }

@@ -21,7 +21,7 @@ export default placeMission(PLACE_BY_ID.stalingrad, {
     { s: 'Oberleutnant Sorokin', t: 'Munition und Verstärkung kommen nur über die Wolga, auf Booten und Fähren. Der Anleger liegt hinter uns. Wenn der Gegner ihn erreicht, sind wir abgeschnitten. In den Kellern sitzen noch Zivilisten – nicht in Kellerfenster schießen, die nicht feuern.' },
   ],
   objectivesPreview: ['Das Eckhaus am Platz besetzen (mindestens 4 Soldaten darin)', 'Das Haus gegen alle Angriffe halten', 'Optional: Den Fähranleger frei halten', 'Optional: Die Gerhardt-Mühle säubern'],
-  forces: ['12× Schützen', '2× DP-28', '4× PPSch', '2× Panzerbüchse', '1× Pionier', '1× Scharfschütze', '1× Offizier', '1× Sanitäter', 'Verstärkung über die Wolga (Fähre)', 'Fähigkeit: Artilleriefeuer (Wolga-Batterien)'],
+  forces: ['10× Schützen', '4× DP-28', '4× PPSch', '2× Panzerbüchse', '2× Granatwerfer', '1× Pionier', '1× Scharfschütze', '1× Offizier', '1× Sanitäter', 'Verstärkung über die Wolga (Fähre)', 'Fähigkeit: Artilleriefeuer (Wolga-Batterien)'],
   weather: { type: 'overcast', intensity: 0.6, changes: [{ at: 420, type: 'fog', intensity: 0.45, fade: 120 }] },
   time: { start: '07:20', speed: 3 },
   camera: { x: 100, z: 40, dist: 92 },
@@ -36,8 +36,8 @@ export default placeMission(PLACE_BY_ID.stalingrad, {
       { x: MILL[0], z: MILL[1], r: 16, label: 'Gerhardt-Mühle', color: '#e9c34a' },
     ];
     // eigene Gruppe landet am Anleger
-    g.spawnGroup([[S.rifle, 12], [S.dp, 2], [S.smg, 4]], 'UA', 132, -14, { spacing: 3, cols: 6, heading: -Math.PI / 2, tags: ['sq'] });
-    g.spawnGroup([[S.at, 2], [S.eng, 1], [S.sniper, 1], [S.off, 1], [S.med, 1]], 'UA', 134, -2, { spacing: 3, cols: 6, heading: -Math.PI / 2, tags: ['sq'] });
+    g.spawnGroup([[S.rifle, 10], [S.dp, 4], [S.smg, 4]], 'UA', 132, -14, { spacing: 3, cols: 6, heading: -Math.PI / 2, tags: ['sq'] });
+    g.spawnGroup([[S.at, 2], [S.eng, 1], [S.sniper, 1], [S.off, 1], [S.med, 1], [S.mortar, 2]], 'UA', 134, -2, { spacing: 3, cols: 6, heading: -Math.PI / 2, tags: ['sq'] });
     // Vorposten im und am Haus
     g.spawnGroup([[E.rifle, 4], [E.mg, 1], [E.sniper, 1]], 'RU', 92, 46, { spacing: 4, cols: 4, ai: { mode: 'guard', radius: 16 }, tags: ['outpost'] });
     g.spawn(E.mgnest, 'RU', 66, 52, { heading: Math.PI / 2 });
@@ -91,7 +91,7 @@ export default placeMission(PLACE_BY_ID.stalingrad, {
   _waves(g) {
     // Angriffswellen über den Platz (West) und von der Mühle (Süd); Nachschub über die Fähre
     const w = (dt, fn) => g.later(dt, () => { if (!g.ended) fn(); });
-    w(25, () => wave(g, 'RU', [[E.rifle, 7], [E.mg, 1]], -30, 62, [[44, 58], [80, 48]], { tags: ['w'] }));
+    w(25, () => wave(g, 'RU', [[E.rifle, 5], [E.mg, 1]], -30, 62, [[44, 58], [80, 48]], { tags: ['w'] }));
     w(80, () => { this._ferry(g, 'Fähre legt an: Munition und frische Soldaten!'); });
     w(95, () => { g.alert('Angriff von Süden – Mühle!', 4); wave(g, 'RU', [[E.rifle, 6], [E.smg, 3]], 110, 130, [[112, 96], [100, 54]], { tags: ['w'] }); });
     w(170, () => { g.say('Bykowa', 'Panzer IV auf dem Platz! Panzerbüchsen – Seitenfenster!', 5); wave(g, 'RU', [[E.pz4, 1], [E.rifle, 6]], -34, 64, [[30, 58], [70, 54]], { tags: ['w'] }); });

@@ -63,8 +63,8 @@ const mission = placeMission(PLACE, {
       if (g.ended) return; g.alert(msg, 4);
       g.spawnGroup(list, 'RU', from[0], from[1], { spacing: 6, cols: 5, ai: { mode: 'attackMove', points: pts, aggressive: true, aggroRadius: 50, after: 'guard' }, tags: ['counter'] });
     });
-    go(60, [['ww2_stug3', 1], ['ww2_de_rifle', 5], ['ww2_de_mg42', 1]], [-60, 250], [[-20, 190], [20, 100], [62, 40]], '⚠ Gegenangriff aus dem Südwesten!');
-    go(160, [['ww2_stug3', 1], ['ww2_de_rifle', 5], ['ww2_de_mp40', 1]], [-10, 262], [[30, 200], [70, 120], [78, 50]], '⚠ Zweite Welle mit Sturmgeschützen!');
+    go(90, [['ww2_stug3', 1], ['ww2_de_rifle', 4], ['ww2_de_mg42', 1]], [-60, 250], [[-20, 190], [20, 100], [62, 40]], '⚠ Gegenangriff aus dem Südwesten!');
+    go(190, [['ww2_stug3', 1], ['ww2_de_rifle', 5], ['ww2_de_mp40', 1]], [-10, 262], [[30, 200], [70, 120], [78, 50]], '⚠ Zweite Welle mit Sturmgeschützen!');
     go(RELIEF - 20, [['ww2_stug3', 1], ['ww2_de_rifle', 6], ['ww2_de_mg42', 1]], [150, 150], [[120, 120], [100, 60], [75, 34]], '⚠ Angriff von Osten über die Bahnlinie!');
     g.later(RELIEF, () => {
       this.relief = true;
