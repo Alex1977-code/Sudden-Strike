@@ -18,5 +18,3 @@ const DEF = {
   missions: MISSIONS,
 };
 registerCampaign(DEF);
-// js/missions/index.js registriert die Platzhalter aller Kampagnen NACH den (hochgezogenen) Importen – danach nochmals eintragen.
-queueMicrotask(() => registerCampaign(DEF));
