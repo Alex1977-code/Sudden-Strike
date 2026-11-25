@@ -45,6 +45,7 @@ export const BUILDING_SETS = {
     { kind: 'church_west', wt: 0.7, w: [8, 11], d: [16, 22], floors: [2, 3] },
     { kind: 'shop', wt: 0.6, w: [7, 10], d: [6, 8], floors: [1, 1], urban: true },
     { kind: 'watchtower', wt: 0.15, w: [3, 4], d: [3, 4], floors: [2, 3], urban: false },
+    { kind: 'norman_stone', wt: 6, w: [8, 13], d: [6, 9], floors: [1, 2] }, // V3-LM
   ],
   east_ww2: [
     { kind: 'izba', wt: 12, w: [5.5, 8], d: [5, 7], floors: [1, 1] },
@@ -55,6 +56,8 @@ export const BUILDING_SETS = {
     { kind: 'townhouse_eu', wt: 1, w: [7, 9], d: [8, 10], floors: [2, 3], urban: true },
     { kind: 'warehouse', wt: 0.6, w: [14, 18], d: [10, 13], floors: [1, 1], urban: true },
     { kind: 'watchtower', wt: 0.3, w: [3, 4], d: [3, 4], floors: [2, 3], urban: false },
+    { kind: 'stalin_brick', wt: 1.2, w: [18, 30], d: [10, 13], floors: [3, 4], urban: true }, // V3-LM
+    { kind: 'ww2_ruin', wt: 0.6, w: [8, 16], d: [8, 12], floors: [1, 3], urban: true }, // V3-LM
   ],
   german_town: [
     { kind: 'townhouse_eu', wt: 10, w: [6.5, 9.5], d: [8, 11], floors: [2, 4] },
@@ -64,6 +67,41 @@ export const BUILDING_SETS = {
     { kind: 'warehouse', wt: 0.8, w: [14, 18], d: [10, 13], floors: [1, 1], urban: true },
     { kind: 'shop', wt: 1, w: [8, 11], d: [6, 8], floors: [1, 2], urban: true },
     { kind: 'barn', wt: 1, w: [9, 13], d: [10, 14], floors: [1, 1], urban: false },
+    { kind: 'gruenderzeit', wt: 4, w: [12, 20], d: [12, 16], floors: [4, 5], urban: true }, // V3-LM
+    { kind: 'fachwerk', wt: 3, w: [7, 10], d: [7, 10], floors: [2, 3] }, // V3-LM
+  ],
+  // ---- V3-LM: epochentypische Sets (für settlement-Feature/Karte: buildingSet: '<Name>') ----
+  berlin_1945: [ // Mietskasernen der Gründerzeit, teils ausgebrannt
+    { kind: 'gruenderzeit', wt: 10, w: [12, 20], d: [12, 16], floors: [4, 5] },
+    { kind: 'ww2_ruin', wt: 4, w: [10, 18], d: [10, 14], floors: [3, 5] },
+    { kind: 'townhouse_eu', wt: 1.5, w: [8, 10], d: [9, 12], floors: [3, 4] },
+    { kind: 'shop', wt: 0.8, w: [8, 11], d: [7, 9], floors: [2, 2] },
+    { kind: 'church_west', wt: 0.3, w: [10, 13], d: [18, 24], floors: [3, 3] },
+    { kind: 'industrial', wt: 0.4, w: [18, 24], d: [12, 16], floors: [1, 2], urban: true },
+  ],
+  stalingrad_1942: [ // sowjetische Ziegel-/Putzbauten der 1930er, Ruinen, Holzhäuser am Rand
+    { kind: 'stalin_brick', wt: 8, w: [18, 32], d: [10, 13], floors: [3, 5], urbanWt: 1.5 },
+    { kind: 'ww2_ruin', wt: 6, w: [10, 22], d: [9, 13], floors: [2, 4] },
+    { kind: 'izba', wt: 4, w: [5.5, 8], d: [5, 7], floors: [1, 1], urban: false },
+    { kind: 'townhouse_eu', wt: 1, w: [8, 10], d: [9, 11], floors: [2, 3] },
+    { kind: 'warehouse', wt: 0.6, w: [14, 18], d: [10, 13], floors: [1, 1] },
+    { kind: 'industrial', wt: 0.5, w: [18, 24], d: [12, 16], floors: [1, 2], urban: true },
+    { kind: 'church_orthodox', wt: 0.2, w: [9, 11], d: [13, 16], floors: [1, 2] },
+  ],
+  north_africa: [ // weiße Kolonialbauten, Lehmhäuser, Lagerhallen
+    { kind: 'colonial_white', wt: 10, w: [8, 20], d: [8, 13], floors: [1, 2] },
+    { kind: 'mud_house', wt: 3, w: [5, 9], d: [5, 8], floors: [1, 1], urban: false },
+    { kind: 'warehouse', wt: 0.8, w: [14, 20], d: [10, 13], floors: [1, 1] },
+    { kind: 'water_tower', wt: 0.2, w: [4, 5], d: [4, 5], floors: [2, 4], urban: false },
+    { kind: 'church_west', wt: 0.2, w: [9, 11], d: [16, 20], floors: [2, 2], urban: true },
+  ],
+  ardennes: [ // Backstein-Reihenhäuser mit Treppengiebel, Bruchstein-Höfe, Scheunen
+    { kind: 'belgian_brick', wt: 8, w: [6, 9], d: [8, 12], floors: [2, 3], urbanWt: 2 },
+    { kind: 'farmhouse_eu', wt: 4, w: [10, 14], d: [6, 9], floors: [1, 2], urban: false },
+    { kind: 'norman_stone', wt: 2, w: [8, 12], d: [6, 9], floors: [1, 2] },
+    { kind: 'barn', wt: 2, w: [9, 13], d: [10, 15], floors: [1, 1], urban: false },
+    { kind: 'church_ardennes', wt: 0.5, w: [10, 13], d: [22, 28], floors: [2, 3] },
+    { kind: 'shop', wt: 0.6, w: [7, 10], d: [6, 8], floors: [1, 2], urban: true },
   ],
 };
 const MODERN_SETS = new Set(['ukraine_village', 'ukraine_town']);

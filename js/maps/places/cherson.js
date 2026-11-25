@@ -14,7 +14,7 @@ const feats = [
   rail([[-300, 60], [0, 70], [120, 80], [120, 150]]),
   // Hafen am Nordufer
   { type: 'causeway', pts: [[-200, 122], [-200, 150]], width: 10, name: 'Hafen Cherson' },
-  bldg('warehouse', -230, 96, 30, 14, faceTo(-230, 96, -230, 130), 1, 'Hafenlager'),
+  bldg('harbour_shed', -230, 96, 30, 14, faceTo(-230, 96, -230, 130), 1, 'Hafenlager'),
   bldg('watchtower', -175, 104, 4, 4, 0, 6, 'Hafenkran'),
   bldg('watchtower', -160, 104, 4, 4, 0, 6),
   // Zentrum: Gebietsverwaltung, Katharinenkathedrale; Werft im Westen

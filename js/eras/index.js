@@ -3,3 +3,4 @@
 import './ww2/index.js';
 import './afghan/index.js';
 import './modern/index.js';
+import '../game/landmarks.js'; // V3-LM: Wahrzeichen und epochentypische Gebäudearten (registerBuildingKind)

@@ -26,22 +26,18 @@ const feats = [
   road([[150, -18], [190, -60], [280, -80]], 8),
   rail([[-280, 252], [0, 258], [280, 262]]),
   // Dom auf dem Kneiphof (Längsachse Ost–West)
-  bldg('church_west', 92, 58, 15, 40, Math.PI / 2, 3, 'Dom (Kneiphof)'),
-  bldg('townhouse_eu', 10, 58, 22, 10, Math.PI, 3, 'Albertina (alte Universität)'),
+  bldg('koenigsberg_dom', 92, 58, 15, 40, Math.PI / 2, 3, 'Dom (Kneiphof)'),
+  bldg('gruenderzeit', 10, 58, 22, 10, Math.PI, 3, 'Albertina (alte Universität)'),
   // Schloss: vier Flügel um den Schlosshof, Schlossturm
-  bldg('townhouse_eu', 64, -96, 70, 13, 0, 3, 'Schloss'),
-  bldg('townhouse_eu', 64, -50, 70, 13, Math.PI, 3),
-  bldg('townhouse_eu', 23, -73, 30, 13, Math.PI / 2, 3),
-  bldg('townhouse_eu', 105, -73, 30, 13, -Math.PI / 2, 3),
-  bldg('watchtower', 22, -46, 9, 9, 0, 9, 'Schlossturm'),
+  bldg('koenigsberg_schloss', 64, -73, 90, 56, 0, 3, 'Schloss'), // V3-LM: vier Flügel um den Hof, Schlossturm an der Südwestecke im Modell
   // Festungsring (Wallgraben, Tore, Türme)
   ...ring(30, 60, 255, -Math.PI * 0.93, -Math.PI * 0.08, { ditch: 8, n: 16 }),
-  bldg('townhouse_eu', 170, -186, 16, 10, faceTo(170, -186, 185, -150), 2, 'Roßgärter Tor'),
-  bldg('watchtower', 245, -110, 12, 12, 0, 3, 'Wrangelturm'),
-  bldg('watchtower', -125, -150, 12, 12, 0, 3, 'Dohnaturm'),
+  bldg('rossgaerter_tor', 170, -186, 16, 10, faceTo(170, -186, 185, -150), 2, 'Roßgärter Tor'),
+  bldg('wrangelturm', 245, -110, 12, 12, 0, 3, 'Wrangelturm'),
+  bldg('wrangelturm', -125, -150, 12, 12, 0, 3, 'Dohnaturm'),
   // Fort Friedrichsburg am Pregel (Sternschanze)
   ...ring(-200, 120, 34, 0, Math.PI * 2, { ditch: 6, n: 12 }),
-  bldg('warehouse', -200, 106, 22, 12, 0, 2, 'Fort Friedrichsburg'),
+  bldg('ringkaserne', -200, 106, 22, 12, 0, 2, 'Fort Friedrichsburg'),
   ...bridge([[-200, 160], [-200, 172]], 6, 'Friedrichsburger Tor', true, 'wood'),
   road([[-200, 128], [-200, 160]], 6, false),
   road([[-200, 172], [-200, 205]], 6, false),
@@ -63,7 +59,7 @@ export default {
   map: { size: 560, seed: 1255, season: 'winter', relief: 2, baseHeight: 4, scatterTrees: 25, scarred: true, features: feats },
   env: { season: 'winter', sunElev: 18, sunAzim: 190, fogDensity: 0.003 },
   camera: { x: 40, z: 20, dist: 140 },
-  landmarks: landmarksOf(feats, [{ name: 'Kneiphof', x: 60, z: 46 }, { name: 'Pregel', x: -200, z: 50 }, { name: 'Schlossteich', x: 130, z: -170 }, { name: 'Festungsring', x: -180, z: -160 }]),
+  landmarks: landmarksOf(feats, [{ name: 'Kneiphof', x: 60, z: 46 }, { name: 'Pregel', x: -200, z: 50 }, { name: 'Schlossteich', x: 130, z: -170 }, { name: 'Festungsring', x: -180, z: -160 }, { name: 'Schlossturm', x: 24, z: -50 }]),
   spawns: { A: [0, -270], B: [60, 40] },
   notes: 'Pregel in zwei Armen um den Kneiphof mit Dom, fünf der historischen Brücken, Schloss mit Schlossturm, Schlossteich, Wallgraben des inneren Festungsrings mit Toren und Türmen, Fort Friedrichsburg. Bebauung generiert (Blockrand).',
 };

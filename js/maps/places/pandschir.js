@@ -13,7 +13,7 @@ const feats = [
   road([[-44, 104], [-20, 160]], 6, false), road([[152, -56], [180, -20]], 6, false),
   // Massoud-Mausoleum auf dem Hügel bei Saricha
   hill(-120, 10, 40, 10),
-  bldg('mud_house', -120, 10, 14, 14, 0.6, 2, 'Massoud-Mausoleum'),
+  bldg('massoud_mausoleum', -120, 10, 15, 15, 0.6, 2, 'Massoud-Mausoleum'),
   bldg('watchtower', -134, 0, 3.5, 3.5, 0, 4),
   road([[-70, 58], [-108, 22]], 5, false),
   // Terrassenfelder am Fluss

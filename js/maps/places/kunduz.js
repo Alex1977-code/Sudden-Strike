@@ -11,11 +11,11 @@ const feats = [
   road([[-20, 40], [-40, 300]], 8, false, { name: 'Straße nach Baghlan' }),
   // Bala Hissar (Zitadellenhügel)
   hill(40, -230, 55, 14),
-  bldg('qalat', 40, -232, 32, 26, Math.PI, 2, 'Bala Hissar (Zitadelle)'),
+  bldg('bala_hissar', 40, -232, 36, 30, Math.PI, 2, 'Bala Hissar (Zitadelle)'),
   // Feldlager (PRT) mit Wachtürmen und Flugplatz
-  bldg('warehouse', CAMP.x, CAMP.z, 26, 14, faceTo(CAMP.x, CAMP.z, CAMP.x - 30, CAMP.z - 20), 1, 'Feldlager Kunduz (PRT)'),
-  bldg('industrial', CAMP.x + 36, CAMP.z + 4, 24, 14, 0, 1),
-  bldg('warehouse', CAMP.x + 10, CAMP.z + 34, 22, 12, 0, 1),
+  bldg('container_camp', CAMP.x, CAMP.z, 26, 14, faceTo(CAMP.x, CAMP.z, CAMP.x - 30, CAMP.z - 20), 1, 'Feldlager Kunduz (PRT)'),
+  bldg('container_camp', CAMP.x + 36, CAMP.z + 4, 24, 14, 0, 1),
+  bldg('container_camp', CAMP.x + 10, CAMP.z + 34, 22, 12, 0, 1),
   bldg('watchtower', CAMP.x - 30, CAMP.z + 40, 4, 4, 0, 3), bldg('watchtower', CAMP.x + 62, CAMP.z + 40, 4, 4, 0, 3),
   bldg('watchtower', CAMP.x - 30, CAMP.z - 46, 4, 4, 0, 3), bldg('watchtower', CAMP.x + 62, CAMP.z - 46, 4, 4, 0, 3),
   treeline([[CAMP.x - 40, CAMP.z - 56], [CAMP.x + 72, CAMP.z - 56], [CAMP.x + 72, CAMP.z + 50], [CAMP.x - 40, CAMP.z + 50]]),

@@ -437,8 +437,14 @@ export class BridgeSystem {
       for (const u of [...g.units]) { // Einheiten auf dem einstürzenden Mittelfeld
         if (!u.alive || u.type.air || u.type.naval || u.type.structure) continue;
         const p = polyProject(b.pts, b.cum, u.pos.x, u.pos.z);
-        if (p.d < b.width / 2 + 1 && p.s > b.gA - 0.5 && p.s < b.gB + 0.5) g.killUnit(u, null);
+        if (p.d < b.width / 2 + 1 && p.s > b.gA - 0.5 && p.s < b.gB + 0.5) {
+          g.killUnit(u, null);
+          if (u.type.vehicle && u.root) { u.root.position.y = this.g.terrain.seaLevel - 1.6; u.root.rotation.z += 0.5; u.root.updateMatrix?.(); } // Wrack stürzt ins Wasser
+        }
       }
+      // Wracks der abgestürzten Fahrzeuge liegen im Fluss, nicht auf der Fahrbahn
+      { const T = g.terrain, [x0, z0, x1, z1] = this._rect(b, b.gA - 3, b.gB + 3, b.width / 2 + 3), [i0, j0] = T.cellOf(x0, z0), [i1, j1] = T.cellOf(x1, z1);
+        for (let j = Math.max(0, j0); j <= Math.min(T.gw - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(T.gw - 1, i1); i++) { const k = j * T.gw + i; if (T.gBlocked[k] === 3) { const [cx, cz] = T.cellCenter(i, j), q = polyProject(b.pts, b.cum, cx, cz); if (q.d < b.width / 2 + 2 && q.s > b.gA - 3 && q.s < b.gB + 3) { T.gBlocked[k] = 0; T.gHard[k] = 0; } } } }
       g.onObstacleAdded(b.cx, b.cz, (b.gB - b.gA) / 2 + b.width);
       this.stats.destroyed++;
       g.emit('bridgeDestroyed', b, cause);

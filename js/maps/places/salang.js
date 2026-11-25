@@ -10,8 +10,8 @@ const feats = [
   river([[60, 300], [70, 150], [80, 0], [70, -150], [40, -260]], 8, { depth: 1.4, bank: 2, name: 'Salang' }),
   road(ROAD, 8, true, { name: 'Salang-Passstraße' }),
   // Südportal + Galerien (Lawinenschutz) neben der Straße
-  bldg('warehouse', 0, -222, 16, 10, 0, 2, 'Salang-Tunnel (Südportal)'),
-  bldg('warehouse', 46, 8, 34, 6, Math.PI / 2 + 0.2, 1, 'Lawinengalerie'),
+  bldg('salang_portal', 0, -222, 16, 10, 0, 2, 'Salang-Tunnel (Südportal)'),
+  bldg('avalanche_gallery', 46, 8, 34, 6, Math.PI / 2 + 0.2, 1, 'Lawinengalerie'),
   bldg('watchtower', -60, 40, 4, 4, 0, 3, 'Kontrollposten'),
   bldg('watchtower', 50, -120, 4, 4, 0, 3),
 ];

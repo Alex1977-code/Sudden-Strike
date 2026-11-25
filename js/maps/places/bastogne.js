@@ -15,12 +15,12 @@ const feats = [
   road([[-6, 0], [6, 0]], 40, true, { square: true, name: 'Place McAuliffe' }),
   ...RADIALS.map(([name, pts]) => road(pts, 8, true, { name })),
   rail([[-280, -150], [-80, -94], [60, -60], [280, -110]]),
-  bldg('church_west', -45, -42, 12, 26, faceTo(-45, -42, 0, 0), 3, 'Kirche St-Pierre'),
-  bldg('townhouse_eu', 44, -86, 30, 11, 0, 2, 'Bahnhof Bastogne-Nord'),
+  bldg('church_ardennes', -45, -42, 12, 26, faceTo(-45, -42, 0, 0), 3, 'Kirche St-Pierre'),
+  bldg('station_ww2', 44, -86, 30, 11, 0, 2, 'Bahnhof Bastogne-Nord'),
   // Heintz-Kaserne (Gefechtsstand der 101. Luftlandedivision)
-  bldg('townhouse_eu', -170, -95, 40, 12, 0, 3, 'Heintz-Kaserne (Div.-Gefechtsstand)'),
-  bldg('townhouse_eu', -197, -66, 34, 12, Math.PI / 2, 2),
-  bldg('townhouse_eu', -143, -66, 34, 12, -Math.PI / 2, 2),
+  bldg('heintz_kaserne', -170, -95, 40, 12, 0, 3, 'Heintz-Kaserne (Div.-Gefechtsstand)'),
+  bldg('heintz_kaserne', -197, -66, 34, 12, Math.PI / 2, 2),
+  bldg('heintz_kaserne', -143, -66, 34, 12, -Math.PI / 2, 2),
   road([[-150, -22], [-170, -48]], 7),
   // Mardasson-Hügel
   hill(185, 45, 60, 12),

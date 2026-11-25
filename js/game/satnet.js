@@ -4,8 +4,9 @@
 //   Terminals: feste Terminals (Typfeld satTerminal: true, satRadius, z. B. m_starlink) und mobile Uplinks auf Einheiten
 //   (Typfeld satlink: true | 'UA' | 'RU' = nur für dieses Team, oder je Einheit u.satlink = true, z. B. Zugführer-Fahrzeug).
 //   Abdeckung: Kreis um jedes funktionsfähige Terminal (fest 45 m, mobil 25 m), Team-weit für alle Spieler des Teams.
-//   Ein Team „nutzt“ das Netz (Status ≠ 'none'), sobald es ein Terminal besitzt (automatisch) oder setEnabled(team, true).
-//   Teams ohne Netz verhalten sich wie bisher (keine Boni, keine Mali).
+//   Ein Team „nutzt“ das Netz (Status ≠ 'none'), sobald es einen festen Terminal besitzt (automatisch), mission.satnet === true
+//   oder setEnabled(team, true). Mobile Uplinks allein schalten das Netz nicht ein (Kampagne M1–M5 bleibt unverändert).
+//   Teams ohne Netz verhalten sich wie bisher (keine Boni, keine Mali); mission.satnet === false schaltet es ganz ab.
 //   Die Sicht ist im Team ohnehin geteilt (game.fows je Team) → modelliert wird das Lagebild für Feuerunterstützung:
 //     verbunden:  Fähigkeiten mit needsNet: Abklingzeit ×0,75, Streuung ×0,6 (−40 %)
 //     ohne Netz (Team nutzt das Netz, Quelle nicht verbunden): Streuung ×1,5, Vorlaufzeit +3 s, Abklingzeit ×1,25,
@@ -303,14 +304,14 @@ export class SatNet {
     }
     for (const team of TEAMS) {
       const T = this.teams[team];
-      if (T.enabled === null && terms[team].length && g.mission?.satnet !== false) T.enabled = true;
+      if (T.enabled === null && g.mission?.satnet !== false && (g.mission?.satnet === true || terms[team].some((t) => t.fixed))) T.enabled = true;
       for (const t of terms[team]) {
         const x = t.u.pos.x, z = t.u.pos.z;
         t.jam = this._jammedAt(x, z, team);
         t.ok = !t.jam && !T.out && !this._inRegion(x, z, team);
         if (t.jam && !t.u._satJam && this.active(team)) {
           this.stats.jamEvents++;
-          if (g.time - T.msgT > 8) { T.msgT = g.time; g.sayTo(team, 'Fernmelder', `${t.fixed ? 'Starlink-Terminal' : t.u.type.name + ' (Uplink)'} gestört – EloKa im Raum, Verbindung im Umkreis weg!`, 4); }
+          if (t.fixed && g.time - T.msgT > 8) { T.msgT = g.time; g.sayTo(team, 'Fernmelder', 'Starlink-Terminal gestört – EloKa im Raum, Verbindung im Umkreis weg!', 4); }
         }
         t.u._satJam = t.jam;
       }
@@ -355,9 +356,10 @@ export class SatNet {
     this.game.emit('satnet', team, st, prev);
     if (prev === 'none' || st === 'none' || T.out) return;
     if (st === 'outage') this.game.sayTo(team, 'Fernmelder', 'Keine Satellitenverbindung mehr – alle Terminals gestört oder verloren!', 4);
-    else if (st === 'connected' && prev === 'outage') this.game.sayTo(team, 'Fernmelder', 'Satellitenverbindung wieder hergestellt.', 3);
+    else if (st === 'connected' && prev === 'outage' && this.game.time - (T.restT ?? -99) > 1) this.game.sayTo(team, 'Fernmelder', 'Satellitenverbindung wieder hergestellt.', 3);
   }
   _restored(team) {
+    this.teams[team].restT = this.game.time;
     if (!this.active(team)) return;
     this.game.sayTo(team, 'Fernmelder', 'Satellitennetz wiederhergestellt – Verbindung steht.', 4);
   }
@@ -400,8 +402,8 @@ export class SatNet {
   hudUpdate(hud, dt) {
     this._sync();
     const g = this.game;
-    this._uiT -= dt;
-    if (this._uiT <= 0) { this._uiT = 0.2; this._renderStatus(); }
+    const now = performance.now();
+    if (now - this._uiT >= 200) { this._uiT = now; this._renderStatus(); } // Echtzeit-Takt (auch bei wenigen FPS)
     if (!g.active || !this.active(g.localSide)) { this._hideRings(); return; }
     this._drawTerminals(hud);
     this._updateRings();
@@ -455,7 +457,7 @@ export class SatNet {
       let r = this._rings.get(u.id);
       if (!r || r.r !== t.r) { if (r) r.mesh.parent?.remove(r.mesh); r = { r: t.r, x: NaN, z: NaN, mesh: this._ringMesh(t.r) }; this._rings.set(u.id, r); }
       if (!r.mesh.parent) g.scene.add(r.mesh);
-      if (Math.abs(r.x - u.pos.x) > 0.5 || Math.abs(r.z - u.pos.z) > 0.5) { r.x = u.pos.x; r.z = u.pos.z; this._fitRing(r); }
+      if (!(Math.abs(r.x - u.pos.x) <= 0.5 && Math.abs(r.z - u.pos.z) <= 0.5)) { r.x = u.pos.x; r.z = u.pos.z; this._fitRing(r); }
       r.mesh.material.color.set(t.ok ? 0x5dff8a : t.jam ? 0xff5a4d : 0xffd23c);
       r.mesh.visible = true;
     }

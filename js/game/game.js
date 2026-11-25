@@ -104,7 +104,7 @@ export class Game {
   }
   on(ev, fn) { (this.listeners[ev] ||= []).push(fn); }
   off(ev, fn) { const l = this.listeners[ev]; if (l) { const i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); } }
-  emit(ev, ...a) { (this.listeners[ev] || []).forEach((f) => f(...a)); }
+  emit(ev, ...a) { const l = this.listeners[ev]; if (l) for (const f of [...l]) f(...a); } // Kopie: Listener dürfen sich beim Aufruf abmelden
 
   // ================== Spieler & Teams ==================
   setupPlayers(list) {

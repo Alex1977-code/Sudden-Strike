@@ -16,7 +16,7 @@ const feats = [
   { type: 'causeway', pts: [[148, 46], [200, 50]], width: 8, style: 'steel_truss' }, { type: 'causeway', pts: [[-122, 36], [-88, 38]], width: 8, style: 'steel_truss' },
   road([[0, -24], [10, -200], [40, -300]], 6, false), road([[40, 40], [60, 200], [80, 300]], 6, false),
   ...bridge([[30, 138], [32, 162]], 6, 'Grabenbrücke Süd', true, 'wood'),
-  bldg('townhouse_eu', -250, 58, 26, 10, Math.PI, 2, 'Bahnhof Seelow'),
+  bldg('station_ww2', -250, 58, 26, 10, Math.PI, 2, 'Bahnhof Seelow'),
   // Felder und Baumreihen im Oderbruch
   field([[-80, -280], [120, -280], [110, -60], [-80, -60]], 'plowed', 0.1),
   field([[-80, 60], [110, 60], [110, 140], [-80, 140]], 'green', 1.5),

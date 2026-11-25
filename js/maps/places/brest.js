@@ -20,11 +20,14 @@ const feats = [
   { type: 'causeway', pts: [[4, -206], [8, -230]], width: 12 }, { type: 'causeway', pts: [[156, 120], [176, 140]], width: 12 },
   // Zitadelle: Garnisonskirche, Weißer Palast, Ingenieursverwaltung
   bldg('church_orthodox', 60, -22, 12, 22, Math.PI / 2, 2, 'Garnisonskirche St. Nikolai'),
-  bldg('townhouse_eu', -30, -4, 22, 12, Math.PI, 2, 'Weißer Palast'),
-  bldg('townhouse_eu', 20, 18, 20, 11, Math.PI, 2, 'Ingenieursverwaltung'),
+  bldg('white_palace', -30, -4, 22, 12, Math.PI, 2, 'Weißer Palast'),
+  bldg('heintz_kaserne', 20, 18, 20, 11, Math.PI, 2, 'Ingenieursverwaltung'),
+  // V3-LM: Cholmer und Terespoler Tor als Torflügelpaar über der Ausfallstraße (Durchfahrt 10 m frei, Lage = Schnitt Straße/Kasernenring)
+  bldg('cholmer_tor', 81.2, 11.9, 8, 12, 1.079, 2, 'Cholmer Tor'), bldg('cholmer_tor', 72.8, 27.7, 8, 12, 1.079 + Math.PI, 2),
+  bldg('terespoler_tor', -80.2, -18.2, 8, 12, -1.938, 2, 'Terespoler Tor'), bldg('terespoler_tor', -73.8, -35.0, 8, 12, -1.938 + Math.PI, 2),
   // Ostfort (Kobriner Befestigung)
   ...ring(120, -150, 34, 0, Math.PI * 2, { ditch: 6, n: 12 }),
-  bldg('warehouse', 120, -150, 26, 12, 0, 1, 'Ostfort'),
+  bldg('ringkaserne', 120, -150, 26, 12, 0, 1, 'Ostfort'),
   forest([[-200, 150], [-120, 140], [-90, 260], [-200, 270]], 'deciduous', 0.05),
   forest([[-200, -270], [-120, -260], [-100, -190], [-200, -190]], 'deciduous', 0.05),
 ];
@@ -40,7 +43,7 @@ for (let k = 1; k < EL.length; k++) {
   const [a, x, z] = EL[k];
   if (GATES.some((g) => Math.abs(Math.atan2(Math.sin(a - g), Math.cos(a - g))) < 0.3)) continue;
   const nx = -Math.cos(a) / 96, nz = -Math.sin(a) / 40;
-  feats.push(bldg('townhouse_eu', x, z, 20, 9, Math.atan2(nx, nz), 2, n++ === 0 ? 'Kasernenring (Kasematten)' : undefined));
+  feats.push(bldg('ringkaserne', x, z, 20, 9, Math.atan2(nx, nz), 2, n++ === 0 ? 'Kasernenring (Kasematten)' : undefined));
 }
 feats.push(settlement('ukr_town', 205, 215, 70, 1941, { era: 'ww2', mainRoadAngle: 0.5, density: 0.6, connectTo: [[180, 120]] }));
 

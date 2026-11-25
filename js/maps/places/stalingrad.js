@@ -22,28 +22,27 @@ const feats = [
   road([[-300, -40], [-110, -40], [40, -95]], 7, false), // Straße über den Hügelsattel
   road([[-300, 120], [-100, 100]], 7),
   // Traktorenwerk (Norden)
-  bldg('industrial', -25, -258, 46, 24, 0, 2, 'Traktorenwerk – Montagehalle'),
-  bldg('industrial', -25, -214, 46, 24, 0, 2),
-  bldg('industrial', 92, -258, 36, 22, 0, 2, 'Traktorenwerk – Schmiede'),
+  bldg('tractor_hall', -25, -258, 46, 24, 0, 2, 'Traktorenwerk – Montagehalle'),
+  bldg('tractor_hall', -25, -214, 46, 24, 0, 2),
+  bldg('tractor_hall', 92, -258, 36, 22, 0, 2, 'Traktorenwerk – Schmiede'),
   bldg('industrial', 92, -214, 30, 20, 0, 1, 'Kraftwerk'),
-  bldg('watchtower', 122, -238, 3.5, 3.5, 0, 8),
-  bldg('watchtower', 126, -224, 3.5, 3.5, 0, 8),
+  bldg('factory_chimney', 122, -238, 4, 4, 0, 8),
+  bldg('factory_chimney', 126, -224, 4, 4, 0, 8),
   bldg('warehouse', -80, -236, 18, 30, 0, 1),
   road([[42, -236], [-50, -236]], 8),
   // Wassertanks auf dem Mamajew-Hügel
-  bldg('warehouse', -45, -85, 9, 9, 0, 1, 'Wassertanks (Höhe 102)'),
+  bldg('water_tanks', -45, -85, 10, 5, 0, 1, 'Wassertanks (Höhe 102)'),
   // Platz des 9. Januar mit dem Pawlow-Haus und der Gerhardt-Mühle
-  bldg('townhouse_eu', 92, 30, 34, 12, faceTo(92, 30, ...PAVLOV_SQ), 4, 'Pawlow-Haus'),
-  bldg('industrial', 116, 86, 18, 14, faceTo(116, 86, ...PAVLOV_SQ), 3, 'Gerhardt-Mühle'),
+  bldg('pawlow_haus', 92, 30, 34, 12, faceTo(92, 30, ...PAVLOV_SQ), 4, 'Pawlow-Haus'),
+  bldg('gerhardt_muehle', 116, 86, 18, 14, faceTo(116, 86, ...PAVLOV_SQ), 3, 'Gerhardt-Mühle'),
   road([[40, 58], [86, 58]], 22, true, { square: true }),
   // Platz der Gefallenen Kämpfer mit dem Univermag
-  bldg('shop', 4, 128, 30, 18, Math.PI, 3, 'Univermag (Kaufhaus)'),
+  bldg('univermag', 4, 128, 30, 18, Math.PI, 3, 'Univermag (Kaufhaus)'),
   // Bahnhof Stalingrad-1 mit Barmaley-Brunnen
-  bldg('townhouse_eu', -80, 60, 40, 13, faceTo(-80, 60, -40, 60), 2, 'Bahnhof Stalingrad-1'),
+  bldg('station_ww2', -80, 60, 40, 13, faceTo(-80, 60, -40, 60), 2, 'Bahnhof Stalingrad-1'),
+  bldg('barmaley_fountain', -50, 60, 8, 8, 0, 1, 'Barmaley-Brunnen'), // V3-LM: Kinderreigen-Brunnen auf dem Bahnhofsvorplatz
   // Getreidesilo (Süden)
-  bldg('industrial', 80, 245, 30, 16, Math.PI, 2, 'Getreidesilo'),
-  bldg('watchtower', 60, 228, 7, 7, 0, 9),
-  bldg('watchtower', 100, 228, 7, 7, 0, 9),
+  bldg('grain_elevator', 80, 240, 44, 18, Math.PI, 9, 'Getreidesilo'), // V3-LM: Silos + Arbeitsturm in einem Modell
   // Fähranlegestellen
   { type: 'causeway', pts: [[130, 40], [186, 40]], width: 7, name: 'Zentraler Fähranleger', style: 'pontoon' },
   { type: 'causeway', pts: [[144, -160], [196, -160]], width: 7, name: 'Fähre Traktorenwerk', style: 'pontoon' },

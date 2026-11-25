@@ -8,12 +8,12 @@ const feats = [
   road([[-60, 6], [-60, 60]], 14), road([[80, 10], [80, 60]], 14),
   // Vorfeld + Terminal (Süd), Tower
   road([[-80, 80], [100, 84]], 40, true, { square: true, name: 'Vorfeld' }),
-  bldg('shop', 10, 136, 70, 22, Math.PI, 2, 'Terminal'),
-  bldg('watchtower', -120, 110, 7, 7, 0, 8, 'Tower'),
+  bldg('airport_terminal', 10, 136, 70, 22, Math.PI, 2, 'Terminal'),
+  bldg('control_tower', -120, 110, 8, 8, 0, 8, 'Tower'),
   // Militärteil (Nord): Hangars
-  bldg('warehouse', -150, -120, 34, 22, 0, 1, 'Militärteil (Nord)'),
-  bldg('warehouse', -100, -120, 34, 22, 0, 1), bldg('warehouse', -50, -120, 34, 22, 0, 1),
-  bldg('warehouse', 60, -122, 40, 26, 0, 1), bldg('industrial', 140, -126, 36, 18, 0, 2),
+  bldg('hangar', -150, -120, 34, 22, 0, 1, 'Militärteil (Nord)'),
+  bldg('hangar', -100, -120, 34, 22, 0, 1), bldg('hangar', -50, -120, 34, 22, 0, 1),
+  bldg('hangar', 60, -122, 40, 26, 0, 1), bldg('industrial', 140, -126, 36, 18, 0, 2),
   road([[-200, -96], [200, -94]], 10),
   road([[0, -94], [0, -66]], 10),
   // Tore: Nordtor, Osttor, Abbey Gate am Abwasserkanal (Südost)
@@ -24,7 +24,7 @@ const feats = [
   river([[100, 210], [180, 200], [300, 190]], 6, { depth: 1.6, bank: 2, name: 'Abwasserkanal' }),
   ...bridge([[176, 186], [178, 214]], 8, 'Abbey Gate', true, 'concrete_beam'),
   road([[100, 84], [176, 186]], 9), road([[178, 214], [190, 300]], 9),
-  bldg('townhouse_eu', 210, 170, 22, 12, faceTo(210, 170, 176, 186), 2, 'Baron Hotel'),
+  bldg('baron_hotel', 210, 170, 22, 12, faceTo(210, 170, 176, 186), 3, 'Baron Hotel'),
   hill(-250, -250, 60, 18), hill(260, 260, 40, 10),
 ];
 feats.push(

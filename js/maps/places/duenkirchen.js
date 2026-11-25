@@ -25,10 +25,10 @@ const feats = [
   rail([[-300, 120], [-120, 90], [-40, 150], [-40, 186]]),
   // Belfried und Kirche St-Éloi, Rathaus, Bastion 32
   bldg('church_west', -86, 36, 14, 34, faceTo(-86, 36, -40, 36), 3, 'Kirche St-Éloi'),
-  bldg('watchtower', -86, 70, 8, 8, 0, 10, 'Belfried'),
+  bldg('belfry', -86, 70, 8, 8, 0, 10, 'Belfried'),
   bldg('townhouse_eu', 6, 90, 28, 14, faceTo(6, 90, -32, 90), 3, 'Rathaus'),
-  bldg('warehouse', -150, 0, 22, 12, faceTo(-150, 0, -100, 10), 1, 'Bastion 32 (Hauptquartier)'),
-  bldg('warehouse', -165, -75, 20, 12, 0, 1, 'Hafenschuppen'),
+  bldg('casemate', -150, 0, 22, 12, faceTo(-150, 0, -100, 10), 1, 'Bastion 32 (Hauptquartier)'),
+  bldg('harbour_shed', -165, -75, 20, 12, 0, 1, 'Hafenschuppen'),
   // Dünen bei Malo-les-Bains / Bray-Dunes
   hill(200, -120, 40, 3), hill(260, -110, 34, 3), hill(120, -112, 26, 2),
 ];

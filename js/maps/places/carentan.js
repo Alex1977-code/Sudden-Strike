@@ -19,7 +19,7 @@ const feats = [
   road([[40, 0], [-100, 40], [-260, 60]], 7, true, { name: 'Straße nach Baupte' }),
   road([[60, 30], [150, 70], [260, 120]], 6, false),
   rail([[-260, 190], [0, 136], [120, 114], [260, 64]]),
-  bldg('townhouse_eu', 85, 107, 30, 10, faceTo(85, 107, 85, 125), 2, 'Bahnhof Carentan'),
+  bldg('station_ww2', 85, 107, 30, 10, faceTo(85, 107, 85, 125), 2, 'Bahnhof Carentan'),
   // Ingouf-Hof am Ende des Damms
   bldg('farmhouse_eu', 14, -92, 14, 8, faceTo(14, -92, -20, -40), 2, 'Ingouf-Hof'),
   bldg('barn', 34, -104, 10, 14, 0, 1),

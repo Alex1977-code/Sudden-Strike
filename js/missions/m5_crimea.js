@@ -33,7 +33,7 @@ export default {
     bridge: { x0: -96, x1: 120, z: BZ, deckY: 9, gaps: [{ x: SPAN_X, kind: 'road' }, { x: SPAN_X, kind: 'rail' }], gapLen: 28 },
   },
   env: { season: 'summer', sunElev: 9, sunAzim: 95, fogDensity: 0.0024 },
-  weather: { type: 'fog', intensity: 0.4, changes: [{ at: 420, type: 'clear', fade: 90 }] }, time: { start: '03:40', speed: 10 }, // V3-W: Nacht -> Morgengrauen, Frühnebel lichtet sich
+  weather: { type: 'fog', intensity: 0.4, changes: [{ at: 420, type: 'clear', fade: 90 }] }, time: { start: '02:30', speed: 10 }, // V3-W: Nacht -> Morgengrauen, Frühnebel lichtet sich
   camera: { x: -85, z: 10, dist: 115, yaw: 0.25 },
   abilities: [{ id: 'stormshadow', charges: 4 }, { id: 'seadrone', charges: 4 }, 'scan'],
   friendlyEdge: [-60, 160],

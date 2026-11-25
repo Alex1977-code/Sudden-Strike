@@ -15,12 +15,12 @@ const feats = [
   rail(RAIL),
   road([[-300, 190], [-60, 90], [80, 70], [210, 120], [300, 130]], 8, false, { name: 'Straße Belgorod–Prochorowka' }),
   road([[80, 70], [30, -40], [-60, -150], [-100, -232]], 5, false),
-  bldg('townhouse_eu', 240, -60, 22, 9, faceTo(240, -60, 228, -80), 1, 'Bahnhof Prochorowka'),
+  bldg('station_ww2', 240, -60, 22, 9, faceTo(240, -60, 228, -80), 1, 'Bahnhof Prochorowka'),
   // Sowchos Oktjabrski am Nordhang
-  bldg('barn', -45, -40, 12, 30, Math.PI / 2, 1, 'Sowchos Oktjabrski'),
-  bldg('barn', -45, -80, 12, 30, Math.PI / 2, 1),
+  bldg('sovkhoz', -45, -40, 12, 30, Math.PI / 2, 1, 'Sowchos Oktjabrski'),
+  bldg('sovkhoz', -45, -80, 12, 30, Math.PI / 2, 1),
   bldg('warehouse', -90, -60, 18, 12, Math.PI / 2, 1),
-  bldg('watchtower', -70, -112, 4, 4, 0, 3),
+  bldg('water_tower', -70, -112, 4, 4, 0, 3),
   // Wald Storoschewoje (Süden), Felder
   forest([[-60, 180], [120, 170], [160, 290], [-80, 290]], 'deciduous', 0.06),
   field([[-280, -140], [-120, -150], [-110, 40], [-280, 60]], 'wheat', 0.3),

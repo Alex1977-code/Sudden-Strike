@@ -16,13 +16,13 @@ const feats = [
   rail([[-92, -280], [-88, -60], [-86, 60], [-92, 280]]),
   rail([[-88, -50], [-70, -10], [-48, BZ + 7]]),
   // Brückentürme (Westen: Remagen, Osten: Erpel)
-  bldg('watchtower', -58, BZ - 18, 7, 7, 0, 6, 'Brückenturm West'), bldg('watchtower', -58, BZ + 17, 7, 7, 0, 6),
-  bldg('watchtower', 158, BZ - 19, 7, 7, 0, 6, 'Brückenturm Ost'), bldg('watchtower', 158, BZ + 19, 7, 7, 0, 6),
+  bldg('remagen_tower', -58, BZ - 18, 8, 8, 0, 6, 'Brückenturm West'), bldg('remagen_tower', -58, BZ + 17, 8, 8, 0, 6),
+  bldg('remagen_tower', 158, BZ - 19, 8, 8, 0, 6, 'Brückenturm Ost'), bldg('remagen_tower', 158, BZ + 19, 8, 8, 0, 6),
   // Ostufer: Erpeler Ley (steiler Basaltfels), Bahntunnel, Uferstraße nach Erpel
   hill(200, -150, 72, 46),
   hill(160, -175, 34, 18),
   rail([[150, BZ + 7], [172, -12], [184, -60]]),
-  bldg('warehouse', 196, -76, 12, 8, faceTo(196, -76, 182, -58), 2, 'Bahntunnel (Erpeler Ley)'),
+  bldg('tunnel_portal', 196, -76, 12, 9, faceTo(196, -76, 182, -58), 2, 'Bahntunnel (Erpeler Ley)'),
   road([[150, BZ - 7], [170, -4], [190, 30], [210, 60], [280, 72]], 8),
   road([[190, 30], [150, 120], [148, 280]], 7, true, { name: 'Uferstraße' }),
   // Apollinariskirche auf dem Apollinarisberg

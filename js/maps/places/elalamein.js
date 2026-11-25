@@ -20,8 +20,8 @@ const feats = [
   field([[-28, -170], [-4, -170], [-4, 280], [-28, 280]], 'stubble', 1.57),
   field([[34, -170], [56, -170], [56, 280], [34, 280]], 'stubble', 1.57),
   // Bahnhalt El Alamein
-  bldg('townhouse_eu', 120, -160, 18, 8, Math.PI, 1, 'Bahnhalt El Alamein'),
-  bldg('watchtower', 140, -160, 4, 4, 0, 2),
+  bldg('colonial_white', 120, -160, 18, 8, Math.PI, 1, 'Bahnhalt El Alamein'),
+  bldg('water_tower', 140, -160, 4, 4, 0, 2),
 ];
 feats.push(settlement('desert_village', 150, -125, 40, 1942, { mainRoadAngle: 0, density: 0.4, square: false }));
 

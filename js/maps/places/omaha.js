@@ -12,11 +12,11 @@ const feats = [
   road([[-210, -100], [210, -100]], 5, false, { name: 'Strandweg (Uferdamm)' }),
   treeline([[-280, 60], [-220, 70]]), treeline([[-150, 70], [-60, 72]]), treeline([[30, 70], [120, 72]]), treeline([[160, 72], [260, 70]]),
   // Widerstandsnester am Ausgang (Kasematten als Gebäude, ergänzt durch Bunker-Bauwerke)
-  bldg('warehouse', -222, -78, 9, 7, Math.PI, 1, 'WN 72 (Vierville)'),
-  bldg('warehouse', -62, -74, 9, 7, Math.PI, 1, 'WN 66 (Les Moulins)'),
-  bldg('warehouse', 58, -74, 9, 7, Math.PI, 1, 'WN 65 (St-Laurent)'),
-  bldg('warehouse', 222, -76, 9, 7, Math.PI, 1, 'WN 62 (Colleville)'),
-  bldg('townhouse_eu', -186, -70, 8, 8, Math.PI, 2, 'Villa am Strand'),
+  bldg('wn_bunker', -222, -78, 12, 9, Math.PI, 1, 'WN 72 (Vierville)'),
+  bldg('wn_bunker', -62, -74, 12, 9, Math.PI, 1, 'WN 66 (Les Moulins)'),
+  bldg('wn_bunker', 58, -74, 12, 9, Math.PI, 1, 'WN 65 (St-Laurent)'),
+  bldg('wn_bunker', 222, -76, 12, 9, Math.PI, 1, 'WN 62 (Colleville)'),
+  bldg('norman_stone', -186, -70, 9, 8, Math.PI, 2, 'Villa am Strand'),
 ];
 feats.push(
   settlement('normandy_village', -200, 180, 58, 1944, { mainRoadAngle: Math.PI / 2, density: 0.7, connectTo: [[-200, 112]] }),

@@ -5,14 +5,14 @@ const feats = [
   // Bahnknoten: mehrere Gleise Ost–West, Abzweig nach Süden
   rail([[-270, -40], [270, -50]]), rail([[-270, -28], [270, -38]]), rail([[-270, -52], [270, -62]]),
   rail([[60, -45], [120, 60], [160, 270]]),
-  bldg('townhouse_eu', -20, -80, 44, 14, faceTo(-20, -80, -20, -60), 2, 'Bahnhof Pokrowsk'),
+  bldg('station_modern', -20, -80, 44, 14, faceTo(-20, -80, -20, -60), 2, 'Bahnhof Pokrowsk'),
   road([[-270, 60], [0, 50], [270, 40]], 10, true, { name: 'E 50 (Donezk–Dnipro)' }),
   road([[-120, -270], [-110, -80], [-100, 60], [-120, 270]], 9, true, { name: 'H 32 (Kostjantyniwka)' }),
   ...[[-110, -48]].map(([x, z]) => ({ type: 'road', pts: [[x, z - 18], [x, z + 18]], width: 9, paved: true, name: 'Bahnübergang' })),
   // Schachtanlage „Pokrowske“ im Südwesten
-  bldg('watchtower', -200, 180, 7, 7, 0, 10, 'Förderturm Schacht Pokrowske'),
-  bldg('watchtower', -170, 180, 7, 7, 0, 10),
-  bldg('industrial', -185, 215, 46, 18, 0, 2, 'Schachtanlage Pokrowske'),
+  bldg('headframe', -200, 180, 12, 12, 0, 10, 'Förderturm Schacht Pokrowske'),
+  bldg('headframe', -170, 180, 12, 12, 0, 10),
+  bldg('mine_complex', -185, 215, 46, 18, 0, 2, 'Schachtanlage Pokrowske'),
   bldg('warehouse', -230, 150, 24, 12, 0, 1),
   road([[-120, 190], [-160, 190]], 7),
   hill(-240, 250, 34, 22), hill(240, 220, 40, 20), hill(230, -230, 36, 18),

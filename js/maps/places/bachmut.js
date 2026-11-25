@@ -13,16 +13,16 @@ const feats = [
   road([[-30, 170], [40, 160]], 7), road([[-80, 170], [-260, 240]], 7, false),
   road([[150, -280], [140, -60], [150, 120], [160, 280]], 10, true, { name: 'M 03 (Slowjansk–Horliwka)' }),
   rail([[232, -280], [220, 0], [228, 280]]),
-  bldg('townhouse_eu', 205, 40, 34, 12, faceTo(205, 40, 220, 40), 2, 'Bahnhof Bachmut-2'),
+  bldg('station_modern', 205, 40, 34, 12, faceTo(205, 40, 220, 40), 2, 'Bahnhof Bachmut-2'),
   // Industrie: Sektkellerei (Stollen) im Nordosten, Knauf-/AZOM-Werk im Nordwesten
-  bldg('industrial', 200, -220, 40, 20, 0, 2, 'Sektkellerei (Stollen)'),
+  bldg('sektkellerei', 200, -220, 40, 20, 0, 2, 'Sektkellerei (Stollen)'),
   bldg('warehouse', 200, -180, 30, 14, Math.PI, 1),
-  bldg('industrial', -200, -230, 46, 24, 0, 2, 'Werk AZOM (Industriegebiet)'),
+  bldg('azom_plant', -200, -230, 46, 24, 0, 2, 'Werk AZOM (Industriegebiet)'),
   bldg('industrial', -150, -220, 30, 18, 0, 1),
-  bldg('watchtower', -240, -210, 4, 4, 0, 9),
+  bldg('chimney_modern', -240, -210, 4, 4, 0, 9),
   road([[-200, -170], [-200, -205]], 7),
   // MiG-17-Denkmal am Nordkreisel
-  bldg('kiosk', 70, -200, 5, 5, 0, 1, 'MiG-17-Denkmal'),
+  bldg('mig17_monument', 70, -200, 8, 8, 0, 1, 'MiG-17-Denkmal'),
   hill(-230, 230, 60, 10), hill(240, -260, 40, 8),
   forest([[-280, 250], [-150, 260], [-140, 280], [-280, 280]], 'deciduous', 0.05),
 ];

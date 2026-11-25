@@ -165,11 +165,13 @@ const TERRAIN_PATCH = `
     float flat_ = smoothstep(0.93, 0.985, normalize(vFowN).y);
     float wxWet = uWx.x, wxMud = uWx.y, wxSnow = uWx.z;
     diffuseColor.rgb *= 1.0 - 0.26 * wxWet - 0.10 * wxMud;
-    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.12, 0.92, 0.72), 0.5 * wxMud);
-    roughnessFactor = mix(roughnessFactor, 0.5, wxWet * 0.65);
-    float pud = smoothstep(0.58 - 0.16 * wxWet - 0.1 * wxMud, 0.72 - 0.12 * wxWet - 0.08 * wxMud, wxA) * flat_ * step(0.001, wxWet) * clamp(wxWet * 1.3 - 0.25, 0.0, 1.0);
-    roughnessFactor = mix(roughnessFactor, 0.05, pud);
-    diffuseColor.rgb *= 1.0 - 0.3 * pud;
+    float wxCh = max(max(diffuseColor.r, diffuseColor.g), diffuseColor.b) - min(min(diffuseColor.r, diffuseColor.g), diffuseColor.b);
+    float wxMk = smoothstep(0.012, 0.05, wxCh); // Asphalt (unbunt) bleibt weitgehend unverschlammt
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.19, 0.125, 0.07) * (0.8 + 0.5 * wxA), 0.5 * wxMud * wxMk);
+    roughnessFactor = mix(roughnessFactor, 0.7, wxWet * 0.6);
+    float pud = smoothstep(0.68 - 0.1 * wxWet - 0.08 * wxMud, 0.8 - 0.08 * wxWet - 0.06 * wxMud, wxA) * flat_ * step(0.001, wxWet) * clamp(wxWet * 1.3 - 0.25, 0.0, 1.0);
+    roughnessFactor = mix(roughnessFactor, 0.4, pud);
+    diffuseColor.rgb *= 1.0 - 0.22 * pud;
     float sn = wxSnow * smoothstep(0.6, 0.95, normalize(vFowN).y) * (0.75 + 0.25 * wxA);
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.80, 0.83, 0.88), sn * 0.62);
     roughnessFactor = mix(roughnessFactor, 0.92, sn);
@@ -280,7 +282,7 @@ export class Weather {
 
   // ---------------- Partikel ----------------
   _buildParticles() {
-    const N = Math.round(7500 * this.qMul), M = Math.round(5500 * this.qMul);
+    const N = Math.round(5600 * this.qMul), M = Math.round(5200 * this.qMul);
     this.nRain = N; this.nSnow = M;
     const rnd = (n) => { const a = new Float32Array(n * 4); for (let i = 0; i < a.length; i++) a[i] = Math.random(); return a; };
     // Regen: LineSegments (2 Vertices je Strich)
@@ -645,9 +647,9 @@ export class Weather {
       const u = this.rainU;
       u.uCenter.value.set(cx, gy + H * 0.5 - 4, cz); u.uSize.value.set(S, H, S);
       u.uVel.value.set(wx * (2 + 9 * wind), 22 + 8 * rainAmt, wz * (2 + 9 * wind));
-      u.uTime.value = tm; u.uLen.value = 1.1 * sc * (0.7 + 0.5 * rainAmt); u.uDens.value = rainAmt;
-      u.uAlpha.value = 0.34 + 0.2 * rainAmt;
-      u.uCol.value.setRGB(0.78, 0.84, 0.95).multiplyScalar(0.35 + 1.4 * L);
+      u.uTime.value = tm; u.uLen.value = 0.8 * sc * (0.7 + 0.5 * rainAmt); u.uDens.value = 0.35 + 0.65 * rainAmt;
+      u.uAlpha.value = 0.17 + 0.12 * rainAmt;
+      u.uCol.value.setRGB(0.78, 0.84, 0.95).multiplyScalar(0.3 + 0.8 * L);
       this.rain.geometry.setDrawRange(0, this.nRain * 2);
     }
     // Schnee
@@ -669,18 +671,18 @@ export class Weather {
     const on = nf > 0.35 && !g.demo;
     M.visible = on;
     if (!on) return;
-    M.material.opacity = clamp((nf - 0.35) * 1.6, 0, 0.85);
+    M.material.opacity = clamp((nf - 0.35) * 1.6, 0, 0.8);
     const ls = g.localSide, arr = M.instanceMatrix.array, col = M.instanceColor.array;
     let n = 0;
     for (const u of g.units) {
       if (n >= this.maxMarks) break;
       if (!u.alive || u.type.structure || u.type.air || u.type.kamikaze || u.side === 'N' || !u.root.visible || u.garrison) continue;
-      const i = n * 16, s = Math.max(1.1, u.radius * 1.25);
+      const i = n * 16, s = Math.max(0.95, u.radius * 0.95);
       arr[i] = s; arr[i + 1] = 0; arr[i + 2] = 0; arr[i + 3] = 0; arr[i + 4] = 0; arr[i + 5] = s; arr[i + 6] = 0; arr[i + 7] = 0;
       arr[i + 8] = 0; arr[i + 9] = 0; arr[i + 10] = s; arr[i + 11] = 0;
       arr[i + 12] = u.pos.x; arr[i + 13] = g.terrain.surface(u.pos.x, u.pos.z) + 0.18; arr[i + 14] = u.pos.z; arr[i + 15] = 1;
       const own = u.side === ls, o3 = n * 3;
-      if (g.isOwn(u)) { col[o3] = 0.35; col[o3 + 1] = 1.0; col[o3 + 2] = 0.5; } else if (own) { col[o3] = 0.35; col[o3 + 1] = 0.7; col[o3 + 2] = 1.0; } else { col[o3] = 1.0; col[o3 + 1] = 0.3; col[o3 + 2] = 0.25; }
+      if (g.isOwn(u)) { col[o3] = 0.04; col[o3 + 1] = 0.3; col[o3 + 2] = 0.1; } else if (own) { col[o3] = 0.04; col[o3 + 1] = 0.16; col[o3 + 2] = 0.34; } else { col[o3] = 0.4; col[o3 + 1] = 0.06; col[o3 + 2] = 0.04; }
       n++;
     }
     M.count = n; M.instanceMatrix.needsUpdate = true; M.instanceColor.needsUpdate = true;

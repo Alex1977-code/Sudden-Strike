@@ -13,13 +13,13 @@ const feats = [
   { type: 'causeway', pts: [[-152, BZ + 7], [222, BZ + 7]], width: 9, name: 'Krimbrücke (Bahn)', style: 'cable_arch', kind: 'rail' },
   // Kertsch (Westen): Mithridates-Berg, Hafen, Fährhafen
   hill(-240, -190, 60, 22),
-  bldg('watchtower', -240, -190, 6, 6, 0, 4, 'Mithridates-Berg (Obelisk)'),
+  bldg('obelisk', -240, -190, 10, 10, 0, 4, 'Mithridates-Berg (Obelisk)'),
   { type: 'causeway', pts: [[-160, -170], [-120, -170]], width: 10, name: 'Hafen Kertsch' },
-  bldg('warehouse', -190, -150, 26, 12, faceTo(-190, -150, -150, -150), 1, 'Hafenlager'),
-  bldg('warehouse', -180, 120, 22, 14, faceTo(-180, 120, -140, 120), 1, 'Fährhafen Krym'),
+  bldg('harbour_shed', -190, -150, 26, 12, faceTo(-190, -150, -150, -150), 1, 'Hafenlager'),
+  bldg('ferry_terminal', -180, 120, 22, 14, faceTo(-180, 120, -140, 120), 1, 'Fährhafen Krym'),
   { type: 'causeway', pts: [[-150, 120], [-110, 124]], width: 10 },
   // Taman-Seite
-  bldg('warehouse', 250, -60, 24, 12, faceTo(250, -60, 230, -40), 1, 'Fährhafen Kawkas'),
+  bldg('ferry_terminal', 250, -60, 24, 12, faceTo(250, -60, 230, -40), 1, 'Fährhafen Kawkas'),
 ];
 feats.push(
   settlement('ukr_town', -230, 50, 65, 2018, { mainRoadAngle: Math.PI / 2, density: 0.75, connectTo: [[-210, -7]] }),

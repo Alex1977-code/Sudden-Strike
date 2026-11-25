@@ -16,13 +16,13 @@ const feats = [
   // Utrechtseweg (Oosterbeek – Arnheim), Bahnstrecke Nord
   road([[-290, -48], [-150, -40], [-20, -30], [50, -30], [150, -36], [290, -40]], 9, true, { name: 'Utrechtseweg' }),
   rail([[-290, -150], [0, -158], [290, -175]]),
-  bldg('townhouse_eu', 0, -176, 44, 14, 0, 2, 'Bahnhof Arnheim'),
+  bldg('station_ww2', 0, -176, 44, 14, 0, 2, 'Bahnhof Arnheim'),
   // Eusebiuskirche und Brückenkopf-Häuser an der Rampe
-  bldg('church_west', 118, 30, 16, 40, Math.PI / 2, 4, 'Eusebiuskirche'),
+  bldg('eusebiuskirche', 118, 30, 16, 40, Math.PI / 2, 4, 'Eusebiuskirche'),
   ...row('townhouse_eu', [60, 96], [60, 52], { side: 1, w: 9, d: 12, floors: 3, setback: 9, name: 'Van-Limburg-Stirum-Schule' }),
   ...row('townhouse_eu', [60, 52], [60, 96], { side: 1, w: 9, d: 12, floors: 3, setback: 9, name: 'Brigade-Gefechtsstand' }),
   // Oosterbeek: Hotel Hartenstein im Park, Alte Kirche am Fluss, Fähre Heveadorp
-  bldg('townhouse_eu', -205, -112, 24, 16, Math.PI, 3, 'Hotel Hartenstein (Div.-Gefechtsstand)'),
+  bldg('hotel_hartenstein', -205, -112, 24, 16, Math.PI, 3, 'Hotel Hartenstein (Div.-Gefechtsstand)'),
   grove(-205, -112, 34, 'deciduous', 0.03),
   bldg('church_west', -212, 86, 10, 20, 0, 2, 'Alte Kirche Oosterbeek'),
   road([[-235, -42], [-238, 70]], 6),

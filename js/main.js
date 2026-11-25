@@ -62,6 +62,7 @@ let current = 'title', returnTo = 'title';
 function show(name) {
   for (const s of screens) $('screen-' + s).classList.toggle('hidden', s !== name);
   current = name;
+  if (name === 'title') renderTitle(); // V3-MENU: „Fortsetzen“-Karte aktualisieren
 }
 function hideScreens() { for (const s of screens) $('screen-' + s).classList.add('hidden'); current = null; }
 document.addEventListener('click', (e) => { audio.init(); if (e.target.closest('button')) audio.ui('click'); }, true);
@@ -101,73 +102,223 @@ function loadDemo() {
   return loadWithSpinner('Lade Schlachtfeld …', () => game.load(DEMO, { demo: true }));
 }
 
-// Titel
-$('btn-campaign').onclick = () => { renderCampaign(); show('campaign'); };
+// ================= Titel (V3-MENU) =================
+$('btn-campaign').onclick = () => { renderCampaignGrid(); show('campaign'); };
 $('btn-settings').onclick = () => { returnTo = 'title'; openSettings(); };
-$('btn-help').onclick = () => { returnTo = 'title'; show('help'); };
+$('btn-help').onclick = () => { returnTo = 'title'; helpFrom = null; show('help'); };
 $('btn-fullscreen').onclick = () => {
   const el = document.documentElement;
   if (!document.fullscreenElement) (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el)?.catch?.(() => {});
   else document.exitFullscreen?.();
   try { screen.orientation?.lock?.('landscape').catch(() => {}); } catch (e) { /* ignorieren */ }
 };
+document.addEventListener('fullscreenchange', () => {
+  const s = $('btn-fullscreen').querySelector('span');
+  if (s) s.textContent = document.fullscreenElement ? t('menu.fullscreen.off', 'Fenster') : t('menu.fullscreen', 'Vollbild');
+});
 document.querySelectorAll('.back').forEach((b) => (b.onclick = () => show(returnTo === 'pause' ? 'pause' : returnTo)));
-document.querySelector('.back-campaign').onclick = () => { if (currentMission?.custom) openMods(); else { renderCampaign(); show('campaign'); } };
-// "Zurück" im Kampagnenmenü führt zum Titel
-document.querySelector('#screen-campaign .back').onclick = () => show('title');
+document.querySelector('.back-campaign').onclick = () => {
+  if (currentMission?.custom) { openMods(); return; }
+  const fm = findMission(currentMission);
+  if (fm) openCampaign(fm.campaign.id, fm.index); else { renderCampaignGrid(); show('campaign'); }
+};
+// "Zurück" im Kampagnenmenü: Missionsliste → Kampagnenauswahl → Titel
+document.querySelector('#screen-campaign .back').onclick = () => { if (campSel) renderCampaignGrid(); else show('title'); };
+// Hilfe: zurück dorthin, woher sie geöffnet wurde (Titel, Pause oder Einstellungen)
+let helpFrom = null;
+document.querySelector('#screen-help .back').onclick = () => { if (helpFrom === 'settings') { helpFrom = null; show('settings'); } else show(returnTo === 'pause' ? 'pause' : returnTo); };
 
-// Kampagne
-function renderCampaign() {
-  const list = $('mission-list');
-  list.innerHTML = '';
-  CAMPAIGN.forEach((m, i) => {
-    const locked = i + 1 > progress.unlocked;
-    const done = progress.done[m.id];
-    const el = document.createElement('div');
-    el.className = 'mission-card' + (locked ? ' locked' : '');
-    el.innerHTML = `<div class="num">${i + 1}</div><div><div class="t">${m.title}</div><div class="p">${m.place} · ${m.date}</div>${done ? `<div class="p">Abgeschlossen in ${fmtTime(done.time)} · ${done.kills} Abschüsse</div>` : ''}</div><div class="state">${icon(locked ? 'lock' : done ? 'medal' : 'play', { label: locked ? 'Gesperrt' : done ? 'Abgeschlossen' : 'Starten' })}</div>`;
-    if (!locked) el.onclick = () => openBriefing(m);
-    list.appendChild(el);
-  });
+// „Fortsetzen“-Karte im Hauptmenü: nächste offene Mission der zuletzt gespielten Kampagne
+function renderTitle() {
+  const box = $('title-continue');
+  const id = lastPlayed() || 'ukraine', c = getCampaign(id);
+  if (!c || !c.missions.length) { box.classList.add('hidden'); return; }
+  const i = Math.max(0, nextMission(id)), m = c.missions[i], p = getProgress(id);
+  const fresh = !p.completed && !lastPlayed();
+  box.querySelector('.tc-over').textContent = fresh ? t('title.begin', 'Einstieg in die Kampagne') : t('title.continue', 'Weiter in der Kampagne');
+  $('tc-art').innerHTML = campaignArtSVG(c);
+  $('tc-title').textContent = m.title;
+  $('tc-sub').textContent = `${c.title} · ${t('common.mission', 'Mission')} ${i + 1}/${c.missions.length}`;
+  box.style.setProperty('--acc', c.accent);
+  box.classList.remove('hidden');
+  $('btn-continue').onclick = () => openBriefing(m);
 }
-// Zweistufige Bestätigung direkt im Knopf (Browser-Dialoge sind nicht überall verfügbar)
-$('btn-reset-progress').onclick = (e) => {
-  const b = e.currentTarget;
-  if (!b.dataset.armed) {
-    b.dataset.armed = '1'; b.textContent = 'Wirklich zurücksetzen? Nochmal tippen';
-    setTimeout(() => { delete b.dataset.armed; b.textContent = 'Fortschritt zurücksetzen'; }, 4000);
+
+// ================= Kampagnen (V3-MENU): Registry, zweistufige Auswahl =================
+// Entwickler-/Testmodus: ?unlock=all schaltet alle Missionen aller Kampagnen frei
+if (new URLSearchParams(location.search).get('unlock') === 'all') setUnlockAll(true);
+let campSel = null; // gewählte Kampagne (Stufe 2: Missionsliste) oder null (Stufe 1: Kampagnenkarten)
+let campMission = 0;
+const esc = (s) => escapeHtml(String(s ?? ''));
+const diffPips = (d) => `<span class="diff d${d}" title="${esc(t('common.difficulty', 'Schwierigkeit'))}: ${esc(DIFFICULTY[d] || '')}"><i></i><i></i><i></i><b>${esc(DIFFICULTY[d] || '')}</b></span>`;
+const ficBadge = () => `<span class="badge-fic" title="${esc(t('badge.fictional.t', 'Fiktives Szenario – nach Mitte 2026 bzw. frei erfunden'))}">${esc(t('badge.fictional', 'fiktiv'))}</span>`;
+const campPanel = () => document.querySelector('#screen-campaign .camp-panel');
+
+function campHead(over, title, sub) {
+  $('camp-over').textContent = over; $('camp-title').textContent = title;
+  $('camp-sub').textContent = sub || ''; $('camp-sub').classList.toggle('hidden', !sub);
+}
+function renderCampaignGrid() {
+  campSel = null;
+  campPanel().style.removeProperty('--acc');
+  campHead(t('camp.over', 'Kampagnen'), t('camp.title', 'Feldzug wählen'), t('camp.sub', 'Drei Epochen, sechs Perspektiven – und eine Grundausbildung für den Einstieg.'));
+  $('camp-progress').classList.add('hidden');
+  $('camp-select').classList.remove('hidden'); $('camp-detail').classList.add('hidden');
+  $('btn-camp-start').classList.add('hidden'); $('btn-reset-progress').classList.add('hidden');
+  const list = getCampaigns();
+  const def = lastPlayed() || 'ukraine';
+  const card = (c) => {
+    const p = getProgress(c.id), n = c.missions.length;
+    const foot = n
+      ? `<span class="cc-bar"><i style="width:${Math.round((p.completed / n) * 100)}%"></i></span><span class="cc-count">${icon('medal', { cls: 'ic-in' })} ${p.completed}/${n}</span>`
+      : `<span class="cc-soon">${icon('hourglass', { cls: 'ic-in' })} ${esc(t('camp.soon', 'In Vorbereitung'))}</span>`;
+    return `<button class="camp-card${n ? '' : ' empty'}${c.era === 'tutorial' ? ' tut' : ''}" data-camp="${esc(c.id)}"${c.id === def ? ' data-gp-default' : ''} style="--acc:${esc(c.accent)}">
+      <span class="cc-art">${campaignArtSVG(c)}</span>
+      <span class="cc-body">
+        <span class="cc-era">${esc(ERAS[c.era]?.label || '')}${c.years ? ' · ' + esc(c.years) : ''}</span>
+        <span class="cc-title">${esc(c.title)}</span>
+        ${c.subtitle ? `<span class="cc-sub">${esc(c.subtitle)}</span>` : ''}
+        <span class="cc-desc">${esc(c.desc)}</span>
+        <span class="cc-foot">${foot}</span>
+      </span></button>`;
+  };
+  const tut = list.filter((c) => c.era === 'tutorial'), rest = list.filter((c) => c.era !== 'tutorial');
+  $('camp-grid').innerHTML = (tut.length ? `<div class="camp-tut">${tut.map(card).join('')}</div>` : '') + `<div class="camp-cards">${rest.map(card).join('')}</div>`;
+  $('camp-grid').querySelectorAll('[data-camp]').forEach((b) => (b.onclick = () => openCampaign(b.dataset.camp)));
+}
+function openCampaign(id, idx) {
+  const c = getCampaign(id);
+  if (!c) { renderCampaignGrid(); show('campaign'); return; }
+  campSel = c; if (c.missions.length) setLastPlayed(id);
+  campMission = idx ?? Math.max(0, nextMission(id));
+  renderCampaignDetail();
+  show('campaign');
+}
+function renderCampaignDetail() {
+  const c = campSel, p = getProgress(c.id), n = c.missions.length;
+  campPanel().style.setProperty('--acc', c.accent);
+  campHead(`${ERAS[c.era]?.label || ''}${c.years ? ' · ' + c.years : ''}${c.faction ? ' · ' + c.faction : ''}`, c.title, c.subtitle ? `${c.subtitle} – ${c.desc}` : c.desc);
+  $('camp-select').classList.add('hidden'); $('camp-detail').classList.remove('hidden');
+  const pr = $('camp-progress');
+  pr.classList.toggle('hidden', !n);
+  if (n) { pr.querySelector('i').style.width = Math.round((p.completed / n) * 100) + '%'; pr.querySelector('span').textContent = t('camp.progress', '{a} von {b} Missionen abgeschlossen', { a: p.completed, b: n }); }
+  $('btn-reset-progress').classList.toggle('hidden', !n || !p.completed);
+  $('btn-camp-start').classList.toggle('hidden', !n);
+  $('camp-detail').classList.toggle('empty', !n);
+  if (!n) {
+    $('mission-list').innerHTML = `<div class="camp-empty">${campaignArtSVG(c)}<div><h3>${esc(t('camp.soon', 'In Vorbereitung'))}</h3><p>${esc(t('camp.soon.p', 'Die Missionen dieses Feldzugs entstehen gerade. Bis dahin: Gefecht, Online-Gefecht oder eigene Karten im Editor.'))}</p></div></div>`;
+    $('camp-info').classList.add('hidden');
     return;
   }
-  delete b.dataset.armed; b.textContent = 'Fortschritt zurücksetzen';
-  progress = { unlocked: 1, done: {} }; saveProgress(); renderCampaign();
-};
-// Entwickler-/Testmodus: ?unlock=all schaltet alle Missionen frei
-if (new URLSearchParams(location.search).get('unlock') === 'all') progress.unlocked = CAMPAIGN.length;
+  $('camp-info').classList.remove('hidden');
+  if (!isUnlocked(c.id, campMission) || campMission >= n) campMission = Math.max(0, nextMission(c.id));
+  $('mission-list').innerHTML = c.missions.map((m, i) => {
+    const locked = !isUnlocked(c.id, i), done = p.done[m.id];
+    const st = locked ? icon('lock', { label: t('mission.locked', 'Gesperrt') }) : done ? icon('medal', { label: t('mission.done', 'Abgeschlossen'), cls: done.medal ? 'medal-' + done.medal : '' }) : icon('play', { label: t('mission.open', 'Frei') });
+    return `<button class="mission-card${locked ? ' locked' : ''}${done ? ' done' : ''}${i === campMission ? ' sel' : ''}" data-i="${i}" role="listitem"${locked ? ' disabled' : ''}${i === campMission ? ' data-gp-default' : ''}>
+      <span class="num">${String(i + 1).padStart(2, '0')}</span>
+      <span class="mc-main"><span class="t">${esc(m.title)}${m.fictional ? ' ' + ficBadge() : ''}</span><span class="p">${esc(m.date || '')}${m.place ? ' · ' + esc(m.place) : ''}</span></span>
+      ${diffPips(m.difficulty)}
+      <span class="state">${st}</span></button>`;
+  }).join('');
+  $('mission-list').querySelectorAll('.mission-card').forEach((b) => {
+    b.onclick = () => { const i = +b.dataset.i; if (i === campMission) openBriefing(c.missions[i]); else selectCampMission(i); };
+  });
+  selectCampMission(campMission);
+}
+function selectCampMission(i) {
+  const c = campSel, m = c.missions[i]; if (!m) return;
+  campMission = i;
+  $('mission-list').querySelectorAll('.mission-card').forEach((b) => { const on = +b.dataset.i === i; b.classList.toggle('sel', on); if (on) b.dataset.gpDefault = ''; else delete b.dataset.gpDefault; });
+  const p = getProgress(c.id), done = p.done[m.id];
+  const wx = weatherInfo(m);
+  const summary = m.summary || (m.briefing?.[0]?.t || '').replace(/<[^>]+>/g, '').slice(0, 220);
+  const state = done
+    ? `${icon('medal', { cls: 'ic-in' })} ${esc(t('mission.doneIn', 'Abgeschlossen in {t}', { t: fmtTime(done.time || 0) }))} · ${done.kills | 0} ${esc(t('end.stat.kills', 'Abschüsse'))}`
+    : `${icon('play', { cls: 'ic-in' })} ${esc(t('mission.ready', 'Bereit zum Einsatz'))}`;
+  $('camp-info-text').innerHTML = `<div class="ci-over">${esc(t('common.mission', 'Mission'))} ${String(i + 1).padStart(2, '0')} / ${String(c.missions.length).padStart(2, '0')}</div>
+    <h3 class="ci-title">${esc(m.title)}${m.fictional ? ' ' + ficBadge() : ''}</h3>
+    <div class="ci-meta">${m.date ? `<span>${icon('calendar', { cls: 'ic-in' })}${esc(m.date)}</span>` : ''}${m.place ? `<span>${icon('pin', { cls: 'ic-in' })}${esc(m.place)}</span>` : ''}<span>${icon(wx.ic, { cls: 'ic-in' })}${esc(wx.txt)}</span></div>
+    <p class="ci-sum">${esc(summary)}</p>
+    <div class="ci-row">${diffPips(m.difficulty)}<span class="ci-state${done ? ' done' : ''}">${state}</span></div>`;
+  const cv = $('camp-map');
+  if (m.map) drawMapSketch(cv, m.map, { start: m.camera, markers: m.markers, startLabel: t('brief.start.lbl', 'Start') });
+  else { const x = cv.getContext('2d'); x.fillStyle = '#1a2026'; x.fillRect(0, 0, cv.width, cv.height); }
+}
+$('btn-camp-start').onclick = () => { const m = campSel?.missions[campMission]; if (m && isUnlocked(campSel.id, campMission)) openBriefing(m); };
+// Zweistufige Bestätigung direkt im Knopf (Browser-Dialoge sind nicht überall verfügbar)
+function armButton(b, armedText, fn) {
+  const label = b.querySelector('[data-i18n]') || b;
+  if (!b.dataset.armed) {
+    b.dataset.armed = '1'; b.dataset.label = label.textContent; label.textContent = armedText; b.classList.add('armed');
+    setTimeout(() => { if (b.dataset.armed) { delete b.dataset.armed; label.textContent = b.dataset.label; b.classList.remove('armed'); } }, 6000);
+    return;
+  }
+  delete b.dataset.armed; label.textContent = b.dataset.label; b.classList.remove('armed');
+  fn();
+}
+$('btn-reset-progress').onclick = (e) => armButton(e.currentTarget, t('common.confirmReset', 'Wirklich zurücksetzen? Nochmal tippen'), () => { if (campSel) { resetProgress(campSel.id); campMission = 0; renderCampaignDetail(); } });
 
+// ================= Briefing (V3-MENU) =================
+const SEASON_DE = { winter: 'Winter', autumn: 'Herbst', summer: 'Sommer', spring: 'Frühling' };
+function weatherInfo(m) {
+  const env = m.env || {}, w = m.weather;
+  let ic = env.night ? 'moon' : (env.season || m.map?.season) === 'winter' ? 'snow' : 'sun';
+  if (w && w.type && w.type !== 'clear') ic = /rain|storm|thunder/.test(w.type) ? 'rain' : /snow|blizzard/.test(w.type) ? 'snow' : /fog|mist|dust|sand/.test(w.type) ? 'fog' : 'cloud';
+  let txt = '';
+  try { txt = (describeSetting(m) || '').replace(/^Wetter:\s*/, ''); } catch (e) { /* ignorieren */ }
+  if (!txt) txt = [env.night ? t('wx.night', 'Nacht') : env.sunElev != null && env.sunElev < 12 ? t('wx.dawn', 'Dämmerung') : t('wx.day', 'Tag'), SEASON_DE[env.season || m.map?.season] || '', (env.fogDensity || 0) > 0.0038 ? t('wx.haze', 'Dunst') : t('wx.clear', 'klare Sicht')].filter(Boolean).join(', ');
+  return { ic, txt };
+}
+const FORCE_ICONS = [
+  [/seedrohne/, 'seadrone'], [/fpv/, 'fpv'], [/lancet|kamikaze|shahed/, 'loiter'], [/drohne|orlan|uav/, 'recon'], [/boot|schiff/, 'boat'],
+  [/javelin|nlaw|panzerabwehr|rpg|panzerjäger|panzerfaust|panzerschreck|bazooka|milan|tow\b/, 'at'], [/scharfsch/, 'sniper'],
+  [/\bmg\b|maschinengewehr/, 'mg'], [/pionier/, 'engineer'], [/sanität/, 'medic'], [/beobachter/, 'observer'],
+  [/\bsso\b|spezial|kommando|ksk|speznas|ranger/, 'special'], [/gepard|flak|schilka|pantsir/, 'aa_gun'],
+  [/iris|patriot|stinger|flugabwehr|igla|nasams|s-300|s-400/, 'aa_missile'], [/radar/, 'radar_veh'],
+  [/himars|mars|raketenwerfer|grad|katjuscha|nebelwerfer/, 'arty_rocket'], [/haubitze|artillerie|m777|msta|mörser|geschütz/, 'arty_tube'],
+  [/bradley|marder|schützenpanzer|bmp|cv90|puma/, 'ifv'], [/leopard|panzer|t-\d|abrams|challenger|sherman|tiger|kampfwagen/, 'tank'],
+  [/btr|dingo|fuchs|radpanzer|mrap|humvee|wolf|jeep|spähwagen/, 'wheeled'], [/berge/, 'recovery'], [/lkw|versorgung|transporter|truck/, 'truck'],
+  [/hubschrauber|heli|\bmi-|\bka-/, 'heli'], [/flugzeug|jäger|bomber|stuka/, 'plane'],
+];
+const ABIL_ICONS = [[/aufkl/, 'scan'], [/himars/, 'himars'], [/marschflug|storm/, 'stormshadow'], [/\bew\b|stör|elektron/, 'ew'], [/fpv/, 'fpv'], [/lancet|kamikaze/, 'lancet'], [/salve|tornado|grad/, 'tornado'], [/artillerie|feuerschlag/, 'artillery'], [/nebel|rauch/, 'smoke'], [/luftlande|fallschirm/, 'airdrop'], [/luft|flugzeug|bomber/, 'plane']];
+const pickIcon = (list, s, fb) => { const l = String(s).toLowerCase(); for (const [re, ic] of list) if (re.test(l)) return ic; return fb; };
 const briefMapCache = {};
 function openBriefing(m) {
   currentMission = m;
-  $('brief-place').textContent = `${m.place} · ${m.date}`;
+  const fm = findMission(m);
+  if (fm) setLastPlayed(fm.campaign.id);
+  $('brief-over').textContent = fm ? `${t('brief.over', 'Einsatzbefehl')} · ${fm.campaign.title} · ${t('common.mission', 'Mission')} ${fm.index + 1}/${fm.campaign.missions.length}` : m.custom ? t('brief.custom', 'Einsatzbefehl · Eigene Karte') : t('brief.over', 'Einsatzbefehl');
   $('brief-title').textContent = m.title;
-  $('brief-text').innerHTML = m.briefing.map((b) => `<p><span class="speaker">${b.s}:</span> ${b.t}</p>`).join('');
-  $('brief-objectives').innerHTML = m.objectivesPreview.map((o) => `<li>${o}</li>`).join('');
-  $('brief-forces').innerHTML = m.forces.map((f) => `<span class="chip">${f}</span>`).join('') + (describeSetting(m) ? `<span class="chip">${describeSetting(m)}</span>` : ''); // V3-W
+  const wx = weatherInfo(m);
+  $('brief-place').innerHTML = [
+    m.date && `<span>${icon('calendar', { cls: 'ic-in' })}${esc(m.date)}</span>`,
+    m.place && `<span>${icon('pin', { cls: 'ic-in' })}${esc(m.place)}</span>`,
+    `<span>${icon(wx.ic, { cls: 'ic-in' })}${esc(wx.txt)}</span>`,
+    m.difficulty && diffPips(m.difficulty),
+    m.fictional && ficBadge(),
+  ].filter(Boolean).join('');
+  $('brief-text').innerHTML = (m.briefing || []).map((b) => `<div class="rl-line"><div class="rl-who">${b.s}</div><div class="rl-msg">${b.t}</div></div>`).join('');
+  $('brief-objectives').innerHTML = (m.objectivesPreview || []).map((o) => {
+    const opt = /^optional:\s*/i.test(o);
+    return `<li class="${opt ? 'opt' : ''}">${icon(opt ? 'obj_open' : 'obj_target', { cls: 'ic-in' })}<span>${opt ? `<em>${esc(t('brief.optional', 'Optional'))}</em> ` : ''}${opt ? o.replace(/^optional:\s*/i, '') : o}</span></li>`;
+  }).join('');
+  const forces = m.forces || [];
+  const units = forces.filter((f) => !/^fähigkeit/i.test(f)), abil = forces.filter((f) => /^fähigkeit/i.test(f));
+  $('brief-forces').innerHTML = `<div class="force-list">${units.map((f) => `<span class="force">${icon(pickIcon(FORCE_ICONS, f, 'inf'), { cls: 'ic-in' })}<span>${f}</span></span>`).join('')}</div>` +
+    (abil.length ? `<div class="force-sub">${esc(t('brief.abilities', 'Fähigkeiten'))}</div><div class="force-list abil">${abil.map((f) => { const s = f.replace(/^fähigkeit:\s*/i, ''); return `<span class="force">${icon(pickIcon(ABIL_ICONS, s, 'star'), { cls: 'ic-in' })}<span>${s}</span></span>`; }).join('')}</div>` : '');
   show('briefing');
-  // Lagekarte
+  // Lagekarte: sofort als Skizze, dann (falls möglich) als gerendertes Gelände mit denselben Markierungen
   const c = $('brief-map'), ctx = c.getContext('2d');
-  ctx.fillStyle = '#111'; ctx.fillRect(0, 0, c.width, c.height);
+  const marks = { start: m.camera, markers: m.markers, startLabel: t('brief.start.lbl', 'Start') };
+  if (m.map) drawMapSketch(c, m.map, marks); else { ctx.fillStyle = '#111'; ctx.fillRect(0, 0, c.width, c.height); }
+  if (!m.map) return;
   setTimeout(() => {
-    if (!briefMapCache[m.id]) briefMapCache[m.id] = new Terrain(m.map, 'low').minimapImage(220);
+    try { if (!briefMapCache[m.id]) briefMapCache[m.id] = new Terrain(m.map, 'low').minimapImage(360); } catch (e) { console.warn('[briefing] Lagekarte', e); return; }
+    if (currentMission !== m) return;
     ctx.drawImage(briefMapCache[m.id], 0, 0, c.width, c.height);
-    ctx.strokeStyle = 'rgba(0,0,0,.35)';
-    for (let i = 1; i < 6; i++) { ctx.beginPath(); ctx.moveTo((i * c.width) / 6, 0); ctx.lineTo((i * c.width) / 6, c.height); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, (i * c.height) / 6); ctx.lineTo(c.width, (i * c.height) / 6); ctx.stroke(); }
-    if (m.camera) {
-      const s = m.map.size;
-      const x = ((m.camera.x + s / 2) / s) * c.width, y = ((m.camera.z + s / 2) / s) * c.height;
-      ctx.fillStyle = '#5dff8a'; ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.font = '700 12px system-ui'; ctx.fillText('Start', x + 9, y + 4);
-    }
-  }, 20);
+    drawMapSketch(c, m.map, { ...marks, overlayOnly: true });
+  }, 320); // erst nach dem Einblenden – der Geländeaufbau blockiert kurz den Hauptthread
 }
 $('btn-start-mission').onclick = () => startMission(currentMission);
 
@@ -329,17 +480,19 @@ function updatePauseInfo() {
   el.classList.toggle('hidden', !sk);
   const on = online.inGame;
   $('btn-restart').classList.toggle('hidden', on);
-  $('btn-quit').textContent = on ? 'Online-Spiel verlassen' : sk ? 'Zum Gefechtsmenü' : currentMission?.custom ? (currentMission.fromEditor ? 'Zurück zum Editor' : 'Zu eigenen Karten') : 'Zur Kampagne';
-  $('btn-resume').textContent = on ? 'Zurück zum Spiel' : 'Weiter';
-  $('btn-restart').textContent = sk ? 'Gefecht neu starten' : 'Mission neu starten';
+  $('btn-surrender').classList.toggle('hidden', on); // V3-MENU
+  const lbl = (id, s) => { const e = $(id).querySelector('.lbl'); if (e) e.textContent = s; else $(id).textContent = s; };
+  lbl('btn-quit', on ? 'Online-Spiel verlassen' : sk ? 'Zum Gefechtsmenü' : currentMission?.custom ? (currentMission.fromEditor ? 'Zurück zum Editor' : 'Zu eigenen Karten') : 'Zur Kampagne');
+  lbl('btn-resume', on ? 'Zurück zum Spiel' : 'Weiter');
+  lbl('btn-restart', sk ? 'Gefecht neu starten' : 'Mission neu starten');
+  $('pause-over').textContent = game.mission?.title ? `${t('pause.over', 'Einsatz unterbrochen')} · ${game.mission.title}` : t('pause.over', 'Einsatz unterbrochen');
   if (sk && on) { const S = sk.setup; el.innerHTML = `${game.mission.title}<br>Online · Seed <b>${S.seed}</b> · ${ROLES[game.localPlayer?.role]?.name || ''} · ${VICTORY[S.victory]}<br>Das Spiel läuft im Hintergrund weiter.`; return; }
   if (sk) { const S = sk.setup; el.innerHTML = `${game.mission.title}<br>Seed <b>${S.seed}</b> · ${ROLES[S.role].name} · KI ${DIFFICULTIES[S.difficulty]} · Verstärkung alle ${Math.round(S.reinforce / 60 * 10) / 10} min · ${VICTORY[S.victory]}`; }
 }
 function showSkirmishEnd(won, text) {
   const sk = game.mission.skirmish;
   const draw = sk.result && sk.result.winner === null;
-  $('end-title').textContent = draw ? 'Unentschieden' : won ? 'Sieg' : 'Niederlage';
-  $('end-title').style.color = draw ? '#e5b93e' : won ? '#46c46b' : '#e5484d';
+  setEndBanner(draw ? 'draw' : won ? 'win' : 'loss', game.mission.title, online.inGame ? t('end.over.online', 'Online-Gefecht') : t('end.over.sk', 'Gefechtsbericht'));
   $('end-text').innerHTML = `<p>${text}</p>`;
   const rows = [];
   for (const team of [game.localSide, game.localSide === 'UA' ? 'RU' : 'UA']) {
@@ -348,9 +501,11 @@ function showSkirmishEnd(won, text) {
     rows.push(`<tr class="team"><td style="color:${TEAM_COLOR[team]}">${TEAM_NAME[team]} – ${sk.scores[team]} Punkte</td><td>${sum('kills')}</td><td>${sum('lost')}</td><td>${sum('captured')}</td><td>${sum('reinf')}</td></tr>`);
     for (const p of ps) rows.push(`<tr class="${p.id === game.localPlayerId ? 'me' : ''}"><td><span class="dot" style="background:${p.color}"></span>${ROLES[p.role] ? icon(ROLES[p.role].iconKey, { cls: 'ic-in', label: ROLES[p.role].name }) : ''} ${p.name}${p.defeated ? ' ' + icon('close', { cls: 'ic-in', label: 'Ausgeschieden' }) : ''}</td><td>${p.stats.kills}</td><td>${p.stats.lost}</td><td>${p.stats.captured || 0}</td><td>${p.stats.reinf || 0}</td></tr>`);
   }
-  $('end-stats').innerHTML = `<div>${icon('clock', { cls: 'ic-in' })} Gefechtsdauer: <b>${fmtTime(game.time)}</b> · Seed ${sk.setup.seed}</div><table class="sk-end-table"><tr><th>Spieler</th><th>Abschüsse</th><th>Verluste</th><th>Erobert</th><th>Verstärkung</th></tr>${rows.join('')}</table>`;
+  $('end-stats').innerHTML = statTiles([['attack', t('end.stat.kills', 'Abschüsse'), game.stats.kills], ['close', t('end.stat.lost', 'Verluste'), game.stats.lost], ['clock', t('end.stat.duration', 'Gefechtsdauer'), fmtTime(game.time)], ['ammo', t('end.stat.shots', 'Schüsse'), game.stats.shots]]) +
+    `<div class="end-seed muted">Seed ${sk.setup.seed}</div><table class="sk-end-table"><tr><th>Spieler</th><th>Abschüsse</th><th>Verluste</th><th>Erobert</th><th>Verstärkung</th></tr>${rows.join('')}</table>`;
   const next = $('btn-end-next');
   $('btn-end-retry').classList.toggle('hidden', online.inGame);
+  $('btn-end-menu').classList.toggle('hidden', online.inGame);
   if (online.inGame) {
     next.textContent = 'Zum Hauptmenü';
     next.onclick = () => online.leaveGame();
@@ -383,10 +538,31 @@ $('btn-quit').onclick = async () => {
   game.paused = false;
   const m = currentMission;
   if (!currentSkirmish && m?.custom) { if (m.fromEditor) backToEditor(m); else { await loadDemo(); openMods(); } return; }
-  const sk = !!currentSkirmish; await loadDemo(); if (sk) openSkirmish(); else { renderCampaign(); show('campaign'); }
+  const sk = !!currentSkirmish; await loadDemo(); if (sk) openSkirmish(); else { const fm = findMission(m); if (fm) openCampaign(fm.campaign.id, fm.index); else { renderCampaignGrid(); show('campaign'); } }
 };
+// V3-MENU: Hilfe aus der Pause, Aufgeben (mit Bestätigung) → Endbildschirm als Niederlage
+$('btn-pause-help').onclick = () => { returnTo = 'pause'; helpFrom = null; show('help'); };
+$('btn-surrender').onclick = (e) => armButton(e.currentTarget, t('pause.surrender.confirm', 'Wirklich aufgeben?'), () => {
+  if (online.inGame) { online.leaveGame(); return; }
+  if (!inMission || game.ended) return;
+  game.paused = false; game.ended = true;
+  game.emit('end', false, t('end.surrendered', 'Einsatz abgebrochen – die Einheiten ziehen sich zurück.'));
+});
 
-// Missionsende
+// Missionsende (V3-MENU: Banner, Statistik-Kacheln, Medaillenleiste #end-medals für das spätere Medaillen-System)
+function setEndBanner(kind, title, over) {
+  $('screen-end').dataset.result = kind;
+  $('end-over').textContent = over || t('end.over', 'Einsatzbericht');
+  $('end-word').textContent = kind === 'win' ? t('end.victory', 'Sieg') : kind === 'draw' ? t('end.draw', 'Unentschieden') : t('end.defeat', 'Niederlage');
+  $('end-title').textContent = title || '';
+  $('end-title').style.color = '';
+}
+function statTiles(items) {
+  return `<div class="stat-tiles">${items.map(([ic, label, val]) => `<div class="stat">${icon(ic)}<b>${val ?? 0}</b><span>${label}</span></div>`).join('')}</div>`;
+}
+// Medaillenleiste bei jedem Laden leeren (das Medaillen-System füllt #end-medals nach 'end' und entfernt .hidden)
+game.on('loaded', () => { const el = $('end-medals'); if (el) { el.innerHTML = ''; el.classList.add('hidden'); } });
+$('btn-end-menu').onclick = async () => { if (online.inGame) { online.leaveGame(); return; } game.paused = false; await loadDemo(); show('title'); };
 game.on('end', (won, text) => {
   if (!inMission) return;
   game.paused = true;
@@ -394,26 +570,23 @@ game.on('end', (won, text) => {
   if (game.mission?.skirmish) { showSkirmishEnd(won, text); return; }
   if (game.mission?.custom) { showCustomEnd(won, text); return; }
   $('btn-end-retry').classList.remove('hidden');
+  $('btn-end-menu').classList.remove('hidden');
   $('btn-end-retry').textContent = 'Erneut versuchen';
   const m = currentMission;
-  const idx = CAMPAIGN.indexOf(m);
-  $('end-title').textContent = won ? 'Mission erfüllt' : 'Mission gescheitert';
-  $('end-title').style.color = won ? '#46c46b' : '#e5484d';
-  $('end-text').innerHTML = `<p>${text}</p>${won && m.victory ? `<p style="color:#9aa4b2;white-space:pre-line">${m.victory}</p>` : ''}`;
-  const t = game.time;
-  $('end-stats').innerHTML = `<div class="cols"><div>${icon('clock', { cls: 'ic-in' })} Einsatzzeit: <b>${fmtTime(t)}</b><br>${icon('attack', { cls: 'ic-in' })} Feindliche Verluste: <b>${game.stats.kills}</b></div><div>${icon('close', { cls: 'ic-in' })} Eigene Verluste: <b>${game.stats.lost}</b><br>${icon('obj_protect', { cls: 'ic-in' })} Abgefangene Flugkörper: <b>${game.stats.intercepts}</b></div></div>`;
-  if (won) {
-    progress.done[m.id] = { time: t, kills: game.stats.kills };
-    progress.unlocked = Math.max(progress.unlocked, idx + 2);
-    saveProgress();
-  }
+  const fm = findMission(m), camp = fm?.campaign, idx = fm ? fm.index : -1; // V3-MENU: Kampagnen-Registry
+  setEndBanner(won ? 'win' : 'loss', `${won ? t('end.won', 'Mission erfüllt') : t('end.lost', 'Mission gescheitert')} – ${m.title}`, camp ? `${camp.title} · ${t('common.mission', 'Mission')} ${idx + 1}/${camp.missions.length}` : '');
+  $('end-text').innerHTML = `<p>${text}</p>${won && m.victory ? `<p class="victory-text">${m.victory}</p>` : ''}`;
+  const tm = game.time;
+  $('end-stats').innerHTML = statTiles([['attack', t('end.stat.kills', 'Abschüsse'), game.stats.kills], ['close', t('end.stat.lost', 'Verluste'), game.stats.lost], ['clock', t('end.stat.time', 'Einsatzzeit'), fmtTime(tm)], ['ammo', t('end.stat.shots', 'Schüsse'), game.stats.shots], ...(game.stats.intercepts ? [['obj_protect', t('end.stat.intercepts', 'Abgefangen'), game.stats.intercepts]] : [])]);
+  if (won && camp) completeMission(camp.id, idx, { time: tm, kills: game.stats.kills, lost: game.stats.lost, shots: game.stats.shots });
   const next = $('btn-end-next');
+  const hasNext = camp && idx + 1 < camp.missions.length;
   if (won) {
-    next.textContent = idx + 1 < CAMPAIGN.length ? 'Nächste Mission' : 'Zum Hauptmenü';
-    next.onclick = async () => { if (idx + 1 < CAMPAIGN.length) { await loadDemo(); openBriefing(CAMPAIGN[idx + 1]); } else { await loadDemo(); show('title'); } };
+    next.textContent = hasNext ? 'Nächste Mission' : 'Zur Kampagne';
+    next.onclick = async () => { await loadDemo(); if (hasNext) openBriefing(camp.missions[idx + 1]); else if (camp) openCampaign(camp.id, idx); else show('title'); };
   } else {
     next.textContent = 'Zur Kampagne';
-    next.onclick = async () => { await loadDemo(); renderCampaign(); show('campaign'); };
+    next.onclick = async () => { await loadDemo(); if (camp) openCampaign(camp.id, idx); else { renderCampaignGrid(); show('campaign'); } };
   }
   $('btn-end-retry').onclick = () => { game.paused = false; startMission(m); };
   show('end');
@@ -423,11 +596,11 @@ game.on('end', (won, text) => {
 function showCustomEnd(won, text) {
   const m = game.mission;
   $('btn-end-retry').classList.remove('hidden');
+  $('btn-end-menu').classList.remove('hidden');
   $('btn-end-retry').textContent = 'Erneut spielen';
-  $('end-title').textContent = won ? 'Mission erfüllt' : 'Mission gescheitert';
-  $('end-title').style.color = won ? '#46c46b' : '#e5484d';
-  $('end-text').innerHTML = `<p>${escapeHtml(text)}</p><p class="muted">${escapeHtml(m.title)}</p>`;
-  $('end-stats').innerHTML = `<div class="cols"><div>${icon('clock', { cls: 'ic-in' })} Einsatzzeit: <b>${fmtTime(game.time)}</b><br>${icon('attack', { cls: 'ic-in' })} Feindliche Verluste: <b>${game.stats.kills}</b></div><div>${icon('close', { cls: 'ic-in' })} Eigene Verluste: <b>${game.stats.lost}</b></div></div>`;
+  setEndBanner(won ? 'win' : 'loss', `${won ? t('end.won', 'Mission erfüllt') : t('end.lost', 'Mission gescheitert')} – ${m.title}`, t('end.over.custom', 'Einsatzbericht · Eigene Karte'));
+  $('end-text').innerHTML = `<p>${escapeHtml(text)}</p>`;
+  $('end-stats').innerHTML = statTiles([['attack', t('end.stat.kills', 'Abschüsse'), game.stats.kills], ['close', t('end.stat.lost', 'Verluste'), game.stats.lost], ['clock', t('end.stat.time', 'Einsatzzeit'), fmtTime(game.time)], ['ammo', t('end.stat.shots', 'Schüsse'), game.stats.shots]]);
   const next = $('btn-end-next');
   next.textContent = m.fromEditor ? 'Zurück zum Editor' : 'Eigene Karten';
   next.onclick = async () => { game.paused = false; if (m.fromEditor) backToEditor(m); else { await loadDemo(); openMods(); } };
@@ -452,16 +625,43 @@ function openMods() { returnTo = 'title'; modsUI.render(); show('mods'); }
 $('btn-editor').onclick = () => editor.open();
 $('btn-mods').onclick = () => openMods();
 
-// Einstellungen
+// Einstellungen (V3-MENU: Tabs Grafik/Audio/Steuerung/Spiel, Schalter, Werteanzeige an Reglern)
 function ensureMusicUI() {
-  if ($('set-music')) return;
-  const host = $('set-volume').closest('label'); if (!host) return;
-  host.insertAdjacentHTML('afterend', '<label class="check"><input id="set-music" type="checkbox"> Musik</label><label>Musiklautstärke <input id="set-musicvol" type="range" min="0" max="1" step="0.05"></label>');
+  if ($('set-music')?.dataset.bound) return;
+  if (!$('set-music')) {
+    const host = $('set-volume').closest('label'); if (!host) return;
+    host.insertAdjacentHTML('afterend', '<label class="set-row"><span class="set-l"><b>Musik</b></span><input id="set-music" type="checkbox" class="switch"></label><label class="set-row"><span class="set-l"><b>Musiklautstärke</b></span><span class="range"><input id="set-musicvol" type="range" min="0" max="1" step="0.05"><output for="set-musicvol"></output></span></label>');
+  }
+  $('set-music').dataset.bound = '1';
   $('set-music').addEventListener('input', () => { settings.music = $('set-music').checked; saveSettings(); music.setEnabled(settings.music); });
   $('set-musicvol').addEventListener('input', () => { settings.musicVolume = +$('set-musicvol').value; saveSettings(); music.setVolume(settings.musicVolume); });
 }
+let setTab = 'gfx';
+function selectSetTab(tab) {
+  setTab = tab;
+  $('set-tabs').querySelectorAll('[data-tab]').forEach((b) => { const on = b.dataset.tab === tab; b.classList.toggle('active', on); b.setAttribute('aria-selected', String(on)); });
+  document.querySelectorAll('#screen-settings .tab-pane').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== tab));
+}
+$('set-tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) selectSetTab(b.dataset.tab); });
+function syncSetOutputs() {
+  document.querySelectorAll('#screen-settings output[for]').forEach((o) => {
+    const inp = $(o.getAttribute('for')); if (!inp) return;
+    const pct = Math.round(((+inp.value - (+inp.min || 0)) / ((+inp.max || 1) - (+inp.min || 0))) * 100);
+    o.textContent = Math.round(+inp.value * 100) + ' %'; inp.style.setProperty('--p', pct + '%');
+  });
+}
+$('screen-settings').addEventListener('input', syncSetOutputs);
+if (typeof settings.reduceMotion !== 'boolean') settings.reduceMotion = false;
+document.body.classList.toggle('reduce-motion', settings.reduceMotion);
+$('set-reducemotion').addEventListener('input', () => { settings.reduceMotion = $('set-reducemotion').checked; saveSettings(); document.body.classList.toggle('reduce-motion', settings.reduceMotion); });
+// Sprache: Platzhalter – Englisch folgt (js/i18n.js, isLangAvailable('en'))
+function renderLang() { $('set-lang').querySelectorAll('button').forEach((b) => { b.classList.toggle('active', b.dataset.v === getLang()); b.disabled = !isLangAvailable(b.dataset.v); }); }
+$('set-lang').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && !b.disabled && setLang(b.dataset.v)) renderLang(); });
+$('btn-reset-all').onclick = (e) => armButton(e.currentTarget, t('common.confirmReset', 'Wirklich zurücksetzen? Nochmal tippen'), () => { resetProgress(); renderTitle(); });
+$('btn-set-help').onclick = () => { helpFrom = 'settings'; show('help'); };
 function openSettings() {
   ensureMusicUI(); $('set-music').checked = settings.music; $('set-musicvol').value = settings.musicVolume;
+  $('set-reducemotion').checked = !!settings.reduceMotion; renderLang();
   $('set-quality').value = settings.quality;
   $('set-upscale').value = settings.upscale;
   $('set-targetfps').value = String(settings.targetFps);
@@ -470,6 +670,7 @@ function openSettings() {
   $('set-shadows').checked = settings.shadows;
   $('set-fps').checked = settings.showFps;
   $('set-volume').value = settings.volume;
+  syncSetOutputs(); selectSetTab(setTab);
   show('settings');
 }
 function bindSetting(id, key, conv = (v) => v, prop = 'value') {
@@ -519,6 +720,7 @@ function frame(now) {
 
 // Start
 (async () => {
+  applyI18n(document); // V3-MENU: data-i18n-Texte (vorerst Deutsch)
   show('title');
   await loadDemo();
   requestAnimationFrame(frame);
@@ -527,6 +729,8 @@ function frame(now) {
   window.__gamepad = gamepad;
   window.__music = music;
   window.__start = (i) => startMission(CAMPAIGN[i]);
+  window.__startMission = (campaignId, i = 0) => { const m = getCampaign(campaignId)?.missions[i]; if (!m) { console.warn('[Kampagne] Mission nicht gefunden:', campaignId, i); return null; } return startMission(m); }; // V3-MENU
+  window.__campaigns = { getCampaigns, getCampaign, getProgress, openCampaign, openBriefing };
   window.__startSkirmish = (setup = {}) => startSkirmishGame({ ...skSetup, ...setup });
   window.__openSkirmish = openSkirmish;
   window.__online = online;

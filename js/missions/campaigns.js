@@ -152,7 +152,8 @@ export function lastPlayed() { const s = loadStore(); return s._last && registry
 export function setLastPlayed(id) { const s = loadStore(); if (s._last !== id) { s._last = id; saveStore(); } }
 
 // ============================== Kartenskizze (Canvas) ==============================
-// opts: { start: {x,z} (grüner Startpunkt), markers: [{x,z,color,label}], grid: true, labels: true }
+// opts: { start: {x,z} (grüner Startpunkt), markers: [{x,z,r,color,label}], grid: true, labels: true,
+//         overlayOnly: nur Raster/Markierungen über ein vorhandenes Bild zeichnen }
 const GROUND = { summer: '#56663f', autumn: '#6d6138', winter: '#b9c0c4', afghan: '#9c8a64', desert: '#b49c6c' };
 export function drawMapSketch(canvas, map, opts = {}) {
   if (!canvas || !map) return;
@@ -161,9 +162,11 @@ export function drawMapSketch(canvas, map, opts = {}) {
   const sc = W / N;
   const winter = map.season === 'winter';
   ctx.save();
-  ctx.fillStyle = GROUND[map.palette] || GROUND[map.season] || GROUND.summer;
-  ctx.fillRect(0, 0, W, H);
-  const feats = map.features || [];
+  if (!opts.overlayOnly) {
+    ctx.fillStyle = GROUND[map.palette] || GROUND[map.season] || GROUND.summer;
+    ctx.fillRect(0, 0, W, H);
+  }
+  const feats = opts.overlayOnly ? [] : map.features || [];
   const poly = (pts) => { ctx.beginPath(); pts.forEach(([x, z], i) => { const [a, b] = P(x, z); if (i) ctx.lineTo(a, b); else ctx.moveTo(a, b); }); };
   const circ = (f) => { const [a, b] = P(f.x, f.z); ctx.beginPath(); ctx.arc(a, b, Math.max(1.5, (f.r || 10) * sc), 0, Math.PI * 2); };
   const line = (pts, w, col, dash) => { if (!pts || pts.length < 2) return; poly(pts); ctx.lineWidth = Math.max(1, w); ctx.strokeStyle = col; ctx.setLineDash(dash || []); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(); ctx.setLineDash([]); };
@@ -255,10 +258,11 @@ function ridge(seed, y0, amp, rough, step = 20) {
   for (let x = step; x <= 400 + step; x += step) d += `L${x} ${(y0 - rnd() * amp + (rnd() - 0.5) * rough).toFixed(1)}`;
   return d + 'L400 225Z';
 }
+let artSerial = 0;
 export function campaignArtSVG(c) {
   const base = ART_DEFAULTS[c.era] || ART_DEFAULTS.modern;
   const a = { ...base, ...(c.art || {}) };
-  const seed = hash(c.id), uid = 'ca' + (seed % 1e6);
+  const seed = hash(c.id), uid = 'ca' + (seed % 1e6) + '_' + (++artSerial); // eindeutige IDs je Einbettung (Gradienten-Verweise)
   const sky = a.sky || base.sky;
   let terrain = '';
   const far = a.far, gr = a.ground;
@@ -306,7 +310,7 @@ export function campaignArtSVG(c) {
   return `<svg class="camp-art-svg" viewBox="0 0 400 225" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
 <defs><linearGradient id="${uid}s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sky[0]}"/><stop offset="1" stop-color="${sky[1]}"/></linearGradient>
 <radialGradient id="${uid}g"><stop offset="0" stop-color="${a.sun?.color || '#fff'}" stop-opacity=".45"/><stop offset="1" stop-color="${a.sun?.color || '#fff'}" stop-opacity="0"/></radialGradient>
-<linearGradient id="${uid}v" x1="0" y1="0" x2="0" y2="1"><stop offset=".35" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".78"/></linearGradient></defs>
-<rect width="400" height="225" fill="url(#${uid}s)"/>${sun}<g fill="none" stroke="#fff" stroke-opacity=".06">${topo}</g>${terrain}${sil}
+<linearGradient id="${uid}v" x1="0" y1="0" x2="0" y2="1"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></linearGradient></defs>
+<rect width="400" height="225" fill="url(#${uid}s)"/>${sun}<g fill="none" stroke="#fff" stroke-opacity=".035">${topo}</g>${terrain}${sil}
 <rect width="400" height="225" fill="url(#${uid}v)"/></svg>`;
 }

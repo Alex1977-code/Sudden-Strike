@@ -9,9 +9,9 @@ const feats = [
   road([[-260, 6], [-62, 0]], 8), road([[-18, 0], [112, 0]], 8), road([[170, 0], [260, 10]], 8),
   road([[-80, -260], [-72, 0], [-80, 260]], 7, true, { name: 'Uferstraße (Westufer)' }),
   road([[-8, 0], [-10, -200]], 5, false),
-  bldg('townhouse_eu', -88, -15, 10, 8, 0, 2, 'Café Gondrée'),
+  bldg('cafe_gondree', -88, -15, 10, 8, 0, 2, 'Café Gondrée'),
   bldg('watchtower', -16, 14, 3.5, 3.5, 0, 2, 'Brückenwärterhaus'),
-  bldg('townhouse_eu', -175, -145, 30, 16, faceTo(-175, -145, -160, -100), 3, 'Château de Bénouville'),
+  bldg('chateau_benouville', -175, -145, 30, 16, faceTo(-175, -145, -160, -100), 3, 'Château de Bénouville'),
   // Landezone der Lastensegler zwischen Kanal und Orne
   field([[-5, -170], [100, -170], [96, -20], [-2, -20]], 'green', 1.5),
   treeline([[-5, -175], [100, -175]]),

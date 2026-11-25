@@ -7,13 +7,13 @@ const feats = [
   road([[-60, -280], [-40, -150], [-30, 0], [-20, 280]], 9, true, { name: 'Straße nach Donezk' }),
   road([[-200, 200], [-120, 120], [-30, 60]], 7, true),
   // Kokerei: Ofenbatterien, Kühltürme, Schornsteine
-  bldg('industrial', -150, -200, 64, 14, 0, 3, 'Kokerei Awdijiwka (AKHZ)'),
-  bldg('industrial', -150, -170, 64, 14, 0, 3),
+  bldg('coke_battery', -150, -200, 64, 14, 0, 3, 'Kokerei Awdijiwka (AKHZ)'),
+  bldg('coke_battery', -150, -170, 64, 14, 0, 3),
   bldg('industrial', 40, -200, 50, 22, 0, 2),
   bldg('warehouse', 40, -176, 40, 14, 0, 1),
-  bldg('watchtower', -100, -235, 4.5, 4.5, 0, 11), bldg('watchtower', -125, -235, 4.5, 4.5, 0, 11), bldg('watchtower', -200, -235, 4.5, 4.5, 0, 10),
-  bldg('watchtower', 110, -230, 16, 16, 0, 5, 'Kühlturm'),
-  bldg('townhouse_eu', 90, -125, 30, 12, 0, 2, 'Bahnhof Awdijiwka'),
+  bldg('chimney_modern', -100, -235, 5, 5, 0, 11), bldg('chimney_modern', -125, -235, 5, 5, 0, 11), bldg('chimney_modern', -200, -235, 5, 5, 0, 10),
+  bldg('cooling_tower', 110, -230, 22, 22, 0, 5, 'Kühlturm'),
+  bldg('station_modern', 90, -125, 30, 12, 0, 2, 'Bahnhof Awdijiwka'),
   road([[-40, -150], [160, -150]], 8),
   // Abraumhalde (Terrikon), Wasserleitungskanal, „Zarska Ochota“
   hill(230, -230, 38, 26),

@@ -17,18 +17,18 @@ const feats = [
   // Hafenanlagen: Molen in die Bucht, Lagerhäuser, Kirche, Kommandantur
   { type: 'causeway', pts: [[40, -70], [44, -30]], width: 8, name: 'Hafenmole', style: 'concrete_beam' },
   { type: 'causeway', pts: [[120, -100], [126, -60]], width: 8 },
-  bldg('warehouse', 70, -110, 26, 12, faceTo(70, -110, 70, -60), 1, 'Hafenlager'),
-  bldg('warehouse', 150, -122, 22, 12, faceTo(150, -122, 150, -80), 1),
+  bldg('harbour_shed', 70, -110, 26, 12, faceTo(70, -110, 70, -60), 1, 'Hafenlager'),
+  bldg('harbour_shed', 150, -122, 22, 12, faceTo(150, -122, 150, -80), 1),
   bldg('church_west', -30, -180, 11, 22, faceTo(-30, -180, -10, -150), 2, 'Kirche (ital.)'),
-  bldg('townhouse_eu', 40, -196, 24, 14, faceTo(40, -196, 20, -160), 2, 'Kommandantur'),
+  bldg('colonial_white', 40, -196, 24, 14, faceTo(40, -196, 20, -160), 2, 'Kommandantur'),
   // Innere Forts
-  bldg('warehouse', -170, 110, 20, 14, 0, 1, 'Fort Pilastrino'),
-  bldg('warehouse', 60, 150, 20, 14, 0, 1, 'Fort Solaro'),
+  bldg('casemate', -170, 110, 20, 14, 0, 1, 'Fort Pilastrino'),
+  bldg('casemate', 60, 150, 20, 14, 0, 1, 'Fort Solaro'),
   bldg('watchtower', -150, 110, 5, 5, 0, 2), bldg('watchtower', 82, 150, 5, 5, 0, 2),
   // Wadis und Höhen
   hill(-230, 20, 60, 8), hill(160, 230, 55, 6), hill(-120, 220, 70, 5),
 ];
-POSTS.forEach(([x, z], i) => feats.push(bldg('watchtower', x * 0.94, 10 + (z - 10) * 0.94, 5, 5, 0, 1, i % 2 ? undefined : `Stützpunkt R${30 + i * 3}`)));
+POSTS.forEach(([x, z], i) => feats.push(bldg('casemate', x * 0.94, 10 + (z - 10) * 0.94, 5, 5, 0, 1, i % 2 ? undefined : `Stützpunkt R${30 + i * 3}`)));
 feats.push(
   settlement('desert_village', 10, -170, 80, 1941, { mainRoadAngle: 0.1, density: 0.85, connectTo: [[0, -150]], keepOut: [{ x: 40, z: -196, r: 18 }] }),
   settlement('desert_village', -150, -150, 45, 1942, { mainRoadAngle: 0.2, density: 0.5 }),
