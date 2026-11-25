@@ -97,7 +97,7 @@ export default placeMission(PLACE_BY_ID.stalingrad, {
     w(170, () => { g.say('Bykowa', 'Panzer IV auf dem Platz! Panzerbüchsen – Seitenfenster!', 5); wave(g, 'RU', [[E.pz4, 1], [E.rifle, 4]], -34, 64, [[30, 58], [70, 54]], { tags: ['w'] }); });
     w(240, () => this._ferry(g, 'Zweite Fähre: Verwundete raus, Munition rein.'));
     w(260, () => wave(g, 'RU', [[E.stug, 1], [E.rifle, 5], [E.mg, 1]], 120, 140, [[114, 100], [100, 56]], { tags: ['w'] }));
-    w(340, () => { g.say('Sorokin', 'Das ist der stärkste Angriff bisher – haltet die Obergeschosse!', 5); wave(g, 'RU', [[E.rifle, 6], [E.smg, 2], [E.at, 1]], -34, 60, [[40, 58], [78, 50]], { tags: ['w'] }); wave(g, 'RU', [[E.rifle, 4], [E.mg, 1]], 118, 140, [[114, 100], [104, 56]], { tags: ['w'] }); });
+    w(340, () => { g.say('Sorokin', 'Das ist der stärkste Angriff bisher – haltet die Obergeschosse!', 5); wave(g, 'RU', [[E.rifle, 5], [E.smg, 1], [E.at, 1]], -34, 60, [[40, 58], [78, 50]], { tags: ['w'] }); wave(g, 'RU', [[E.rifle, 3], [E.mg, 1]], 118, 140, [[114, 100], [104, 56]], { tags: ['w'] }); });
     w(400, () => this._ferry(g, 'Dritte Fähre – das ist die letzte vor der Ablösung.'));
   },
   _ferry(g, text) {
