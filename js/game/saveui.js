@@ -1,4 +1,4 @@
-// Spielstände – Bildschirm „Speichern/Laden“, Schnellspeichern (F5) / Schnellladen (F9), Autosave (V3-X).
+// Spielstände – Bildschirm „Speichern/Laden“, Schnellspeichern (F8) / Schnellladen (F9), Autosave (V3-X).
 // Abhängigkeiten kommen aus main.js (Menüfunktionen), die Spiellogik aus savegame.js.
 import { icon } from './icons.js';
 import { listSaves, readSave, writeSave, deleteSave, AUTOSAVE_EVERY } from './savegame.js';
@@ -7,7 +7,7 @@ import { fmtTime } from '../engine/util.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const SLOT_NAMES = { 1: 'Platz 1', 2: 'Platz 2', 3: 'Platz 3', quick: 'Schnellspeicher (F5)', auto: 'Autosave' };
+const SLOT_NAMES = { 1: 'Platz 1', 2: 'Platz 2', 3: 'Platz 3', quick: 'Schnellspeicher (F8)', auto: 'Autosave' };
 
 export function createSaveUI(d) {
   // d = { game, rec, show, hideScreens, current(), isOnline(), inMission(), saveMeta(), startFromSave(data), onLoaded(report), toast(text) }
@@ -89,7 +89,7 @@ export function createSaveUI(d) {
     $('saves-title').textContent = mode === 'save' ? 'Spiel speichern' : 'Spielstand laden';
     $('saves-over').textContent = mode === 'save' ? (game.mission?.title || 'Einsatz') : 'Spielstände';
     const note = $('saves-note');
-    note.textContent = online ? 'Im Online-Spiel ist Speichern/Laden deaktiviert.' : mode === 'save' && !can ? 'In diesem Spielmodus kann nicht gespeichert werden (nur Kampagne und Gefecht).' : 'F5 Schnellspeichern · F9 Schnellladen · Autosave beim Missionsstart und alle 5 Minuten';
+    note.textContent = online ? 'Im Online-Spiel ist Speichern/Laden deaktiviert.' : mode === 'save' && !can ? 'In diesem Spielmodus kann nicht gespeichert werden (nur Kampagne und Gefecht).' : 'F8 Schnellspeichern · F9 Schnellladen · Autosave beim Missionsstart und alle 5 Minuten';
     const slots = mode === 'save' ? ['1', '2', '3'] : ['quick', 'auto', '1', '2', '3'];
     $('saves-list').innerHTML = slots.map((s) => {
       const m = idx[s];
@@ -120,12 +120,12 @@ export function createSaveUI(d) {
   });
   $('btn-saves-back').addEventListener('click', () => d.show(from === 'saves' ? 'title' : from));
 
-  // Tastatur: F5 Schnellspeichern, F9 Schnellladen (im Einsatz, offline)
+  // Tastatur: F8 Schnellspeichern, F9 Schnellladen (im Einsatz, offline)
   window.addEventListener('keydown', (e) => {
-    if (e.key !== 'F5' && e.key !== 'F9') return;
+    if (e.key !== 'F8' && e.key !== 'F9') return;
     if (!d.inMission() || e.target?.tagName === 'INPUT') return;
     e.preventDefault(); e.stopImmediatePropagation();
-    if (e.key === 'F5') save('quick');
+    if (e.key === 'F8') save('quick');
     else if (listSaves().quick) load('quick');
     else d.toast('Kein Schnellspeicherstand vorhanden.');
   }, true);
