@@ -63,7 +63,7 @@ export default placeMission(PLACE_BY_ID.seelow, {
     g.addObjective('flak', 'Die 8,8-cm-Flak auf den Höhen ausschalten', { optional: true });
     g.later(3, () => g.say('Kusnezow', 'Feuerwalze! Scheinwerfer an – alle Rohre auf die Höhen!', 5));
     g.later(10, () => g.say('Petrenko', 'Minen im Bruch! Pioniere voran, Panzer folgen auf geräumten Gassen.', 6));
-    g.later(360, () => {
+    g.later(240, () => {
       g.spawnGroup([[S.t85, 4], [S.smg, 6]], 'UA', 276, -50, { spacing: 10, cols: 5, heading: Math.PI / 2, tags: ['tank'] });
       g.markerTo?.('UA', 276, -50, 0x5db8ff, 8, 14); g.say('Kusnezow', 'Zweite Staffel setzt über die Oder. Brückenkopf ausbauen!', 5);
     });

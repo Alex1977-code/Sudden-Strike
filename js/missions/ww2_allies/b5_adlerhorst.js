@@ -125,8 +125,8 @@ const mission = {
     ];
     // Festung: Radar auf dem Grat, Flak, Prüfstand
     g.spawn('ww2_adler_radar', 'RU', RAD.x, RAD.z, { tags: ['radar'] });
-    g.spawn('ww2_flak37', 'RU', RAD.x - 20, RAD.z + 8, { heading: PI, ai: { mode: 'hold' }, tags: ['flak', 'gar'] });
-    g.spawn('ww2_flak37', 'RU', RAD.x + 22, RAD.z + 6, { heading: PI, ai: { mode: 'hold' }, tags: ['flak', 'gar'] });
+    g.spawn('ww2_flak37', 'RU', RAD.x - 20, RAD.z + 8, { hpMul: 0.6, heading: PI, ai: { mode: 'hold' }, tags: ['flak', 'gar'] });
+    g.spawn('ww2_flak37', 'RU', RAD.x + 22, RAD.z + 6, { hpMul: 0.6, heading: PI, ai: { mode: 'hold' }, tags: ['flak', 'gar'] });
     g.spawnGroup([['ww2_de_rifle', 2], ['ww2_de_mg42', 1]], 'RU', RAD.x, RAD.z + 18, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 20 }, tags: ['gar', 'radarwache'] });
     g.spawn('ww2_adler_stand', 'RU', STAND.x, STAND.z, { tags: ['stand'] });
     g.spawnGroup([['ww2_de_rifle', 2], ['ww2_de_mg42', 1]], 'RU', STAND.x - 18, STAND.z + 14, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 22 }, tags: ['gar', 'stand'] });

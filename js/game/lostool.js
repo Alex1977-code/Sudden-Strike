@@ -140,6 +140,7 @@ export class LosTool {
   }
   _label(ctx, x, y, text, color) {
     ctx.font = '600 12px system-ui, sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     const w = ctx.measureText(text).width + 12;
     const lx = Math.max(4, Math.min(window.innerWidth - w - 4, x - w / 2));
     ctx.fillStyle = 'rgba(10,12,10,0.78)'; ctx.fillRect(lx, y - 16, w, 20);

@@ -56,8 +56,8 @@ const mission = placeMission(PLACE, {
     W(260, [['ww2_pz4', 1], ['ww2_de_rifle', 5], ['ww2_de_mg42', 1]], N, [[56, -90], [58, -10], [60, 36]], { msg: '⚠ Panzer von Norden!' });
     W(390, [['ww2_sdkfz251', 2], ['ww2_de_rifle', 6], ['ww2_de_mp40', 2], ['ww2_puma', 1]], S, [[60, 200], [60, 130], [60, 98]], { msg: '⚠ Zweiter Vorstoß über die Brücke!' });
     W(470, [['ww2_pz4', 1], ['ww2_stug3', 1], ['ww2_de_rifle', 6], ['ww2_de_mg42', 1]], EA, [[190, -10], [120, 20], [84, 48]], { msg: '⚠ Panzer und Sturmgeschütz von Osten!' });
-    W(590, [['ww2_pz4', 1], ['ww2_stug3', 1], ['ww2_de_rifle', 5], ['ww2_de_mg42', 1], ['ww2_de_panzer', 1]], N, [[50, -100], [56, -20], [60, 34]], { msg: '⚠ Panzer und Sturmgeschütz von Norden!' });
-    W(690, [['ww2_stug3', 1], ['ww2_de_rifle', 5], ['ww2_de_mp40', 2]], EA, [[190, 0], [120, 28], [80, 52]], { msg: '⚠ Starker Angriff von Osten!' });
+    W(590, [['ww2_pz4', 1], ['ww2_de_rifle', 5], ['ww2_de_mg42', 1], ['ww2_de_panzer', 1]], N, [[50, -100], [56, -20], [60, 34]], { msg: '⚠ Panzer von Norden!' });
+    W(690, [['ww2_de_rifle', 4], ['ww2_de_mp40', 2]], EA, [[190, 0], [120, 28], [80, 52]], { msg: '⚠ Infanterieangriff von Osten!' });
     // Verstärkung aus Oosterbeek und Versorgungsabwürfe
     g.later(380, () => {
       g.say('Ashby', 'Eine Gruppe aus Oosterbeek hat sich durchgeschlagen – sechs Mann, wenig Munition.', 5);
@@ -79,8 +79,8 @@ const mission = placeMission(PLACE, {
     g.later(HOLD - 45, () => {
       g.say('Carver', 'Gefechtsmeldung: Die Brigade ist abgeschnitten, die Ablösung erreicht uns nicht mehr. Ausbruch vorbereiten!', 6);
       // Deutsche Sperrgruppen entlang der Utrechtseweg im Westen
-      g.spawnGroup([['ww2_de_rifle', 5], ['ww2_de_mg42', 1], ['ww2_de_mp40', 1]], 'RU', -110, -34, { spacing: 4, cols: 4, ai: { mode: 'guard', radius: 30 }, tags: ['block'] });
-      g.spawnGroup([['ww2_de_rifle', 4], ['ww2_de_mg42', 1]], 'RU', -170, -40, { spacing: 4, cols: 4, ai: { mode: 'guard', radius: 30 }, tags: ['block'] });
+      g.spawnGroup([['ww2_de_rifle', 3], ['ww2_de_mg42', 1]], 'RU', -110, -34, { spacing: 4, cols: 4, ai: { mode: 'guard', radius: 30 }, tags: ['block'] });
+      g.spawnGroup([['ww2_de_rifle', 2], ['ww2_de_mg42', 1]], 'RU', -170, -40, { spacing: 4, cols: 4, ai: { mode: 'guard', radius: 30 }, tags: ['block'] });
     });
   },
   startBreakout(g, why) {
@@ -93,6 +93,8 @@ const mission = placeMission(PLACE, {
     const m = g.objectives.find((q) => q.id === 'men'); if (m) { m.hidden = false; g.emit('objectives'); }
     g.markerTo('UA', OUT.x, OUT.z, 0x5db8ff, 60, OUT.r);
     g.addAbilityCharges('smoke', 2); g.addAbilityCharges('ww2_artillery', 1);
+    g.say('Ashby', 'Die Division schickt einen Entlastungstrupp aus Oosterbeek den Utrechtseweg entlang – er räumt uns den Weg.', 5);
+    limitAmmo(g.spawnGroup([[uk.rifle, 6], [uk.lmg, 2], [uk.at, 2]], 'UA', -196, -34, { spacing: 3.4, cols: 5, heading: -Math.PI / 2, ai: { mode: 'attackMove', points: [[-130, -34]], after: 'guard' }, tags: ['own', 'sortie'] }), 0.7);
   },
   onKill(g, u) {
     if (u.side === 'RU' && u.type.vehicle && !u.type.air && !u.type.structure) {
@@ -120,7 +122,7 @@ const mission = placeMission(PLACE, {
       } else if (t >= HOLD) this.startBreakout(g, 'time');
     }
     if (this.phase === 'break') {
-      for (const u of mine) if (Math.hypot(u.pos.x - OUT.x, u.pos.z - OUT.z) < OUT.r) this.arrived.add(u.id);
+      for (const u of mine) if (!u.tags.has('sortie') && Math.hypot(u.pos.x - OUT.x, u.pos.z - OUT.z) < OUT.r) this.arrived.add(u.id);
       const n = this.arrived.size, left = BREAK_T - (g.time - this.tBreak);
       setText(g, 'break', `Ausbruch nach Oosterbeek: ${Math.min(n, NEED_OUT)}/${NEED_OUT} Mann im Sammelraum – ${mmss(left)}`);
       setText(g, 'men', `Mindestens 12 Mann kommen durch (${Math.min(n, 12)}/12)`);
@@ -130,7 +132,7 @@ const mission = placeMission(PLACE, {
         g.say('Carver', 'Wir sind durch. Die Division hat jeden Mann gebraucht – und wir haben die Brücke so lange gehalten, wie es ging.', 6);
         g.win(`Der Ausbruch ist gelungen: ${n} Mann haben Oosterbeek erreicht. Die Brücke war nicht zu halten, aber die Division gewann Zeit.`); return;
       }
-      const possible = n + mine.filter((u) => !this.arrived.has(u.id)).length;
+      const possible = n + mine.filter((u) => !u.tags.has('sortie') && !this.arrived.has(u.id)).length;
       if (possible < NEED_OUT) { g.setObjective('break', 'failed'); g.lose('Zu viele Männer sind gefallen – der Ausbruch ist gescheitert.'); return; }
       if (left <= 0) { g.setObjective('break', 'failed'); g.lose('Der Ausbruch kam nicht rechtzeitig durch – die Deutschen haben den Ring geschlossen.'); }
     }

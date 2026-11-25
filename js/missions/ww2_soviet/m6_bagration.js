@@ -18,7 +18,7 @@ export default {
     { s: 'Oberst Karpow', t: 'Die Hauptmacht greift die Drut-Linie an: Hauptbrücke im Süden, ein Knüppeldamm im Norden, kaum bewacht. Danach der Knotenpunkt im Westen. Die Dörfer hier haben viel durchgemacht – bringt sie nicht unter Feuer, wo es nicht sein muss.' },
   ],
   objectivesPreview: ['Den Nachschubzug stoppen (Lokomotive ausschalten)', 'Die Drut-Linie durchbrechen', 'Den Eisenbahnknoten im Westen einnehmen', 'Optional: Mindestens 6 Partisanen überleben'],
-  forces: ['Partisanen: 6× PPSch, 5× Schützen, 2× DP-28, 2× Panzerbüchse, 1× Scharfschütze, 2× Pioniere', 'Hauptmacht: 5× T-34/85, 2× SU-76, 12× Schützen, 4× PPSch, 3× DP-28, 2× Panzerbüchse, 2× Pioniere, 1× Offizier, 1× Sanitäter', 'Fähigkeiten: Schlachtflieger (Il-2) ×2, Artillerie ×3'],
+  forces: ['Partisanen: 6× PPSch, 5× Schützen, 2× DP-28, 2× Panzerbüchse, 1× Scharfschütze, 2× Pioniere', 'Hauptmacht: 7× T-34/85, 2× SU-76, 12× Schützen, 4× PPSch, 3× DP-28, 2× Panzerbüchse, 2× Pioniere, 1× Offizier, 1× Sanitäter', 'Fähigkeiten: Schlachtflieger (Il-2) ×2, Artillerie ×3'],
   map: {
     size: 560, seed: 1944622, season: 'summer', palette: 'mud', relief: 1.5, baseHeight: 3, scatterTrees: 70,
     railways: [{ pts: RAIL, id: 'main' }],
@@ -60,7 +60,7 @@ export default {
     const P = ['part'];
     g.spawnGroup([[S.smg, 6], [S.rifle, 5], [S.dp, 2], [S.at, 2], [S.sniper, 1], [S.eng, 2]], 'UA', 30, -118, { spacing: 3, cols: 6, heading: 0, tags: P });
     // Hauptmacht (Osten)
-    g.spawnGroup([[S.t85, 5], [S.su76, 2]], 'UA', 262, 42, { spacing: 12, cols: 4, heading: Math.PI / 2, tags: ['tank'] });
+    g.spawnGroup([[S.t85, 7], [S.su76, 2]], 'UA', 262, 42, { spacing: 12, cols: 4, heading: Math.PI / 2, tags: ['tank'] });
     g.spawnGroup([[S.rifle, 12], [S.smg, 4], [S.dp, 3], [S.at, 2], [S.eng, 2], [S.off, 1], [S.med, 1]], 'UA', 250, 62, { spacing: 3, cols: 8, heading: Math.PI / 2 });
     // Drut-Linie: Hauptbrücke stark, Knüppeldamm schwach
     const L = ['line'];

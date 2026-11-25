@@ -18,6 +18,7 @@
 // Hooks in game.js: emit('preSetup') vor mission.setup, emit('postLoad') nach 'loaded', game.update → rec.quantize/enter/exit,
 //   issueCommand → rec.onCommand. Während des Vorspulens: game.replaying = true (Erfolge/Sprachfunk ignorieren Ereignisse).
 import { Effects } from '../engine/effects.js';
+import { UNIT_TYPES } from './unitTypes.js';
 
 const NATIVE = Math.random;
 const Q = 240;          // dt-Raster (1/240 s)
@@ -36,12 +37,12 @@ const visualCaller = (() => {
     const holder = {}, prep = (_, cs) => cs;
     return function visualCaller() {
       const pst = Error.prepareStackTrace, lim = Error.stackTraceLimit;
-      Error.prepareStackTrace = prep; Error.stackTraceLimit = 5;
+      Error.prepareStackTrace = prep; Error.stackTraceLimit = 6;
       Error.captureStackTrace(holder, visualCaller);
       const cs = holder.stack;
       Error.prepareStackTrace = pst; Error.stackTraceLimit = lim;
       if (!Array.isArray(cs)) return false;
-      for (const c of cs) { const f = c.getFileName() || ''; if (SKIP_FILE.test(f)) continue; return VISUAL_CALLER.test(f); }
+      for (const c of cs) { const f = c.getFileName(); if (!f || SKIP_FILE.test(f)) continue; return VISUAL_CALLER.test(f); } // ohne Datei: eingebaute Funktionen (Array.map …)
       return false;
     };
   }
@@ -89,7 +90,11 @@ export class SimRecorder {
     };
     this._reset();
     isolateRandom(game.audio);
-    game.on('beginLoad', () => { if (!this.armed) { this.on = false; this.ctx = null; } });
+    game.on('beginLoad', () => {
+      if (!this.armed) { this.on = false; this.ctx = null; }
+      // Satellitennetz beim nächsten Zugriff neu aufsetzen – auch wenn dieselbe Mission erneut geladen wird (Schnellladen)
+      if (game.satnet && '_mission' in game.satnet) game.satnet._mission = null;
+    });
     game.on('preSetup', () => this._preSetup());
     game.on('postLoad', () => this._postLoad());
   }
@@ -265,6 +270,8 @@ export class SimRecorder {
       let u = g.unitById(id);
       rep.units++;
       if (!u || !u.alive || u.type.key !== key) {
+        const T = UNIT_TYPES[key];
+        if (T && (T.structure || T.build)) { rep.skipped = (rep.skipped || 0) + 1; continue; } // Bauten nicht ohne Bauzustand nachbilden
         try {
           u = g.spawn(key, side, x, z, { owner: owner ?? undefined });
           rep.spawned++;

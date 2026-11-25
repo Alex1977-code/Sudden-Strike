@@ -11,11 +11,11 @@ const NBUNK = 5;
 
 // Wald- und Geländeflächen (Rechtecke/Polygone) – für die Baumkrepierer „im Wald“
 const FORESTS = [
-  [[-250, -250], [-30, -250], [-30, -80], [-250, -100]],
-  [[-250, 80], [-30, 60], [-30, 250], [-250, 250]],
-  [[40, -250], [250, -250], [250, -100], [40, -70]],
-  [[40, 80], [250, 70], [250, 250], [40, 250]],
-  [[-30, -70], [40, -70], [40, -20], [-30, -20]],
+  [[-250, -250], [-30, -250], [-30, -50], [-250, -70]],
+  [[-250, 60], [-30, 52], [-30, 250], [-250, 250]],
+  [[40, -250], [250, -250], [250, -70], [40, -40]],
+  [[40, 60], [250, 50], [250, 250], [40, 250]],
+  [[-30, -50], [40, -40], [40, -8], [-30, -8]],
 ];
 const inPoly = (p, x, z) => { let c = false; for (let i = 0, j = p.length - 1; i < p.length; j = i++) { const [xi, zi] = p[i], [xj, zj] = p[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c; } return c; };
 const inForest = (x, z) => FORESTS.some((p) => inPoly(p, x, z));
@@ -54,7 +54,7 @@ export default {
     { s: 'Sergeant Pruitt', t: 'Minen liegen auf dem Trail und an den Hängen, die Pioniere müssen vor. Bunker nehmt ihr mit Artillerie und Sprengladungen, nicht mit Gewehren. Und dann: Kommerscheidt halten, bis die Panzer über den Trail nachkommen.' },
   ],
   objectivesPreview: ['Westwall-Bunker ausschalten (0/5)', 'Kommerscheidt einnehmen und gegen den Gegenangriff halten', 'Optional: Minen auf dem Kall-Trail räumen', 'Optional: Mindestens 20 Schützen kommen durch den Wald', 'Zeitlimit: 23 Minuten'],
-  forces: ['18× Rifleman', '4× Thompson-Schütze', '6× BAR-Schütze', '4× Bazooka-Team', '4× Pionier', '3× Sanitäter', '1× Offizier', '1× Mörsertrupp', '3× Sherman', '1× M10', 'Fähigkeiten: Artillerie, Nebel'],
+  forces: ['22× Rifleman', '4× Thompson-Schütze', '6× BAR-Schütze', '4× Bazooka-Team', '4× Pionier', '3× Sanitäter', '1× Offizier', '1× Mörsertrupp', '3× Sherman', '1× M10', 'Fähigkeiten: Artillerie, Nebel'],
   map: { size: 500, seed: 2200, season: 'autumn', palette: 'mud', terrainStyle: 'hills', relief: 9, baseHeight: 7, seaLevel: 0, scatterTrees: 20, features: feats },
   env: { season: 'autumn', sunElev: 22, sunAzim: 180, fogDensity: 0.0042 },
   weather: { type: 'rain', intensity: 0.55, changes: [{ at: 420, type: 'fog', intensity: 0.6, fade: 40 }] }, time: { start: '08:10', speed: 3 },
@@ -64,19 +64,19 @@ export default {
     { x: -46, z: 20, r: 14, label: 'Kall', color: '#ffe9a8' },
     { x: TOWN.x, z: TOWN.z, r: TOWN.r, label: 'Kommerscheidt', color: '#5db8ff' },
   ],
-  abilities: [{ id: 'ww2_artillery', charges: 5 }, { id: 'smoke', charges: 3 }],
+  abilities: [{ id: 'ww2_artillery', charges: 8 }, { id: 'smoke', charges: 3 }],
 
   setup(g) {
     this.t0 = g.time; this.bunk = 0; this.tTown = null; this.capT = 0; this.lostT = 0; this.mineT = 0; this.burstT = 18; this.warnedBurst = false; this.relief = false;
     // Eigene Truppen in Vossenack
-    g.spawnGroup([[us.rifle, 18], [us.smg, 4], [us.lmg, 6], [us.at, 4]], 'UA', -178, -24, { spacing: 3.2, cols: 6, heading: Math.PI / 2, tags: ['own'] });
+    g.spawnGroup([[us.rifle, 22], [us.smg, 4], [us.lmg, 6], [us.at, 4]], 'UA', -178, -24, { spacing: 4.2, cols: 6, heading: Math.PI / 2, tags: ['own'] });
     g.spawnGroup([[us.engineer, 4], [us.officer, 1], [us.medic, 3], [us.mortar, 1]], 'UA', -196, -18, { spacing: 3.4, cols: 4, heading: Math.PI / 2, tags: ['own'] });
     g.spawnGroup([['ww2_sherman', 3], ['ww2_m10', 1]], 'UA', -214, -22, { spacing: 8, cols: 2, heading: Math.PI / 2, tags: ['own', 'tank'] });
     // Westwall: Bunker (hpMul = geschwächte Altbauten), Höckerlinie, Draht, MG-Nester, Besatzung
     for (const [x, z, h, tag] of BUNK) {
       g.spawn('ww2_bunker', 'RU', x, z, { heading: h + Math.PI / 2, hpMul: 0.15, tags: ['bunker', tag] });
-      fort(g, 'ww2_mgnest', 'RU', x - 6, z + 7, { heading: Math.PI / 2, tags: [tag] });
-      g.spawnGroup([['ww2_de_rifle', 2], ['ww2_de_mg42', 1], ['ww2_de_panzer', 1]], 'RU', x + 6, z - 3, { spacing: 3.4, cols: 3, ai: { mode: 'guard', radius: 26 }, tags: ['gar', tag] });
+      if (tag === 'k1') fort(g, 'ww2_mgnest', 'RU', x - 6, z + 7, { heading: Math.PI / 2, tags: [tag] });
+      g.spawnGroup([['ww2_de_rifle', 2], ...(tag === 'k1' && z < 20 || tag === 'k2' && z < 20 || tag === 'k3' ? [['ww2_de_mg42', 1]] : [])], 'RU', x + 6, z - 3, { spacing: 3.4, cols: 3, ai: { mode: 'guard', radius: 26 }, tags: ['gar', tag] });
     }
     for (let k = -3; k <= 3; k++) { fort(g, 'ww2_tetrahedron', 'RU', -18, 24 + k * 6.5, { tags: ['dz'] }); fort(g, 'ww2_tetrahedron', 'RU', 44, 22 + k * 6.5, { tags: ['dz'] }); }
     for (let k = -2; k <= 2; k++) fort(g, 'ww2_barbedwire', 'RU', -24, 24 + k * 6, { tags: ['wire'] });
@@ -84,9 +84,8 @@ export default {
     for (const [x, z] of [[-12, 22], [-4, 23], [4, 23], [44, 18], [50, 18], [66, 14]]) fort(g, 'ww2_mines_at', 'RU', x, z, { mines: 3, tags: ['mine', 'trail'] });
     for (const [x, z] of [[-14, 6], [-16, 40], [52, 50], [60, -14], [94, 40], [140, -6]]) fort(g, 'ww2_mines_ap', 'RU', x, z, { mines: 4, tags: ['mine'] });
     // Besatzung des Ortes und der Hänge
-    g.spawnGroup([['ww2_de_rifle', 3], ['ww2_de_mg42', 1], ['ww2_de_mp40', 1]], 'RU', 106, 10, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 26 }, tags: ['gar', 'town'] });
-    g.spawnGroup([['ww2_de_rifle', 2], ['ww2_de_mg42', 1]], 'RU', 128, 22, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 24 }, tags: ['gar', 'town'] });
-    fort(g, 'ww2_mgnest', 'RU', 96, 26, { heading: Math.PI / 2, tags: ['town'] }); fort(g, 'ww2_foxhole', 'RU', 90, 6, { tags: ['town'] });
+    g.spawnGroup([['ww2_de_rifle', 2], ['ww2_de_mg42', 1]], 'RU', 106, 10, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 26 }, tags: ['gar', 'town'] });
+    g.spawnGroup([['ww2_de_rifle', 2]], 'RU', 128, 22, { spacing: 3.4, cols: 4, ai: { mode: 'guard', radius: 24 }, tags: ['gar', 'town'] });
     g.spawn('ww2_pak40', 'RU', 124, 6, { heading: -Math.PI / 2, ai: { mode: 'hold' }, tags: ['gar', 'town'] });
     g.addObjective('bunk', `Westwall-Bunker ausschalten (0/${NBUNK})`);
     g.addObjective('town', 'Kommerscheidt einnehmen und halten');

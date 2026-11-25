@@ -6,7 +6,7 @@ import { ground, infIn, wave } from './_hb.js';
 
 const PLACE = PLACE_BY_ID.remagen;
 const LIMIT = 1260;                                  // s Zeitlimit insgesamt
-const HOLD = 420;                                    // s Brückenkopf halten
+const HOLD = 330;                                    // s Brückenkopf halten
 const EAST_X = 160;                                  // ab hier gilt ein Soldat als „drüben“
 const NEED_E = 8;                                    // Soldaten, die für den Brückenkopf übersetzen müssen
 const BH = { x: 200, z: 24, r: 72 };                 // Brückenkopf am Ostufer
@@ -25,7 +25,7 @@ const mission = placeMission(PLACE, {
     { s: 'Lieutenant Hollis', t: 'Wir nehmen sie im Handstreich: Infanterie vor, Panzer geben Feuerschutz, Pioniere zu den Ladungen – sie müssen drei Stellen entschärfen. Auf dem Ostufer sitzen MGs im Brückenturm und im Tunnel der Erpeler Ley. Rauch hilft, Artillerie hält die Türme nieder.' },
     { s: 'Sergeant Kowal', t: 'Wenn wir drüben sind, holt sich die Gegenseite die Brücke wieder: Panzer, Infanterie, Artillerie. Wir brauchen den Brückenkopf, bis Verstärkung nachrückt. Die Brücke muss stehen – an beiden Enden.' },
   ],
-  objectivesPreview: ['Alle drei Sprengladungen entschärfen (Pioniere)', 'Mit mindestens 8 Mann das Ostufer erreichen', 'Brückenkopf halten (7 Minuten)', 'Optional: Tunnelstellung der Erpeler Ley ausschalten', 'Optional: Mindestens 2 Panzer bringen die Brücke über'],
+  objectivesPreview: ['Alle drei Sprengladungen entschärfen (Pioniere)', 'Mit mindestens 8 Mann das Ostufer erreichen', 'Brückenkopf halten (5,5 Minuten)', 'Optional: Tunnelstellung der Erpeler Ley ausschalten', 'Optional: Mindestens 2 Panzer bringen die Brücke über'],
   forces: ['12× Rifleman', '4× Thompson-Schütze', '4× BAR-Schütze', '3× Bazooka-Team', '4× Pionier', '1× Offizier', '1× Sanitäter', '1× Mörsertrupp', '4× Sherman (76 mm)', '1× M10', '2× Halbkette M3', 'Fähigkeiten: Artillerie, Nebel, Jabo-Angriff'],
   weather: { type: 'overcast', intensity: 0.3 }, time: { start: '15:30', speed: 3 },
   camera: { x: -96, z: -10, dist: 150, yaw: -1.57 },
@@ -112,17 +112,17 @@ const mission = placeMission(PLACE, {
     g.alert('Brückenkopf am Ostufer errichtet', 4);
     g.addAbilityCharges('ww2_artillery', 2); g.addAbilityCharges('smoke', 1);
     const go = (d, ...a) => g.later(d, () => wave(g, ...a));
-    go(30, [['ww2_de_rifle', 6], ['ww2_de_mp40', 2], ['ww2_de_mg42', 1]], [280, 74], [[240, 60], [210, 40], [190, 22]], { msg: '⚠ Gegenangriff entlang der Uferstraße!' });
-    go(85, [['ww2_pz4', 1], ['ww2_de_rifle', 5], ['ww2_de_mg42', 1]], [184, -74], [[186, -50], [188, -10], [190, 18]], { msg: '⚠ Panzer aus dem Tunnel der Erpeler Ley!' });
-    go(150, [['ww2_stug3', 1], ['ww2_de_rifle', 6], ['ww2_de_mp40', 2]], [280, 60], [[240, 56], [214, 40], [194, 22]], { msg: '⚠ Sturmgeschütz mit Infanterie von Osten!' });
-    go(215, [['ww2_pz4', 1], ['ww2_panther', 1], ['ww2_de_rifle', 6], ['ww2_de_mg42', 1]], [270, -20], [[240, 0], [216, 14], [196, 24]], { msg: '⚠ Starker Panzerangriff!' });
-    go(290, [['ww2_de_rifle', 8], ['ww2_de_mp40', 2], ['ww2_de_panzer', 1]], [148, 250], [[150, 150], [170, 80], [190, 40]], { msg: '⚠ Infanterie von Süden entlang des Ufers!' });
-    go(350, [['ww2_stug3', 1], ['ww2_pz4', 1], ['ww2_de_rifle', 6], ['ww2_de_mg42', 1]], [280, 50], [[240, 54], [214, 38], [194, 22]], { msg: '⚠ Letzter Gegenstoß!' });
+    go(30, [['ww2_de_rifle', 5], ['ww2_de_mp40', 1], ['ww2_de_mg42', 1]], [280, 74], [[240, 60], [210, 40], [190, 22]], { msg: '⚠ Gegenangriff entlang der Uferstraße!' });
+    go(90, [['ww2_pz4', 1], ['ww2_de_rifle', 4]], [184, -74], [[186, -50], [188, -10], [190, 18]], { msg: '⚠ Panzer aus dem Tunnel der Erpeler Ley!' });
+    go(160, [['ww2_stug3', 1], ['ww2_de_rifle', 4], ['ww2_de_mp40', 1]], [280, 60], [[240, 56], [214, 40], [194, 22]], { msg: '⚠ Sturmgeschütz mit Infanterie von Osten!' });
+    go(230, [['ww2_pz4', 1], ['ww2_de_rifle', 4], ['ww2_de_mg42', 1]], [270, -20], [[240, 0], [216, 14], [196, 24]], { msg: '⚠ Panzerangriff!' });
+    go(285, [['ww2_de_rifle', 5], ['ww2_de_panzer', 1]], [148, 250], [[150, 150], [170, 80], [190, 40]], { msg: '⚠ Letzter Gegenstoß vom Ufer im Süden!' });
     // Eigene Verstärkung folgt über die Brücke
     g.later(60, () => {
       g.say('Kowal', 'Pioniere und Panzer kommen über die Brücke nach.', 5);
       g.spawnGroup([['ww2_sherman76', 2], [us.rifle, 6], [us.engineer, 1]], 'UA', -150, -20, { spacing: 8, cols: 3, heading: Math.PI / 2, ai: { mode: 'attackMove', points: [[40, -4], [180, 10]], after: 'guard' }, tags: ['own', 'tank'] });
     });
+    g.later(150, () => { g.say('Kowal', 'Zweite Welle über die Brücke: Schützen mit Bazookas.', 4); g.spawnGroup([[us.rifle, 6], [us.at, 2]], 'UA', -150, -20, { spacing: 3.4, cols: 4, heading: Math.PI / 2, ai: { mode: 'attackMove', points: [[40, -4], [185, 14]], after: 'guard' }, tags: ['own'] }); });
     // Artillerie des Gegners auf den Brückenkopf (nicht auf die Brücke)
     g.every(45, () => { if (!g.ended) { const c = alive(g, 'UA', (u) => u.type.infantry && u.pos.x > 170); if (c.length) { const u = c[Math.floor(Math.random() * c.length)]; g.artilleryBarrage(u.pos.x, u.pos.z, 10, 3, { delay: 4, dmg: 90 }); } } }, 60);
   },

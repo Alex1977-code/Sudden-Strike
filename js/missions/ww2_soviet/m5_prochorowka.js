@@ -58,7 +58,7 @@ export default placeMission(PLACE_BY_ID.prochorowka, {
       g.spawnGroup([[S.t34, 4], [S.rifle, 6], [S.at, 1]], 'UA', 230, 90, { spacing: 10, cols: 4, heading: -3 * Math.PI / 4, tags: ['tank'] });
       g.markerTo?.('UA', 230, 90, 0x5db8ff, 8, 14); g.say('Orlow', 'Frische Panzer aus der Reserve – am Ostrand sammeln!', 5);
     });
-    w(330, () => { wave(g, 'RU', [[E.tiger, 2], [E.panther, 2], [E.jagd, 1], [E.rifle, 6], [E.mg, 2]], -240, 250, [[-100, 150], [-10, 80], [50, 36]], { tags: ['w'], aggro: 60, spacing: 12 }); g.alert('Dritter Stoß: schwere Panzer!', 4); this.spawned = true; });
+    w(330, () => { wave(g, 'RU', [[E.tiger, 1], [E.panther, 2], [E.rifle, 5], [E.mg, 1]], -240, 250, [[-100, 150], [-10, 80], [50, 36]], { tags: ['w'], aggro: 60, spacing: 12 }); g.alert('Dritter Stoß: schwere Panzer!', 4); this.spawned = true; });
   },
 
   update(g, dt) {

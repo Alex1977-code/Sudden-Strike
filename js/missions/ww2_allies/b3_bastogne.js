@@ -7,10 +7,10 @@ import { limitAmmo, refill, ammoLevel, ground, infIn, wave } from './_hb.js';
 
 const PLACE = PLACE_BY_ID.bastogne;
 const CEN = { x: 0, z: 0, r: 40 };                 // Marktplatz
-const CLEAR = 540;                                  // s: Himmel klart auf (Abwürfe, Jabos)
-const RELIEF = 1020;                                // s: Panzerspitze von Süden
+const CLEAR = 420;                                  // s: Himmel klart auf (Abwürfe, Jabos)
+const RELIEF = 900;                                 // s: Panzerspitze von Süden
 const FINISH = 70;                                  // s nach dem Entsatz: Angriffe gebrochen
-const DZ = [{ x: -34, z: 34, at: 560 }, { x: 40, z: -30, at: 820 }];   // Abwurfzonen
+const DZ = [{ x: -34, z: 34, at: 440 }, { x: 40, z: -30, at: 700 }];   // Abwurfzonen
 
 const W = [-270, -40], Nn = [8, -270], Ea = [270, -28], SE = [262, 190];
 const mission = placeMission(PLACE, {
@@ -29,7 +29,7 @@ const mission = placeMission(PLACE, {
   abilities: [{ id: 'ww2_artillery', charges: 3 }, { id: 'smoke', charges: 2 }, { id: 'ww2_airstrike_us', charges: 0 }],
 
   setup(g) {
-    this.t0 = g.time; this.tanks = 0; this.supplied = new Set(); this.cleared = false; this.lostT = 0; this.centerLost = false; this.warnAmmo = false; this.rel = false; this.tRel = null;
+    this.t0 = g.time; this.tanks = 0; this.supplied = new Set(); this.cleared = false; this.lostT = 0; this.sqT = 0; this.centerLost = false; this.warnAmmo = false; this.rel = false; this.tRel = null;
     const inf = (x, z, n, h) => g.spawnGroup(n, 'UA', x, z, { spacing: 3.3, cols: 5, heading: h, tags: ['own'] });
     const own = [
       ...inf(-74, -6, [[us.rifle, 5], [us.lmg, 1], [us.at, 1]], Math.PI * 1.5),   // West
@@ -43,7 +43,7 @@ const mission = placeMission(PLACE, {
       g.spawn('ww2_sherman', 'UA', 8, 50, { heading: Math.PI, tags: ['own', 'tank'], ai: { mode: 'hold' } }),
       g.spawn('ww2_m10', 'UA', -8, -52, { heading: Math.PI, tags: ['own', 'tank'], ai: { mode: 'hold' } }), g.spawn('ww2_m10', 'UA', 64, 44, { heading: Math.PI / 4, tags: ['own', 'tank'], ai: { mode: 'hold' } }),
     ];
-    limitAmmo(own, 0.45);
+    limitAmmo(own, 0.8);
     for (const [x, z] of [[-84, -14], [-84, 6], [-14, -72], [26, -70], [88, -16], [88, 6], [62, 70], [74, 54]]) fort(g, 'ww2_foxhole', 'UA', x, z, {});
     fort(g, 'ww2_mgnest', 'UA', -80, 0, { heading: -Math.PI / 2 }); fort(g, 'ww2_mgnest', 'UA', 16, -76, { heading: Math.PI }); fort(g, 'ww2_mgnest', 'UA', 92, -4, { heading: Math.PI / 2 });
     g.addObjective('hold', `Bastogne halten, bis der Entsatz eintrifft (${mmss(RELIEF)})`);
@@ -52,24 +52,20 @@ const mission = placeMission(PLACE, {
     g.addObjective('square', 'Marktplatz nie ganz verlieren', { optional: true });
     g.later(3, () => g.say('Haines', 'Sektoren besetzen, Panzerabwehr nach vorn! Munition sparen – Feuer nur auf Sicht.', 6));
     g.later(40, () => g.say('Reyes', 'Kein Flugzeug am Himmel, kein Nachschub. Wir haben, was wir tragen.', 5));
-    // Angriffe
-    const wv = (t, ...a) => g.later(t, () => wave(g, ...a));
+    // Angriffe: Ab der dritten Phase stoßen die Wellen bis auf den Marktplatz durch (sonst blieben sie am Rand stehen)
+    const wv = (t, list, from, pts, o) => g.later(t, () => wave(g, list, from, t >= 440 ? [...pts, [0, 0]] : pts, o));
     wv(70, [['ww2_de_rifle', 7], ['ww2_de_mg42', 1], ['ww2_de_mp40', 1]], W, [[-200, -30], [-110, -14], [-80, -6]], { msg: '⚠ Angriff von Westen (Straße nach Marche)!' });
     wv(160, [['ww2_pz4', 1], ['ww2_de_rifle', 6], ['ww2_de_mg42', 1]], Nn, [[8, -200], [8, -120], [8, -76]], { msg: '⚠ Panzer von Norden (Straße nach Houffalize)!' });
-    wv(250, [['ww2_de_rifle', 8], ['ww2_de_mp40', 2], ['ww2_de_mg42', 1]], Ea, [[200, -18], [130, -10], [90, -6]], { msg: '⚠ Infanterie von Osten (Longvilly)!' });
     wv(340, [['ww2_stug3', 1], ['ww2_pz4', 1], ['ww2_de_rifle', 6], ['ww2_de_mg42', 1]], SE, [[200, 150], [130, 100], [74, 62]], { msg: '⚠ Panzer von Südosten (Marvie)!' });
-    wv(440, [['ww2_pz4', 2], ['ww2_de_rifle', 7], ['ww2_de_mp40', 2]], W, [[-200, -30], [-110, -14], [-80, -6]], { msg: '⚠ Panzerangriff von Westen!' });
-    wv(530, [['ww2_panther', 1], ['ww2_de_rifle', 8], ['ww2_de_mg42', 1], ['ww2_de_panzer', 1]], Nn, [[8, -200], [8, -120], [8, -76]], { msg: '⚠ Panther von Norden!' });
-    wv(640, [['ww2_stug3', 1], ['ww2_pz4', 1], ['ww2_de_rifle', 8], ['ww2_de_mg42', 1]], Ea, [[200, -18], [130, -10], [90, -6]], { msg: '⚠ Panzer und Infanterie von Osten!' });
-    wv(740, [['ww2_panther', 1], ['ww2_pz4', 1], ['ww2_de_fj', 4], ['ww2_de_rifle', 6]], SE, [[200, 150], [130, 100], [74, 62]], { msg: '⚠ Starker Angriff von Südosten!' });
-    wv(850, [['ww2_pz4', 2], ['ww2_de_rifle', 8], ['ww2_de_mg42', 2]], W, [[-200, -30], [-110, -14], [-80, -6]], { msg: '⚠ Erneuter Angriff von Westen!' });
-    wv(940, [['ww2_panther', 1], ['ww2_stug3', 1], ['ww2_de_rifle', 8], ['ww2_de_mp40', 2]], Nn, [[8, -200], [8, -120], [8, -76]], { msg: '⚠ Panzerangriff von Norden!' });
-    wv(1040, [['ww2_pz4', 1], ['ww2_de_rifle', 7], ['ww2_de_mg42', 1]], Ea, [[200, -18], [130, -10], [90, -6]], { msg: '⚠ Letzter Vorstoß von Osten!' });
+    wv(440, [['ww2_pz4', 1], ['ww2_de_rifle', 6]], W, [[-200, -30], [-110, -14], [-80, -6]], { msg: '⚠ Panzerangriff von Westen!' });
+    wv(530, [['ww2_pz4', 1], ['ww2_de_rifle', 5], ['ww2_de_mg42', 1]], Nn, [[8, -200], [8, -120], [8, -76]], { msg: '⚠ Panzer von Norden!' });
+    wv(740, [['ww2_stug3', 1], ['ww2_de_rifle', 5], ['ww2_de_fj', 2]], SE, [[200, 150], [130, 100], [74, 62]], { msg: '⚠ Starker Angriff von Südosten!' });
+    wv(790, [['ww2_pz4', 1], ['ww2_de_rifle', 5], ['ww2_de_mp40', 1]], Nn, [[8, -200], [8, -120], [8, -76]], { msg: '⚠ Panzerangriff von Norden!' });
     g.later(300, () => g.say('Haines', 'Ein deutscher Parlamentär fordert die Übergabe der Stadt. Die Antwort ist ein einziges Wort: „Nuts!“', 6));
     g.later(CLEAR - 10, () => g.say('Reyes', 'Der Nebel reißt auf! Gleich hören wir Motoren – haltet die Abwurfzone frei!', 6));
     g.later(CLEAR + 15, () => {
       this.cleared = true; g.alert('Himmel klart auf – Luftunterstützung verfügbar', 5);
-      g.addAbilityCharges('ww2_airstrike_us', 3);
+      g.addAbilityCharges('ww2_airstrike_us', 3); g.addAbilityCharges('ww2_artillery', 2);
       g.say('Haines', 'Jabos über uns! Der Himmel gehört wieder uns – gebt Zielmarkierungen für den Luftschlag.', 5);
     });
     DZ.forEach((z, i) => g.later(z.at, () => {
@@ -100,21 +96,23 @@ const mission = placeMission(PLACE, {
       this.dz.left -= dt;
       for (const u of ground(g, 'UA', this.dz.x, this.dz.z, 16)) if (!u.tags.has('s' + this.dz.t)) {
         u.tags.add('s' + this.dz.t);
-        if (refill([u], 0.7)) this.supplied.add(u.id);
+        if (refill([u], 0.9)) this.supplied.add(u.id);
       }
       setText(g, 'supply', `Nachschubabwurf bergen: 15 Einheiten auffüllen (${Math.min(this.supplied.size, 15)}/15)`);
       if (this.supplied.size >= 15) g.setObjective('supply', 'done');
     }
     if (!this.warnAmmo && ammoLevel(g) < 0.3) { this.warnAmmo = true; g.say('Haines', 'Die Munition geht zur Neige – nur noch gezielte Schüsse, Reserven in die Löcher!', 5); }
-    // Marktplatz
-    const oursC = infIn(g, 'UA', CEN.x, CEN.z, CEN.r).length, foesC = ground(g, 'RU', CEN.x, CEN.z, CEN.r).length;
-    if (oursC === 0 && foesC >= 5) this.lostT += dt; else this.lostT = Math.max(0, this.lostT - dt);
-    if (!this.centerLost && this.lostT > 6) { this.centerLost = true; g.setObjective('square', 'failed'); g.alert('Marktplatz teilweise verloren!', 4); }
+    // Marktplatz: Die Stadt fällt, wenn sich der Gegner mit mindestens 6 Mann in der Mitte hält und kaum Schützen im Ring (85 m) übrig sind;
+    // das Nebenziel „Marktplatz nie ganz verlieren“ fällt schon, wenn die Mitte (40 m) leer von eigenen Schützen und voller Gegner ist
+    const oursC = infIn(g, 'UA', CEN.x, CEN.z, CEN.r).length, oursRing = infIn(g, 'UA', CEN.x, CEN.z, 85).length, foesC = ground(g, 'RU', CEN.x, CEN.z, CEN.r).length;
+    if (oursC === 0 && foesC >= 5) this.sqT += dt; else this.sqT = Math.max(0, this.sqT - dt);
+    if (!this.centerLost && this.sqT > 6) { this.centerLost = true; g.setObjective('square', 'failed'); g.alert('Marktplatz teilweise verloren!', 4); }
+    if (foesC >= 6 && oursRing <= 5) this.lostT += dt; else this.lostT = Math.max(0, this.lostT - dt);
     if (this.lostT > 16) { g.setObjective('hold', 'failed'); g.lose('Der Marktplatz von Bastogne ist verloren – der Ring ist gesprengt, die Stadt gefallen.'); return; }
     setText(g, 'hold', this.rel ? 'Bastogne halten – die Panzerspitze bricht den Ring' : `Bastogne halten, bis der Entsatz eintrifft (${mmss(RELIEF - t)})`);
     if (this.rel && g.time - this.tRel > FINISH) {
       const rem = alive(g, 'RU', (u) => u.tags.has('wave') && Math.hypot(u.pos.x, u.pos.z) < 90).length;
-      if (rem <= 3 && oursC + mine.length > 0) {
+      if ((rem <= 3 || foesC <= 6) && mine.length > 0) {
         g.setObjective('hold', 'done'); if (g.objState('square') === 'open') g.setObjective('square', 'done');
         if (g.objState('armor') === 'open') g.setObjective('armor', 'failed'); if (g.objState('supply') === 'open') g.setObjective('supply', 'failed');
         g.say('Haines', 'Die Spitze ist da. Der Ring ist gebrochen – Bastogne ist frei.', 5);
