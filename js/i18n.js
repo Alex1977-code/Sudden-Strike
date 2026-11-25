@@ -12,13 +12,16 @@
 // data-i18n nur auf Elemente setzen, die ausschließlich Text enthalten (Icons stehen in eigenen <i>-Geschwistern).
 // Stand: Englisch ist vorbereitet, aber noch nicht verfügbar (isLangAvailable('en') === false) – folgt.
 
+import { enableDomTranslate, disableDomTranslate } from './i18n/domtr.js';
+import { translateText, setNameSources, unitNameEn, unitDescEn, abilityNameEn, abilityDescEn, weaponNameEn } from './i18n/engine.js';
+import { EN_UI } from './i18n/en_ui.js';
+
 const LANG_KEY = 'steppensturm.lang';
 export const LANGS = { de: 'Deutsch', en: 'English' };
 const dict = { de: {}, en: {} };
 const available = { de: true, en: false };
 const listeners = [];
 let lang = 'de';
-try { const l = localStorage.getItem(LANG_KEY); if (l && available[l]) lang = l; } catch (e) { /* ignorieren */ }
 
 const fill = (s, vars) => (vars ? String(s).replace(/\{(\w+)\}/g, (m, k) => (vars[k] ?? m)) : String(s));
 
@@ -33,11 +36,42 @@ export function registerStrings(l, obj, { makeAvailable = false } = {}) {
   if (makeAvailable) available[l] = true;
 }
 export function onLangChange(fn) { listeners.push(fn); }
+function applyDomMode() {
+  if (typeof document === 'undefined') return;
+  document.documentElement.lang = lang;
+  applyI18n(document);
+  if (lang === 'en') enableDomTranslate(); else disableDomTranslate();
+}
+// Erststart: gespeicherte Wahl, sonst Browsersprache (de* → Deutsch, sonst Englisch)
+export function initLang() {
+  let l = null;
+  try { l = localStorage.getItem(LANG_KEY); } catch (e) { /* ignorieren */ }
+  if (!l || !available[l]) {
+    const nav = (typeof navigator !== 'undefined' && (navigator.language || (navigator.languages && navigator.languages[0]))) || 'de';
+    l = String(nav).toLowerCase().startsWith('de') ? 'de' : 'en';
+    try { localStorage.setItem(LANG_KEY, l); } catch (e) { /* ignorieren */ }
+  }
+  lang = available[l] ? l : 'de';
+  if (lang === 'en') applyDomMode();
+  return lang;
+}
+// Zentrale Namens-Helfer (Einheit/Fähigkeit/Waffe): Deutsch = Wert im Code, Englisch = Tabelle js/i18n/en_units.js
+export const unitName = (type) => (lang === 'en' ? unitNameEn(type) : (type?.name ?? ''));
+export const unitDesc = (type) => (lang === 'en' ? unitDescEn(type) : (type?.desc ?? ''));
+export const abilityName = (id, a) => (lang === 'en' ? abilityNameEn(id, a) : (a?.name ?? ''));
+export const abilityDesc = (id, a) => (lang === 'en' ? abilityDescEn(id, a) : (a?.desc ?? ''));
+export const weaponName = (id, w) => (lang === 'en' ? weaponNameEn(id, w) : (w?.name ?? ''));
+// beliebigen deutschen Text für die Anzeige übersetzen (z. B. Sprachfunk); bei Deutsch unverändert
+export const tr = (s) => (lang === 'en' ? translateText(s) : s);
+export { setNameSources };
+// Zahlen/Dezimaltrenner nach Sprache (Anzeige): fmtNum(1.5) → „1,5“ (de) / „1.5“ (en)
+export function fmtNum(n, digits = 1) { return Number(n).toLocaleString(lang === 'en' ? 'en-GB' : 'de-DE', { maximumFractionDigits: digits }); }
+
 export function setLang(l) {
   if (!available[l] || l === lang) return false;
   lang = l;
   try { localStorage.setItem(LANG_KEY, l); } catch (e) { /* ignorieren */ }
-  if (typeof document !== 'undefined') { document.documentElement.lang = l; applyI18n(document); }
+  applyDomMode();
   listeners.forEach((f) => { try { f(l); } catch (e) { console.warn('[i18n]', e); } });
   return true;
 }
@@ -56,3 +90,6 @@ export function applyI18n(root = document) {
     });
   }
 }
+
+registerStrings('en', EN_UI, { makeAvailable: true });
+initLang();
